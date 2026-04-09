@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -240,7 +241,10 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
 
             string statusMessage = fanSnapshots.Count switch
             {
-                0 when cpuTemperatures.Count == 0 => "No CPU temperature or fan sensors were exposed. Try running elevated or confirm that your motherboard is supported by LibreHardwareMonitor.",
+                0 when cpuTemperatures.Count == 0 && !IsRunningAsAdministrator() =>
+                    "No sensors detected. The application must run as Administrator so LibreHardwareMonitor can access the ring-0 kernel driver.",
+                0 when cpuTemperatures.Count == 0 =>
+                    "No CPU temperature or fan sensors were exposed. Try running elevated or confirm that your motherboard is supported by LibreHardwareMonitor.",
                 0 => "CPU temperatures are available, but no fan channels were exposed by the motherboard or attached controller.",
                 _ when cpuFan is null => "Fan telemetry is live, but a dedicated CPU fan header was not clearly identified. Generic fan channels are still shown below.",
                 _ when fanSnapshots.All(fan => !fan.CanControl) => "Fan telemetry is active. Manual fan control is disabled because this hardware did not expose software-controllable channels.",
@@ -622,5 +626,16 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+    }
+
+    private static bool IsRunningAsAdministrator()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }
 }

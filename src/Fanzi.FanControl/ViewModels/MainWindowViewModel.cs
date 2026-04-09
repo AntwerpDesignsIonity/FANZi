@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Net.Mail;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -263,9 +264,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         catch (OperationCanceledException)
         {
         }
-        catch (Exception exception)
+        catch (UnauthorizedAccessException)
         {
-            StatusMessage = $"Hardware poll failed: {exception.Message}";
+            // Do not surface internal path/handle details from the exception message.
+            StatusMessage = "Hardware poll failed: access was denied to a sensor. Ensure the application is running as Administrator.";
+        }
+        catch (Exception)
+        {
+            // Swallow the raw exception.Message to prevent leaking internal paths or
+            // system details to the UI. The previous reading remains visible.
+            StatusMessage = "Hardware poll encountered an error. The previous reading is still displayed.";
         }
         finally
         {
@@ -335,9 +343,35 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         CpuFanDesiredLabel = $"{value:F0}%";
     }
 
+    partial void OnCpuWarningThresholdDegreesChanged(double value)
+    {
+        // Enforce the valid range in code, not just via the AXAML NumericUpDown.
+        double clamped = Math.Clamp(value, 50, 110);
+        if (clamped != value)
+        {
+            CpuWarningThresholdDegrees = clamped;
+        }
+    }
+
     partial void OnNotificationEmailChanged(string value)
     {
-        HasNotificationEmail = !string.IsNullOrWhiteSpace(value);
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            HasNotificationEmail = false;
+            return;
+        }
+
+        // Validate using the BCL parser so arbitrary strings are rejected before
+        // they can reach any future email-sending code path.
+        try
+        {
+            _ = new MailAddress(value.Trim());
+            HasNotificationEmail = true;
+        }
+        catch (FormatException)
+        {
+            HasNotificationEmail = false;
+        }
     }
 
     private async Task ApplyCpuFanAsync()
