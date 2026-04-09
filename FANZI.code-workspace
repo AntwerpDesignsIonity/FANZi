@@ -1,13 +1,8 @@
 {
 	"folders": [
 		{
+			"name": "FANZI",
 			"path": "."
-		},
-		{
-			"path": "E:/-ASSETS-/assets"
-		},
-		{
-			"path": "E:/-ASSETS-/favicon"
 		}
 	]
 }
