@@ -1,0 +1,35 @@
+## .NET / C# gitignore
+
+# Build outputs
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# Visual Studio
+.vs/
+*.vsp
+*.psess
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Rider
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

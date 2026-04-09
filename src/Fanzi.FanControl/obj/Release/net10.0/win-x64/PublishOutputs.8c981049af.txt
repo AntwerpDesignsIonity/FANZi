@@ -1,7 +1,0 @@
-j:\Repo\FANZI\src\Fanzi.FanControl\bin\Release\net10.0\win-x64\publish\Fanzi.FanControl.pdb
-j:\Repo\FANZI\src\Fanzi.FanControl\bin\Release\net10.0\win-x64\publish\av_libglesv2.dll
-j:\Repo\FANZI\src\Fanzi.FanControl\bin\Release\net10.0\win-x64\publish\libHarfBuzzSharp.dll
-j:\Repo\FANZI\src\Fanzi.FanControl\bin\Release\net10.0\win-x64\publish\MonoPosixHelper.dll
-j:\Repo\FANZI\src\Fanzi.FanControl\bin\Release\net10.0\win-x64\publish\libMonoPosixHelper.dll
-j:\Repo\FANZI\src\Fanzi.FanControl\bin\Release\net10.0\win-x64\publish\libSkiaSharp.dll
-j:\Repo\FANZI\src\Fanzi.FanControl\bin\Release\net10.0\win-x64\publish\Fanzi.FanControl.exe
