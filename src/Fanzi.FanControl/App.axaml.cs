@@ -13,6 +13,8 @@ namespace Fanzi.FanControl;
 public partial class App : Application
 {
     private IHardwareMonitorService? _hardwareMonitorService;
+    private IRgbService?             _rgbService;
+    private ISettingsService?        _settingsService;
 
     public override void Initialize()
     {
@@ -28,7 +30,9 @@ public partial class App : Application
             DisableAvaloniaDataAnnotationValidation();
 
             _hardwareMonitorService = new HardwareMonitorService();
-            var viewModel = new MainWindowViewModel(_hardwareMonitorService);
+            _rgbService             = new OpenRgbService();
+            _settingsService        = new SettingsService();
+            var viewModel = new MainWindowViewModel(_hardwareMonitorService, _rgbService, _settingsService);
 
             desktop.MainWindow = new MainWindow
             {
@@ -39,6 +43,7 @@ public partial class App : Application
             {
                 viewModel.Dispose();
                 _hardwareMonitorService.Dispose();
+                _rgbService.Dispose();
             };
         }
 

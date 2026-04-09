@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Net;
 using System.Net.Mail;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,11 +18,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(3);
 
     private readonly IHardwareMonitorService _hardwareMonitorService;
+    private readonly ISettingsService _settingsService;
     private readonly CancellationTokenSource _disposeTokenSource = new();
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private AppSettings _appSettings = new();
+    private ProfileTabViewModel? _activeProfileTab;
     private string? _cpuFanChannelId;
     private bool _suppressCpuFanDesiredUpdate;
+    private bool _suppressProfileSync;
     private bool _disposed;
+    private readonly EmailNotificationService _emailService = new();
+    private DateTimeOffset _lastAlertEmailSent = DateTimeOffset.MinValue;
+    private static readonly TimeSpan AlertEmailCooldown = TimeSpan.FromMinutes(10);
+
+    public RgbControlViewModel RgbControl { get; }
 
     [ObservableProperty]
     private string _statusMessage = "Initializing hardware monitor...";
@@ -125,16 +135,45 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private bool _hasNotificationEmail;
 
-    public MainWindowViewModel(IHardwareMonitorService hardwareMonitorService)
+    [ObservableProperty]
+    private int _selectedTabIndex;
+
+    [ObservableProperty]
+    private string _smtpHost = string.Empty;
+
+    [ObservableProperty]
+    private double _smtpPort = 587;
+
+    [ObservableProperty]
+    private string _smtpUser = string.Empty;
+
+    [ObservableProperty]
+    private string _smtpPassword = string.Empty;
+
+    [ObservableProperty]
+    private bool _smtpConfigured;
+
+    [ObservableProperty]
+    private string _emailStatus = string.Empty;
+
+    [ObservableProperty]
+    private bool _isSendingEmail;
+
+    public MainWindowViewModel(IHardwareMonitorService hardwareMonitorService, IRgbService rgbService, ISettingsService settingsService)
     {
         _hardwareMonitorService = hardwareMonitorService;
-        FanChannels = new ObservableCollection<FanChannelViewModel>();
-        CpuReadings = new ObservableCollection<CpuReadingSnapshot>();
-        GpuReadings = new ObservableCollection<GpuReadingSnapshot>();
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync);
-        ApplyCpuFanCommand = new AsyncRelayCommand(ApplyCpuFanAsync);
-        AutoCpuFanCommand = new AsyncRelayCommand(AutoCpuFanAsync);
-        ToggleHelpCommand = new RelayCommand(() => ShowHelp = !ShowHelp);
+        _settingsService        = settingsService;
+        FanChannels             = new ObservableCollection<FanChannelViewModel>();
+        CpuReadings             = new ObservableCollection<CpuReadingSnapshot>();
+        GpuReadings             = new ObservableCollection<GpuReadingSnapshot>();
+        Profiles                = new ObservableCollection<ProfileTabViewModel>();
+        RefreshCommand          = new AsyncRelayCommand(RefreshAsync);
+        ApplyCpuFanCommand      = new AsyncRelayCommand(ApplyCpuFanAsync);
+        AutoCpuFanCommand       = new AsyncRelayCommand(AutoCpuFanAsync);
+        ToggleHelpCommand       = new RelayCommand(() => ShowHelp = !ShowHelp);
+        AddProfileCommand       = new RelayCommand(AddProfile);
+        SendTestEmailCommand    = new AsyncRelayCommand(SendTestEmailAsync);
+        RgbControl              = new RgbControlViewModel(rgbService);
 
         _ = RunStartupAsync();
     }
@@ -145,6 +184,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<GpuReadingSnapshot> GpuReadings { get; }
 
+    public ObservableCollection<ProfileTabViewModel> Profiles { get; }
+
     public IAsyncRelayCommand RefreshCommand { get; }
 
     public IAsyncRelayCommand ApplyCpuFanCommand { get; }
@@ -152,6 +193,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public IAsyncRelayCommand AutoCpuFanCommand { get; }
 
     public IRelayCommand ToggleHelpCommand { get; }
+
+    public IRelayCommand AddProfileCommand { get; }
+
+    public IAsyncRelayCommand SendTestEmailCommand { get; }
 
     public void Dispose()
     {
@@ -164,6 +209,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _disposeTokenSource.Cancel();
         _refreshLock.Dispose();
         _disposeTokenSource.Dispose();
+        RgbControl.Dispose();
 
         foreach (FanChannelViewModel fanChannel in FanChannels)
         {
@@ -173,10 +219,149 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private async Task RunStartupAsync()
     {
-        // 2-second splash / loader animation.
+        // Load persisted settings concurrently with the splash delay.
+        Task<AppSettings> loadTask = _settingsService.LoadAsync(_disposeTokenSource.Token);
         await Task.Delay(TimeSpan.FromSeconds(2));
+        _appSettings = await loadTask;
+        InitialiseProfiles();
         IsLoading = false;
         await RunRefreshLoopAsync();
+    }
+
+    private void InitialiseProfiles()
+    {
+        if (_appSettings.Profiles.Count == 0)
+        {
+            FanProfile defaultProfile = new() { Name = "Default" };
+            _appSettings.Profiles.Add(defaultProfile);
+            _appSettings.ActiveProfileId = defaultProfile.Id;
+        }
+
+        foreach (FanProfile profile in _appSettings.Profiles)
+        {
+            Profiles.Add(new ProfileTabViewModel(profile, OnSelectProfile, OnDeleteProfile, OnRenameProfile));
+        }
+
+        ProfileTabViewModel? activeTab = Profiles.FirstOrDefault(p => p.Profile.Id == _appSettings.ActiveProfileId)
+                                         ?? Profiles.First();
+        ActivateProfileTab(activeTab, applyToVm: true);
+    }
+
+    private void ActivateProfileTab(ProfileTabViewModel tab, bool applyToVm)
+    {
+        if (_activeProfileTab != null)
+        {
+            _activeProfileTab.IsActive = false;
+        }
+
+        _activeProfileTab = tab;
+        tab.IsActive = true;
+        _appSettings.ActiveProfileId = tab.Profile.Id;
+
+        if (applyToVm)
+        {
+            ApplyProfileToVm(tab.Profile);
+        }
+
+        _ = SaveSettingsAsync();
+    }
+
+    private void ApplyProfileToVm(FanProfile profile)
+    {
+        _suppressProfileSync = true;
+        try
+        {
+            CpuWarningThresholdDegrees = Math.Clamp(profile.CpuWarningThresholdDegrees, 50, 110);
+            NotificationEmail = profile.NotificationEmail;
+            SetCpuFanDesiredPercent(profile.CpuFanDesiredPercent);
+        }
+        finally
+        {
+            _suppressProfileSync = false;
+        }
+    }
+
+    private void UpdateActiveProfileFromVm()
+    {
+        if (_activeProfileTab is null)
+        {
+            return;
+        }
+
+        FanProfile p = _activeProfileTab.Profile;
+        p.CpuWarningThresholdDegrees = CpuWarningThresholdDegrees;
+        p.NotificationEmail = NotificationEmail;
+        p.CpuFanDesiredPercent = CpuFanDesiredPercent;
+    }
+
+    private void AddProfile()
+    {
+        // Snapshot current settings into the new profile.
+        FanProfile newProfile = new()
+        {
+            Name = $"Profile {Profiles.Count + 1}",
+            CpuWarningThresholdDegrees = CpuWarningThresholdDegrees,
+            NotificationEmail = NotificationEmail,
+            CpuFanDesiredPercent = CpuFanDesiredPercent,
+        };
+
+        _appSettings.Profiles.Add(newProfile);
+        ProfileTabViewModel tab = new(newProfile, OnSelectProfile, OnDeleteProfile, OnRenameProfile);
+        Profiles.Add(tab);
+        ActivateProfileTab(tab, applyToVm: false);
+    }
+
+    private void OnSelectProfile(ProfileTabViewModel tab)
+    {
+        if (tab == _activeProfileTab)
+        {
+            return;
+        }
+
+        // Persist current VM state back to the outgoing profile before switching.
+        UpdateActiveProfileFromVm();
+        ActivateProfileTab(tab, applyToVm: true);
+    }
+
+    private void OnDeleteProfile(ProfileTabViewModel tab)
+    {
+        if (Profiles.Count <= 1)
+        {
+            return; // Always keep at least one profile.
+        }
+
+        int index = Profiles.IndexOf(tab);
+        _appSettings.Profiles.Remove(tab.Profile);
+        Profiles.Remove(tab);
+
+        if (_activeProfileTab == tab)
+        {
+            ProfileTabViewModel next = Profiles[Math.Max(0, Math.Min(index, Profiles.Count - 1))];
+            ActivateProfileTab(next, applyToVm: true);
+        }
+        else
+        {
+            _ = SaveSettingsAsync();
+        }
+    }
+
+    private void OnRenameProfile(ProfileTabViewModel tab, string newName)
+    {
+        tab.Profile.Name = newName;
+        tab.Name = newName;
+        _ = SaveSettingsAsync();
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        try
+        {
+            await _settingsService.SaveAsync(_appSettings, _disposeTokenSource.Token);
+        }
+        catch
+        {
+            // Best-effort — never crash the app for a settings write failure.
+        }
     }
 
     private async Task RunRefreshLoopAsync()
@@ -248,8 +433,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             if (hottest.HasValue && hottest.Value >= CpuWarningThresholdDegrees)
             {
                 HasCpuTempWarning = true;
-                string emailNote = HasNotificationEmail ? $" Notification queued to {NotificationEmail}." : " Set a notification e-mail below to receive reports.";
+                string emailNote = SmtpConfigured ? $" Alert email will be sent to {NotificationEmail}." : " Configure SMTP in the Notifications tab to receive alerts.";
                 CpuTempWarningMessage = $"⚠  CPU temperature {hottest.Value:F0} °C exceeds the {CpuWarningThresholdDegrees:F0} °C threshold.{emailNote}";
+
+                if (SmtpConfigured && DateTimeOffset.UtcNow - _lastAlertEmailSent > AlertEmailCooldown)
+                {
+                    _lastAlertEmailSent = DateTimeOffset.UtcNow;
+                    _ = SendAlertEmailAsync(hottest.Value);
+                }
             }
             else
             {
@@ -260,6 +451,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             SyncCpuReadings(snapshot.CpuReadings);
             SyncGpuReadings(snapshot.GpuReadings);
             SynchronizeFans(snapshot.Fans);
+
+            // Feed live hardware data to the RGB effects engine.
+            RgbControl.UpdateHardwareData(
+                cpuTempC:   snapshot.CpuPackageTemperature ?? snapshot.CpuAverageTemperature,
+                gpuTempC:   snapshot.GpuCoreTemperature,
+                cpuLoadPct: snapshot.CpuTotalLoadPercent);
         }
         catch (OperationCanceledException)
         {
@@ -291,6 +488,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             if (!existing.TryGetValue(snapshot.Id, out FanChannelViewModel? channelViewModel))
             {
                 channelViewModel = new FanChannelViewModel(snapshot, ApplyFanControlAsync, RestoreAutomaticControlAsync);
+
+                // Restore stored desired percent from the active profile.
+                if (_activeProfileTab?.Profile.FanChannelPercents.TryGetValue(snapshot.Id, out double stored) == true)
+                {
+                    channelViewModel.DesiredPercent = stored;
+                }
+
                 FanChannels.Add(channelViewModel);
                 continue;
             }
@@ -328,6 +532,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         SetFanControlResult result = await _hardwareMonitorService.SetFanControlAsync(channel.Id, channel.DesiredPercent, _disposeTokenSource.Token);
         channel.ApplyResult(result);
+
+        if (_activeProfileTab != null)
+        {
+            _activeProfileTab.Profile.FanChannelPercents[channel.Id] = channel.DesiredPercent;
+            _ = SaveSettingsAsync();
+        }
+
         await RefreshAsync();
     }
 
@@ -341,6 +552,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     partial void OnCpuFanDesiredPercentChanged(double value)
     {
         CpuFanDesiredLabel = $"{value:F0}%";
+
+        if (!_suppressProfileSync && !_suppressCpuFanDesiredUpdate)
+        {
+            UpdateActiveProfileFromVm();
+            _ = SaveSettingsAsync();
+        }
     }
 
     partial void OnCpuWarningThresholdDegreesChanged(double value)
@@ -350,6 +567,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (clamped != value)
         {
             CpuWarningThresholdDegrees = clamped;
+            return;
+        }
+
+        if (!_suppressProfileSync)
+        {
+            UpdateActiveProfileFromVm();
+            _ = SaveSettingsAsync();
         }
     }
 
@@ -358,19 +582,24 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (string.IsNullOrWhiteSpace(value))
         {
             HasNotificationEmail = false;
-            return;
         }
+        else
+        {
+            // Validate using the BCL parser so arbitrary strings are rejected before
+            // they can reach any future email-sending code path.
+            try
+            {
+                _ = new MailAddress(value.Trim());
+                HasNotificationEmail = true;
+            }
+            catch (FormatException)
+            {
+                HasNotificationEmail = false;
+            }
 
-        // Validate using the BCL parser so arbitrary strings are rejected before
-        // they can reach any future email-sending code path.
-        try
-        {
-            _ = new MailAddress(value.Trim());
-            HasNotificationEmail = true;
-        }
-        catch (FormatException)
-        {
-            HasNotificationEmail = false;
+        UpdateSmtpConfigured();
+            UpdateActiveProfileFromVm();
+            _ = SaveSettingsAsync();
         }
     }
 
@@ -387,6 +616,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             SetFanControlResult result = await _hardwareMonitorService.SetFanControlAsync(_cpuFanChannelId, CpuFanDesiredPercent, _disposeTokenSource.Token);
             CpuFanCapability = result.Message;
+
+            if (_activeProfileTab != null)
+            {
+                _activeProfileTab.Profile.CpuFanDesiredPercent = CpuFanDesiredPercent;
+                _ = SaveSettingsAsync();
+            }
+
             await RefreshAsync();
         }
         finally
@@ -426,6 +662,55 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _suppressCpuFanDesiredUpdate = true;
         CpuFanDesiredPercent = Math.Clamp(value, 0, 100);
         _suppressCpuFanDesiredUpdate = false;
+    }
+
+    partial void OnSmtpHostChanged(string value) => UpdateSmtpConfigured();
+    partial void OnSmtpPortChanged(double value) => UpdateSmtpConfigured();
+    partial void OnSmtpUserChanged(string value) => UpdateSmtpConfigured();
+    partial void OnSmtpPasswordChanged(string value) => UpdateSmtpConfigured();
+
+    private void UpdateSmtpConfigured()
+    {
+        SmtpConfigured = HasNotificationEmail
+            && !string.IsNullOrWhiteSpace(SmtpHost)
+            && !string.IsNullOrWhiteSpace(SmtpUser)
+            && !string.IsNullOrWhiteSpace(SmtpPassword);
+    }
+
+    private async Task SendAlertEmailAsync(double tempC)
+    {
+        string subject = $"FANZI Alert: CPU temperature {tempC:F0} \u00b0C";
+        string body = $"FANZI has detected that your CPU temperature ({tempC:F0} \u00b0C) " +
+                      $"has exceeded the configured threshold of {CpuWarningThresholdDegrees:F0} \u00b0C.\r\n\r\n" +
+                      $"System: {CpuName}\r\n" +
+                      $"Timestamp: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}\r\n\r\n" +
+                      "This alert was sent by FANZI \u2014 Ionity Global (Pty) Ltd.";
+
+        EmailStatus = await _emailService.SendAsync(SmtpHost, (int)SmtpPort, SmtpUser, SmtpPassword, NotificationEmail, subject, body);
+    }
+
+    private async Task SendTestEmailAsync()
+    {
+        if (!SmtpConfigured)
+        {
+            return;
+        }
+
+        IsSendingEmail = true;
+        EmailStatus = "Sending test email\u2026";
+        try
+        {
+            string subject = "FANZI \u2014 Test Notification";
+            string body = "This is a test notification from FANZI \u2014 Fan Telemetry & Control.\r\n\r\n" +
+                          "Your SMTP configuration is working correctly.\r\n\r\n" +
+                          "\u00a9 2026 Ionity Global (Pty) Ltd.";
+
+            EmailStatus = await _emailService.SendAsync(SmtpHost, (int)SmtpPort, SmtpUser, SmtpPassword, NotificationEmail, subject, body);
+        }
+        finally
+        {
+            IsSendingEmail = false;
+        }
     }
 
     private static string FormatTemperature(double? temperature)
