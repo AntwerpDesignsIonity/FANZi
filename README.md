@@ -38,7 +38,7 @@
 
 ## Overview
 
-**FANZi** (Fan + Zi, styled stylistically) is a desktop application for real-time hardware telemetry and fan management. It reads CPU and GPU sensor data via [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor), lets you set individual fan channel speeds, and drives RGB lighting across all [OpenRGB](https://openrgb.org)-compatible devices with a rich built-in effects engine.
+**FANZi** (Fan + Zi) is a desktop application for real-time hardware telemetry and fan management. It reads CPU and GPU sensor data via [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor), lets you set individual fan channel speeds, and drives RGB lighting across all [OpenRGB](https://openrgb.org)-compatible devices with a rich built-in effects engine.
 
 The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer is cross-platform; however, **hardware sensor access (fan control, temperature readings) requires Windows**, where LibreHardwareMonitor has full kernel-level support.
 
