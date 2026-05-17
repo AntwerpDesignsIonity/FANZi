@@ -32,5 +32,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageReference Include="OpenRGB.NET" Version="3.1.1" />
+    <!-- Explicit reference to override vulnerable transitive Tmds.DBus.Protocol 0.21.2 (GHSA-xrw6-gwf8-vvr9) -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 </Project>
