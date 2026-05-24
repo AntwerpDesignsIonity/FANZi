@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Fanzi.FanControl.ViewModels;
 using System;
@@ -15,9 +16,17 @@ public partial class MainWindow : Window
         Closed += OnClosed;
         PropertyChanged += OnPropertyChanged;
 
+        var titleBar = this.FindControl<Border>("TitleBar");
         var minimizeBtn = this.FindControl<Button>("MinimizeButton");
         var maximizeBtn = this.FindControl<Button>("MaximizeButton");
         var closeBtn = this.FindControl<Button>("CloseButton");
+
+        if (titleBar is not null)
+        {
+            titleBar.PointerPressed += OnTitleBarPointerPressed;
+            titleBar.DoubleTapped += (_, _) =>
+                WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        }
 
         if (minimizeBtn is not null)
             minimizeBtn.Click += (_, _) => WindowState = WindowState.Minimized;
@@ -28,6 +37,12 @@ public partial class MainWindow : Window
 
         if (closeBtn is not null)
             closeBtn.Click += (_, _) => Close();
+    }
+
+    private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            BeginMoveDrag(e);
     }
 
     private void OnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)

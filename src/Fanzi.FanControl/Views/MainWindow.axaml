@@ -143,7 +143,7 @@
 
     <Panel>
         <!-- ═══════════════ CUSTOM TITLEBAR ═══════════════ -->
-        <Border Height="38" VerticalAlignment="Top" ZIndex="200" Background="#050A12" IsHitTestVisible="True">
+        <Border x:Name="TitleBar" Height="38" VerticalAlignment="Top" ZIndex="200" Background="#050A12" IsHitTestVisible="True">
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="14,0" VerticalAlignment="Center">
                     <Image Source="/Assets/ionity-logo.png" Width="20" Height="20" Opacity="0.8"/>
