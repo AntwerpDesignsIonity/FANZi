@@ -147,7 +147,7 @@ public partial class InstallerWindow : Window
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\FANZI");
         uninstallKey.SetValue("DisplayName", "FANZI — AI-Powered Fan Control");
         uninstallKey.SetValue("DisplayVersion", "2.0.0");
-        uninstallKey.SetValue("Publisher", "Ionity Global (Pty) Ltd");
+        uninstallKey.SetValue("Publisher", "Antwerp Designs — Johan Wilhelm van Antwerp");
         uninstallKey.SetValue("InstallLocation", installPath);
         uninstallKey.SetValue("DisplayIcon", exePath);
         uninstallKey.SetValue("UninstallString", $"\"{Path.Combine(installPath, "uninstall.bat")}\"");

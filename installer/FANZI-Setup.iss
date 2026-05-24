@@ -4,7 +4,7 @@
 
 #define MyAppName "FANZI"
 #define MyAppVersion "2.0.0"
-#define MyAppPublisher "Ionity Global (Pty) Ltd"
+#define MyAppPublisher "Antwerp Designs — Johan Wilhelm van Antwerp"
 #define MyAppURL "https://www.ionity.today"
 #define MyAppExeName "Fanzi.FanControl.exe"
 #define MyAppDescription "AI-Powered Fan Control & RGB Lighting"

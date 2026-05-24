@@ -151,8 +151,12 @@
                     <TextBlock Text="v2.0" FontSize="10" Foreground="#3A5070" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Grid.Column="1" Text="AI-Powered Fan Control" FontSize="11" Foreground="#3A5070" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" Margin="0,0,8,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding LastUpdated}" FontSize="10" Foreground="#2A4060" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0" Margin="0,0,4,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding LastUpdated}" FontSize="10" Foreground="#2A4060" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <!-- Window Controls -->
+                    <Button x:Name="MinimizeButton" Content="─" Background="Transparent" Foreground="#5A7FA8" FontSize="14" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Minimize"/>
+                    <Button x:Name="MaximizeButton" Content="□" Background="Transparent" Foreground="#5A7FA8" FontSize="13" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Maximize"/>
+                    <Button x:Name="CloseButton" Content="✕" Background="Transparent" Foreground="#EF4444" FontSize="13" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Close"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -600,8 +604,9 @@
                                                 <TextBlock Text="AI-Powered Fan Control &amp; RGB Lighting" FontSize="12" Foreground="#6A8AAF"/>
                                             </StackPanel>
                                         </StackPanel>
-                                        <TextBlock Text="© 2026 Ionity Global (Pty) Ltd. All rights reserved." Foreground="#2A4060" FontSize="11"/>
-                                        <TextBlock Text="Author: Johan Wilhelm van Antwerp · ai@ionity.today · www.ionity.today" Foreground="#2A4060" FontSize="11"/>
+                                        <TextBlock Text="© 2018-2026 Antwerp Designs. ALL Rights Reserved." Foreground="#2A4060" FontSize="11"/>
+                                        <TextBlock Text="Johan Wilhelm van Antwerp · AI@IONITY.TODAY" Foreground="#2A4060" FontSize="11"/>
+                                        <TextBlock Text="POL986 AED License 990|900 · FREE TO USE" Foreground="#2A4060" FontSize="11"/>
                                         <TextBlock TextWrapping="Wrap" Foreground="#2A4060" FontSize="10"
                                                    Text="Powered by LibreHardwareMonitor, OpenRGB, Avalonia UI, and custom AI thermal intelligence."/>
                                     </StackPanel>

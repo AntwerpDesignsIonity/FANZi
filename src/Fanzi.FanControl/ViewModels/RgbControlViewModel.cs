@@ -153,11 +153,28 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private RgbThemePreset? _activeTheme;
 
+    // ── Server management ────────────────────────────────────────────────────
+
+    private readonly OpenRgbServerManager _serverManager = new();
+
+    [ObservableProperty]
+    private string _serverStatus = "Detecting OpenRGB...";
+
+    [ObservableProperty]
+    private bool _isServerRunning;
+
+    [ObservableProperty]
+    private bool _isStartingServer;
+
+    public string StartServerButtonText => IsStartingServer ? "Starting..." : IsServerRunning ? "Server Running" : "Start Server";
+
     // ── Commands ──────────────────────────────────────────────────────────────
 
     public IAsyncRelayCommand ConnectCommand       { get; }
     public IRelayCommand      DisconnectCommand    { get; }
     public IRelayCommand<RgbThemePreset> ApplyThemeCommand { get; }
+    public IAsyncRelayCommand StartServerCommand   { get; }
+    public IRelayCommand      StopServerCommand    { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -168,6 +185,11 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         ConnectCommand    = new AsyncRelayCommand(ConnectAsync);
         DisconnectCommand = new RelayCommand(DisconnectFromServer);
         ApplyThemeCommand = new RelayCommand<RgbThemePreset>(ApplyTheme);
+        StartServerCommand = new AsyncRelayCommand(StartServerAsync);
+        StopServerCommand  = new RelayCommand(StopServer);
+
+        _serverManager.DetectInstallation();
+        ServerStatus = _serverManager.Status;
 
         // Sync slider sets from initial color constants.
         SyncPrimarySliders();
@@ -408,6 +430,35 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         _updatingSecondary = false;
     }
 
+    // ── Server management commands ────────────────────────────────────────────
+
+    private async Task StartServerAsync()
+    {
+        if (IsStartingServer || IsServerRunning) return;
+        IsStartingServer = true;
+        OnPropertyChanged(nameof(StartServerButtonText));
+
+        bool ok = await _serverManager.StartServerAsync(OpenRgbPort, _cts.Token);
+        IsServerRunning = ok;
+        ServerStatus = _serverManager.Status;
+        IsStartingServer = false;
+        OnPropertyChanged(nameof(StartServerButtonText));
+
+        if (ok && !IsConnected)
+        {
+            await Task.Delay(500, _cts.Token);
+            await ConnectAsync();
+        }
+    }
+
+    private void StopServer()
+    {
+        _serverManager.StopServer();
+        IsServerRunning = false;
+        ServerStatus = _serverManager.Status;
+        OnPropertyChanged(nameof(StartServerButtonText));
+    }
+
     // ── IDisposable ───────────────────────────────────────────────────────────
 
     public void Dispose()
@@ -416,6 +467,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         _timer.Dispose();
         _cts.Cancel();
         _cts.Dispose();
+        _serverManager.Dispose();
         _rgbService.Dispose();
     }
 }

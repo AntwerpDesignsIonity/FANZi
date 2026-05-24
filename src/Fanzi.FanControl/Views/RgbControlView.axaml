@@ -90,33 +90,53 @@
                 </Border>
             </Grid>
 
-            <!-- ── SECTION 1 : CONNECTION ─────────────────────────────── -->
+            <!-- ── SECTION 1 : SERVER &amp; CONNECTION ──────────────────────── -->
             <Border Grid.Row="2" CornerRadius="14" Background="#071015" BorderBrush="#162030"
                     BorderThickness="1" Padding="16,12">
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
-                    <TextBlock Grid.Column="0" Text="OpenRGB server"
-                               Foreground="#6B87AD" FontSize="13" VerticalAlignment="Center"/>
-                    <TextBox Grid.Column="1" Text="{Binding OpenRgbHost, Mode=TwoWay}"
-                             Watermark="localhost" FontSize="13"
-                             Background="#081320" Foreground="#C4D8F4"
-                             BorderBrush="#1E3A60" CornerRadius="8" Padding="8,5"
-                             VerticalAlignment="Center"/>
-                    <NumericUpDown Grid.Column="2" Value="{Binding OpenRgbPort, Mode=TwoWay}"
-                                  Minimum="1" Maximum="65535" Increment="1"
-                                  Width="100" FontSize="13"
-                                  Background="#081320" Foreground="#C4D8F4"
-                                  VerticalAlignment="Center"/>
-                    <Button Grid.Column="3"
-                            Content="{Binding ConnectButtonText}"
-                            Command="{Binding ConnectCommand}"
-                            IsEnabled="{Binding !IsConnecting}"
-                            Classes="primary" MinWidth="90" VerticalAlignment="Center"/>
-                    <Button Grid.Column="4"
-                            Content="Disconnect"
-                            Command="{Binding DisconnectCommand}"
-                            IsEnabled="{Binding IsConnected}"
-                            MinWidth="90" VerticalAlignment="Center"/>
-                </Grid>
+                <StackPanel Spacing="10">
+                    <!-- Server status row -->
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                        <Border Grid.Column="0" CornerRadius="8" Background="#0A1A10" BorderBrush="#166534" BorderThickness="1" Padding="8,3">
+                            <TextBlock Text="{Binding ServerStatus}" FontSize="10" Foreground="#6EE7B7"/>
+                        </Border>
+                        <TextBlock Grid.Column="1" Text="OpenRGB SDK Server (integrated)" Foreground="#4A6A8F" FontSize="11" VerticalAlignment="Center"/>
+                        <Button Grid.Column="2"
+                                Content="{Binding StartServerButtonText}"
+                                Command="{Binding StartServerCommand}"
+                                IsEnabled="{Binding !IsServerRunning}"
+                                Classes="primary" MinWidth="110" Padding="10,5" FontSize="11" VerticalAlignment="Center"/>
+                        <Button Grid.Column="3"
+                                Content="Stop"
+                                Command="{Binding StopServerCommand}"
+                                IsEnabled="{Binding IsServerRunning}"
+                                MinWidth="60" Padding="10,5" FontSize="11" VerticalAlignment="Center"/>
+                    </Grid>
+                    <!-- Connection row -->
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
+                        <TextBlock Grid.Column="0" Text="Connect to"
+                                   Foreground="#6B87AD" FontSize="12" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" Text="{Binding OpenRgbHost, Mode=TwoWay}"
+                                 Watermark="localhost" FontSize="12"
+                                 Background="#081320" Foreground="#C4D8F4"
+                                 BorderBrush="#1E3A60" CornerRadius="8" Padding="8,4"
+                                 VerticalAlignment="Center"/>
+                        <NumericUpDown Grid.Column="2" Value="{Binding OpenRgbPort, Mode=TwoWay}"
+                                      Minimum="1" Maximum="65535" Increment="1"
+                                      Width="95" FontSize="12"
+                                      Background="#081320" Foreground="#C4D8F4"
+                                      VerticalAlignment="Center"/>
+                        <Button Grid.Column="3"
+                                Content="{Binding ConnectButtonText}"
+                                Command="{Binding ConnectCommand}"
+                                IsEnabled="{Binding !IsConnecting}"
+                                Classes="primary" MinWidth="85" Padding="10,5" FontSize="11" VerticalAlignment="Center"/>
+                        <Button Grid.Column="4"
+                                Content="Disconnect"
+                                Command="{Binding DisconnectCommand}"
+                                IsEnabled="{Binding IsConnected}"
+                                MinWidth="85" Padding="10,5" FontSize="11" VerticalAlignment="Center"/>
+                    </Grid>
+                </StackPanel>
             </Border>
 
             <!-- ── SECTION 2 : THEME PRESETS ─────────────────────────── -->
