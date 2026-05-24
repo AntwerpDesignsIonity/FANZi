@@ -222,7 +222,13 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             List<FanChannelSnapshot> fanSnapshots = BuildFanSnapshots(sensors);
             FanChannelSnapshot? cpuFan = fanSnapshots.FirstOrDefault(IsCpuFanSnapshot);
 
-            // Fallback: if no fan matched CPU keywords but exactly one fan exists, use it.
+            // Fallback: prefer pump/AIO if no explicit CPU fan found (common in liquid-cooled systems).
+            if (cpuFan is null)
+            {
+                cpuFan = fanSnapshots.FirstOrDefault(f => f.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler);
+            }
+
+            // Last resort: if exactly one channel exists, use it.
             if (cpuFan is null && fanSnapshots.Count == 1)
             {
                 cpuFan = fanSnapshots[0];
@@ -454,10 +460,15 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
 
     private static bool IsCpuFanSnapshot(FanChannelSnapshot snapshot)
     {
-        // Pumps and AIO coolers are not fans — they have their own section.
-        if (snapshot.DeviceKind != FanDeviceKind.Fan)
+        // Pumps and AIO coolers ARE valid CPU cooling devices (e.g. W_PUMP headers).
+        if (snapshot.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler)
         {
-            return false;
+            return snapshot.Name.Contains("cpu", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("pump", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("aio", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("w_pump", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("cooler", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("liquid", StringComparison.OrdinalIgnoreCase);
         }
 
         return snapshot.Name.Contains("cpu", StringComparison.OrdinalIgnoreCase)

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"H:\\\\.repo\\\\.ionity\\\\.dev\\\\.johan\\\\.utilities\\\\.Fanzy\" -Recurse -Force)",
+      "Bash(Select-Object -First 100)",
+      "Bash(Format-Table FullName, PSIsContainer)"
+    ]
+  }
+}

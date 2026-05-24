@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Nullable>enable</Nullable>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <ApplicationIcon>..\Fanzi.FanControl\Assets\ionity-logo.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>FANZI Installer</Product>
+    <Company>Ionity Global (Pty) Ltd</Company>
+    <Authors>Johan Wilhelm van Antwerp</Authors>
+    <Copyright>Copyright © 2026 Ionity Global (Pty) Ltd. All rights reserved.</Copyright>
+    <Description>FANZI Installer — AI-Powered Fan Control &amp; RGB Lighting</Description>
+    <Version>2.0.0</Version>
+    <AssemblyName>FANZI-Installer</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.12" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.12" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\Fanzi.FanControl\Assets\**" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" />
+  </ItemGroup>
+</Project>

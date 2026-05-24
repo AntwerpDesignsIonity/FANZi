@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Fanzi.FanControl/Fanzi.FanControl.csproj" />
+    <Project Path="src/Fanzi.Installer/Fanzi.Installer.csproj" />
   </Folder>
 </Solution>

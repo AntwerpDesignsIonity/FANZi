@@ -1,4 +1,5 @@
 using Avalonia;
+using Fanzi.FanControl.Services;
 using System;
 using System.Linq;
 using System.Threading;
@@ -12,6 +13,8 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        CrashGuardService.Initialize();
+
         _singleInstanceMutex = new Mutex(true, "Global\\FANZI_SingleInstance", out bool createdNew);
         if (!createdNew)
             return;
@@ -22,6 +25,11 @@ sealed class Program
             App.StartMinimizedFromArgs = startMinimized;
 
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception ex)
+        {
+            CrashGuardService.WriteCrashLog(ex, "Main", isTerminating: true);
+            throw;
         }
         finally
         {
