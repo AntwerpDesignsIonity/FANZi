@@ -1,18 +1,35 @@
-﻿using Avalonia;
+using Avalonia;
 using System;
+using System.Linq;
+using System.Threading;
 
 namespace Fanzi.FanControl;
 
 sealed class Program
 {
-    // Initialization code. Don't use any Avalonia, third-party APIs or any
-    // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
-    // yet and stuff might break.
-    [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp()
-        .StartWithClassicDesktopLifetime(args);
+    private static Mutex? _singleInstanceMutex;
 
-    // Avalonia configuration, don't remove; also used by visual designer.
+    [STAThread]
+    public static void Main(string[] args)
+    {
+        _singleInstanceMutex = new Mutex(true, "Global\\FANZI_SingleInstance", out bool createdNew);
+        if (!createdNew)
+            return;
+
+        try
+        {
+            bool startMinimized = args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
+            App.StartMinimizedFromArgs = startMinimized;
+
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        finally
+        {
+            _singleInstanceMutex.ReleaseMutex();
+            _singleInstanceMutex.Dispose();
+        }
+    }
+
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()

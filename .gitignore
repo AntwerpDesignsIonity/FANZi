@@ -3,6 +3,7 @@
 # Build outputs
 bin/
 obj/
+publish/
 
 # User-specific files
 *.user

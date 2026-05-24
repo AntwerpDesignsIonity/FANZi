@@ -1,20 +1,25 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
-using System.Linq;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform.Storage;
 using Fanzi.FanControl.Services;
 using Fanzi.FanControl.ViewModels;
 using Fanzi.FanControl.Views;
+using System;
+using System.Linq;
 
 namespace Fanzi.FanControl;
 
 public partial class App : Application
 {
     private IHardwareMonitorService? _hardwareMonitorService;
-    private IRgbService?             _rgbService;
-    private ISettingsService?        _settingsService;
+    private IRgbService? _rgbService;
+    private ISettingsService? _settingsService;
+
+    public static bool StartMinimizedFromArgs { get; set; }
 
     public override void Initialize()
     {
@@ -25,18 +30,28 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
-            // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             DisableAvaloniaDataAnnotationValidation();
 
             _hardwareMonitorService = new HardwareMonitorService();
-            _rgbService             = new OpenRgbService();
-            _settingsService        = new SettingsService();
+            _rgbService = new OpenRgbService();
+            _settingsService = new SettingsService();
             var viewModel = new MainWindowViewModel(_hardwareMonitorService, _rgbService, _settingsService);
 
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = viewModel,
+            };
+
+            desktop.MainWindow = mainWindow;
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+            mainWindow.Closing += (_, e) =>
+            {
+                if (viewModel.CloseToTray)
+                {
+                    e.Cancel = true;
+                    mainWindow.Hide();
+                }
             };
 
             desktop.Exit += (_, _) =>
@@ -45,6 +60,13 @@ public partial class App : Application
                 _hardwareMonitorService.Dispose();
                 _rgbService.Dispose();
             };
+
+            if (StartMinimizedFromArgs || viewModel.StartMinimized)
+            {
+                mainWindow.WindowState = WindowState.Minimized;
+                if (viewModel.MinimizeToTray)
+                    mainWindow.Hide();
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -52,11 +74,9 @@ public partial class App : Application
 
     private void DisableAvaloniaDataAnnotationValidation()
     {
-        // Get an array of plugins to remove
         var dataValidationPluginsToRemove =
             BindingPlugins.DataValidators.OfType<DataAnnotationsValidationPlugin>().ToArray();
 
-        // remove each entry found
         foreach (var plugin in dataValidationPluginsToRemove)
         {
             BindingPlugins.DataValidators.Remove(plugin);
