@@ -166,15 +166,26 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private bool _isStartingServer;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowInstallButton))]
+    private bool _isInstallingOpenRgb;
+
+    [ObservableProperty]
+    private string _installProgress = "";
+
+    public bool IsOpenRgbInstalled => _serverManager.IsInstalled;
+    public bool ShowInstallButton => !IsOpenRgbInstalled && !IsInstallingOpenRgb;
+
     public string StartServerButtonText => IsStartingServer ? "Starting..." : IsServerRunning ? "Server Running" : "Start Server";
 
-    // ── Commands ──────────────────────────────────────────────────────────────
+    // ��─ Commands ─────────────────��────────────────────────────────────────────
 
     public IAsyncRelayCommand ConnectCommand       { get; }
     public IRelayCommand      DisconnectCommand    { get; }
     public IRelayCommand<RgbThemePreset> ApplyThemeCommand { get; }
     public IAsyncRelayCommand StartServerCommand   { get; }
     public IRelayCommand      StopServerCommand    { get; }
+    public IAsyncRelayCommand InstallOpenRgbCommand { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -187,9 +198,12 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         ApplyThemeCommand = new RelayCommand<RgbThemePreset>(ApplyTheme);
         StartServerCommand = new AsyncRelayCommand(StartServerAsync);
         StopServerCommand  = new RelayCommand(StopServer);
+        InstallOpenRgbCommand = new AsyncRelayCommand(InstallOpenRgbAsync);
 
         _serverManager.DetectInstallation();
         ServerStatus = _serverManager.Status;
+        OnPropertyChanged(nameof(IsOpenRgbInstalled));
+        OnPropertyChanged(nameof(ShowInstallButton));
 
         // Sync slider sets from initial color constants.
         SyncPrimarySliders();
@@ -459,7 +473,34 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(StartServerButtonText));
     }
 
-    // ── IDisposable ───────────────────────────────────────────────────────────
+    private async Task InstallOpenRgbAsync()
+    {
+        if (IsInstallingOpenRgb) return;
+        IsInstallingOpenRgb = true;
+        InstallProgress = "Starting download...";
+        ServerStatus = "Installing OpenRGB...";
+
+        var progress = new Progress<string>(msg =>
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => InstallProgress = msg);
+        });
+
+        bool ok = await _serverManager.InstallOpenRgbAsync(progress, _cts.Token);
+
+        IsInstallingOpenRgb = false;
+        ServerStatus = _serverManager.Status;
+        OnPropertyChanged(nameof(IsOpenRgbInstalled));
+        OnPropertyChanged(nameof(ShowInstallButton));
+        InstallProgress = ok ? "Installed! Ready to start." : "Install failed.";
+
+        if (ok)
+        {
+            await Task.Delay(500, _cts.Token);
+            await StartServerAsync();
+        }
+    }
+
+    // ── IDisposable ─────────���────────────────────────���────────────────────────
 
     public void Dispose()
     {

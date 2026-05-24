@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Fanzi.FanControl.App"
              xmlns:local="using:Fanzi.FanControl"
+             xmlns:vm="using:Fanzi.FanControl.ViewModels"
+             x:DataType="vm:MainWindowViewModel"
              RequestedThemeVariant="Dark">
 
     <Application.DataTemplates>
@@ -11,4 +13,20 @@
     <Application.Styles>
         <FluentTheme />
     </Application.Styles>
+
+    <TrayIcon.Icons>
+        <TrayIcons>
+            <TrayIcon Icon="/Assets/ionity-logo.ico"
+                      ToolTipText="FANZI — AI Fan Control &amp; RGB"
+                      Command="{Binding ShowWindowCommand}">
+                <TrayIcon.Menu>
+                    <NativeMenu>
+                        <NativeMenuItem Header="Show FANZI" Command="{Binding ShowWindowCommand}"/>
+                        <NativeMenuItemSeparator/>
+                        <NativeMenuItem Header="Exit" Command="{Binding ExitApplicationCommand}"/>
+                    </NativeMenu>
+                </TrayIcon.Menu>
+            </TrayIcon>
+        </TrayIcons>
+    </TrayIcon.Icons>
 </Application>

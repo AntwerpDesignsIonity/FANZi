@@ -94,6 +94,24 @@
             <Border Grid.Row="2" CornerRadius="14" Background="#071015" BorderBrush="#162030"
                     BorderThickness="1" Padding="16,12">
                 <StackPanel Spacing="10">
+                    <!-- Install OpenRGB row (shown when not installed) -->
+                    <Border IsVisible="{Binding ShowInstallButton}"
+                            CornerRadius="10" Background="#1A0A0A" BorderBrush="#7C2D12" BorderThickness="1" Padding="12,8">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="OpenRGB Not Installed" FontSize="12" FontWeight="Bold" Foreground="#FB923C"/>
+                                <TextBlock Text="OpenRGB is required for RGB control. Click Install to download and set up automatically." FontSize="10" Foreground="#9A5A30" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Install OpenRGB"
+                                    Command="{Binding InstallOpenRgbCommand}"
+                                    Background="#9A3412" Foreground="#FFF"
+                                    CornerRadius="8" Padding="14,6" FontSize="12" FontWeight="Bold"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <!-- Install progress -->
+                    <TextBlock IsVisible="{Binding IsInstallingOpenRgb}"
+                               Text="{Binding InstallProgress}" FontSize="11" Foreground="#FB923C" Margin="4,0"/>
                     <!-- Server status row -->
                     <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
                         <Border Grid.Column="0" CornerRadius="8" Background="#0A1A10" BorderBrush="#166534" BorderThickness="1" Padding="8,3">

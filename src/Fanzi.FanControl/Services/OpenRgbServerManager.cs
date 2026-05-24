@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,12 +12,17 @@ namespace Fanzi.FanControl.Services;
 
 public sealed class OpenRgbServerManager : IDisposable
 {
+    private static readonly HttpClient Http = new();
     private Process? _serverProcess;
     private bool _disposed;
 
     public bool IsRunning => _serverProcess is { HasExited: false };
     public string Status { get; private set; } = "Server not started";
     public int Port { get; private set; } = 6742;
+    public bool IsInstalled => DetectedPath is not null;
+
+    private static readonly string InstallDir =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FANZI", "OpenRGB");
 
     private static readonly string[] SearchPaths =
     [
@@ -23,6 +30,7 @@ public sealed class OpenRgbServerManager : IDisposable
         @"C:\Program Files (x86)\OpenRGB\OpenRGB.exe",
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenRGB", "OpenRGB.exe"),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "OpenRGB", "OpenRGB.exe"),
+        Path.Combine(InstallDir, "OpenRGB.exe"),
     ];
 
     public string? DetectedPath { get; private set; }
@@ -146,6 +154,81 @@ public sealed class OpenRgbServerManager : IDisposable
         }
         catch
         {
+            return false;
+        }
+    }
+
+    public async Task<bool> InstallOpenRgbAsync(IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        const string downloadUrl = "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_6b1df76.zip";
+
+        try
+        {
+            progress?.Report("Downloading OpenRGB...");
+            Status = "Downloading OpenRGB...";
+
+            Directory.CreateDirectory(InstallDir);
+            var zipPath = Path.Combine(InstallDir, "OpenRGB.zip");
+
+            using (var response = await Http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+            {
+                response.EnsureSuccessStatusCode();
+                await using var stream = await response.Content.ReadAsStreamAsync(ct);
+                await using var fileStream = File.Create(zipPath);
+                await stream.CopyToAsync(fileStream, ct);
+            }
+
+            progress?.Report("Extracting...");
+            Status = "Extracting OpenRGB...";
+
+            if (Directory.GetFiles(InstallDir, "*.exe").Length > 0)
+            {
+                foreach (var f in Directory.GetFiles(InstallDir).Where(f => !f.EndsWith(".zip")))
+                    File.Delete(f);
+                foreach (var d in Directory.GetDirectories(InstallDir))
+                    Directory.Delete(d, true);
+            }
+
+            System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, InstallDir, overwriteFiles: true);
+            File.Delete(zipPath);
+
+            var exeInSubfolder = Directory.GetFiles(InstallDir, "OpenRGB.exe", SearchOption.AllDirectories).FirstOrDefault();
+            if (exeInSubfolder is not null && Path.GetDirectoryName(exeInSubfolder) != InstallDir)
+            {
+                var subDir = Path.GetDirectoryName(exeInSubfolder)!;
+                foreach (var file in Directory.GetFiles(subDir))
+                    File.Move(file, Path.Combine(InstallDir, Path.GetFileName(file)), overwrite: true);
+                foreach (var dir in Directory.GetDirectories(subDir))
+                {
+                    var dest = Path.Combine(InstallDir, Path.GetFileName(dir));
+                    if (Directory.Exists(dest)) Directory.Delete(dest, true);
+                    Directory.Move(dir, dest);
+                }
+                if (Directory.Exists(subDir) && subDir != InstallDir)
+                    Directory.Delete(subDir, true);
+            }
+
+            DetectedPath = Path.Combine(InstallDir, "OpenRGB.exe");
+            if (!File.Exists(DetectedPath))
+            {
+                DetectedPath = Directory.GetFiles(InstallDir, "OpenRGB.exe", SearchOption.AllDirectories).FirstOrDefault();
+            }
+
+            if (DetectedPath is not null && File.Exists(DetectedPath))
+            {
+                Status = $"OpenRGB installed: {InstallDir}";
+                progress?.Report("OpenRGB installed successfully!");
+                return true;
+            }
+
+            Status = "Install failed: OpenRGB.exe not found after extraction";
+            progress?.Report("Install failed");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Status = $"Install failed: {ex.Message}";
+            progress?.Report($"Install failed: {ex.Message}");
             return false;
         }
     }

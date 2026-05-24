@@ -45,6 +45,8 @@ public partial class App : Application
             desktop.MainWindow = mainWindow;
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+            DataContext = viewModel;
+
             mainWindow.Closing += (_, e) =>
             {
                 if (viewModel.CloseToTray)
