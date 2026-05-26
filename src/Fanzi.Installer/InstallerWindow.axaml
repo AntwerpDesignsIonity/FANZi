@@ -87,6 +87,8 @@
                                 <CheckBox x:Name="StartMenuCheck" Content="Create Start Menu entry" IsChecked="True"/>
                                 <CheckBox x:Name="StartupCheck" Content="Start FANZI with Windows" IsChecked="False"/>
                                 <CheckBox x:Name="LaunchAfterCheck" Content="Launch FANZI after installation" IsChecked="True"/>
+                                <CheckBox x:Name="InstallOpenRgbCheck" Content="Download and install OpenRGB (required for RGB control)" IsChecked="True"/>
+                                <CheckBox x:Name="InstallVcRedistCheck" Content="Install Visual C++ runtime (LibreHardwareMonitor dependency)" IsChecked="True"/>
                             </StackPanel>
                         </Border>
 

@@ -92,6 +92,95 @@ public sealed class SmartFanCurveEngine
         };
     }
 
+    /// <summary>Aggressive curve for streamers / OBS encoding — keeps CPU cool under sustained load.</summary>
+    public static List<FanCurvePoint> GenerateStreamingCurve()
+    {
+        return new List<FanCurvePoint>
+        {
+            new() { TemperatureC = 30, FanPercent = 35 },
+            new() { TemperatureC = 45, FanPercent = 50 },
+            new() { TemperatureC = 55, FanPercent = 75 },
+            new() { TemperatureC = 65, FanPercent = 90 },
+            new() { TemperatureC = 75, FanPercent = 100 },
+        };
+    }
+
+    /// <summary>Gaming curve — quiet at idle, ramps fast when GPU/CPU spike.</summary>
+    public static List<FanCurvePoint> GenerateGamingCurve()
+    {
+        return new List<FanCurvePoint>
+        {
+            new() { TemperatureC = 35, FanPercent = 25 },
+            new() { TemperatureC = 50, FanPercent = 45 },
+            new() { TemperatureC = 60, FanPercent = 70 },
+            new() { TemperatureC = 70, FanPercent = 90 },
+            new() { TemperatureC = 78, FanPercent = 100 },
+        };
+    }
+
+    /// <summary>Workstation / rendering curve — sustained moderate cooling for hour-long jobs.</summary>
+    public static List<FanCurvePoint> GenerateWorkstationCurve()
+    {
+        return new List<FanCurvePoint>
+        {
+            new() { TemperatureC = 30, FanPercent = 30 },
+            new() { TemperatureC = 50, FanPercent = 60 },
+            new() { TemperatureC = 65, FanPercent = 80 },
+            new() { TemperatureC = 75, FanPercent = 95 },
+            new() { TemperatureC = 82, FanPercent = 100 },
+        };
+    }
+
+    /// <summary>Overclocker curve — max airflow, no compromises.</summary>
+    public static List<FanCurvePoint> GenerateOverclockCurve()
+    {
+        return new List<FanCurvePoint>
+        {
+            new() { TemperatureC = 25, FanPercent = 60 },
+            new() { TemperatureC = 40, FanPercent = 75 },
+            new() { TemperatureC = 55, FanPercent = 90 },
+            new() { TemperatureC = 65, FanPercent = 100 },
+        };
+    }
+
+    /// <summary>Zero-RPM (passive) curve — fans off until threshold, popular for SFF builds.</summary>
+    public static List<FanCurvePoint> GenerateZeroRpmCurve()
+    {
+        return new List<FanCurvePoint>
+        {
+            new() { TemperatureC = 0,  FanPercent = 0 },
+            new() { TemperatureC = 55, FanPercent = 0 },
+            new() { TemperatureC = 60, FanPercent = 40 },
+            new() { TemperatureC = 70, FanPercent = 65 },
+            new() { TemperatureC = 80, FanPercent = 90 },
+            new() { TemperatureC = 85, FanPercent = 100 },
+        };
+    }
+
+    /// <summary>Linear curve — proportional from 30°C/30% to 80°C/100%.</summary>
+    public static List<FanCurvePoint> GenerateLinearCurve()
+    {
+        return new List<FanCurvePoint>
+        {
+            new() { TemperatureC = 30, FanPercent = 30 },
+            new() { TemperatureC = 80, FanPercent = 100 },
+        };
+    }
+
+    /// <summary>All built-in presets paired with display name + description.</summary>
+    public static IReadOnlyList<(string Name, string Description, List<FanCurvePoint> Curve)> AllPresets => new[]
+    {
+        ("Silent",        "Whisper-quiet, fans low until 65°C",          GenerateSilentCurve()),
+        ("Balanced",      "Default — good cooling, low noise",           GenerateDefaultCurve()),
+        ("Performance",   "Aggressive ramp from 45°C — keeps temps low", GeneratePerformanceCurve()),
+        ("Gaming",        "Quiet idle, fast ramp on GPU spikes",          GenerateGamingCurve()),
+        ("Streaming",     "Sustained encode load — anti-throttle",        GenerateStreamingCurve()),
+        ("Workstation",   "Renders/compilers — long sustained loads",    GenerateWorkstationCurve()),
+        ("Overclock",     "Max airflow, no compromise",                   GenerateOverclockCurve()),
+        ("Zero-RPM",      "Fans off until 55°C (SFF / passive builds)",   GenerateZeroRpmCurve()),
+        ("Linear",        "Simple proportional 30→100%",                  GenerateLinearCurve()),
+    };
+
     private static double InterpolateCurve(List<FanCurvePoint> curve, double tempC)
     {
         var sorted = curve.OrderBy(p => p.TemperatureC).ToList();

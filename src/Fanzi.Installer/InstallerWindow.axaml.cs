@@ -6,7 +6,10 @@ using Microsoft.Win32;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Net.Http;
 using System.Runtime.Versioning;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Fanzi.Installer;
@@ -15,6 +18,8 @@ public partial class InstallerWindow : Window
 {
     private static readonly string DefaultInstallPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "FANZI");
+
+    private static readonly HttpClient Http = new();
 
     public InstallerWindow()
     {
@@ -47,6 +52,7 @@ public partial class InstallerWindow : Window
         bool startMenu = StartMenuCheck.IsChecked == true;
         bool startup = StartupCheck.IsChecked == true;
         bool launchAfter = LaunchAfterCheck.IsChecked == true;
+        bool installOpenRgb = InstallOpenRgbCheck.IsChecked == true;
 
         OptionsPanel.IsVisible = false;
         ProgressPanel.IsVisible = true;
@@ -55,7 +61,7 @@ public partial class InstallerWindow : Window
 
         try
         {
-            await Task.Run(() => RunInstallation(installPath, desktopShortcut, startMenu, startup));
+            await Task.Run(async () => await RunInstallationAsync(installPath, desktopShortcut, startMenu, startup, installOpenRgb));
 
             ProgressPanel.IsVisible = false;
             CompletePanel.IsVisible = true;
@@ -67,7 +73,10 @@ public partial class InstallerWindow : Window
             {
                 if (launchAfter)
                 {
-                    string exePath = Path.Combine(installPath, "Fanzi.FanControl.exe");
+                    string launcherPath = Path.Combine(installPath, "Run_Ionity.exe");
+                    string exePath = File.Exists(launcherPath)
+                        ? launcherPath
+                        : Path.Combine(installPath, "Fanzi.FanControl.exe");
                     if (File.Exists(exePath))
                     {
                         Process.Start(new ProcessStartInfo
@@ -90,29 +99,47 @@ public partial class InstallerWindow : Window
         }
     }
 
-    private void RunInstallation(string installPath, bool desktopShortcut, bool startMenu, bool startup)
+    private async Task RunInstallationAsync(string installPath, bool desktopShortcut, bool startMenu, bool startup, bool installOpenRgb)
     {
         UpdateProgress(5, "Creating installation directory...");
         Directory.CreateDirectory(installPath);
 
-        UpdateProgress(15, "Extracting application files...");
+        UpdateProgress(10, "Locating bundled application files...");
         string? sourceDir = FindSourceFiles();
         if (sourceDir is null)
         {
             throw new InvalidOperationException(
-                "Could not locate FANZI application files. Ensure the publish output is bundled with the installer.");
+                "Could not locate FANZI application files. Expected an 'app' folder next to the installer.");
         }
 
-        UpdateProgress(30, "Copying files...");
+        UpdateProgress(25, "Copying FANZI files...");
         CopyDirectory(sourceDir, installPath);
 
-        UpdateProgress(60, "Registering application...");
+        UpdateProgress(45, "Creating Run_Ionity launcher...");
+        CreateRunIonityLauncher(installPath);
+
+        if (installOpenRgb)
+        {
+            UpdateProgress(55, "Downloading OpenRGB...");
+            try
+            {
+                await InstallOpenRgbAsync(installPath);
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: continue install even if OpenRGB download fails
+                UpdateProgress(70, $"OpenRGB skipped ({ex.Message.Split('\n')[0]})");
+                Thread.Sleep(800);
+            }
+        }
+
+        UpdateProgress(80, "Registering application...");
         if (OperatingSystem.IsWindows())
         {
             RegisterWindowsApp(installPath, desktopShortcut, startMenu, startup);
         }
 
-        UpdateProgress(85, "Creating uninstaller...");
+        UpdateProgress(92, "Creating uninstaller...");
         CreateUninstaller(installPath);
 
         UpdateProgress(100, "Installation complete!");
@@ -123,25 +150,73 @@ public partial class InstallerWindow : Window
         string? assemblyDir = AppContext.BaseDirectory;
         if (string.IsNullOrEmpty(assemblyDir)) return null;
 
-        string appFilesDir = Path.Combine(assemblyDir, "app");
-        if (Directory.Exists(appFilesDir))
-            return appFilesDir;
-
-        string parentAppDir = Path.Combine(Path.GetDirectoryName(assemblyDir) ?? "", "app");
-        if (Directory.Exists(parentAppDir))
-            return parentAppDir;
-
-        string publishDir = Path.Combine(assemblyDir, "..", "..", "publish", "win-x64");
-        if (Directory.Exists(publishDir))
-            return Path.GetFullPath(publishDir);
+        // Look for 'app' folder alongside installer
+        foreach (var candidate in new[]
+        {
+            Path.Combine(assemblyDir, "app"),
+            Path.Combine(Path.GetDirectoryName(assemblyDir) ?? "", "app"),
+            Path.GetFullPath(Path.Combine(assemblyDir, "..", "..", "publish")),
+            Path.GetFullPath(Path.Combine(assemblyDir, "..", "..", "..", "publish")),
+        })
+        {
+            if (Directory.Exists(candidate) &&
+                File.Exists(Path.Combine(candidate, "Fanzi.FanControl.exe")))
+            {
+                return candidate;
+            }
+        }
 
         return null;
+    }
+
+    private async Task InstallOpenRgbAsync(string installPath)
+    {
+        string openRgbDir = Path.Combine(installPath, "OpenRGB");
+        Directory.CreateDirectory(openRgbDir);
+
+        string zipPath = Path.Combine(openRgbDir, "OpenRGB.zip");
+        const string downloadUrl = "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_6b1df76.zip";
+
+        UpdateProgress(60, "Downloading OpenRGB (~8 MB)...");
+        using (var response = await Http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+        {
+            response.EnsureSuccessStatusCode();
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            await using var fileStream = File.Create(zipPath);
+            await stream.CopyToAsync(fileStream);
+        }
+
+        UpdateProgress(70, "Extracting OpenRGB...");
+        ZipFile.ExtractToDirectory(zipPath, openRgbDir, overwriteFiles: true);
+        File.Delete(zipPath);
+
+        // Flatten the OpenRGB_0.9_Windows_64 subfolder if present
+        var subdirs = Directory.GetDirectories(openRgbDir);
+        foreach (var sd in subdirs)
+        {
+            if (Path.GetFileName(sd).StartsWith("OpenRGB", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var f in Directory.GetFiles(sd))
+                    File.Move(f, Path.Combine(openRgbDir, Path.GetFileName(f)), overwrite: true);
+                foreach (var d in Directory.GetDirectories(sd))
+                {
+                    var dest = Path.Combine(openRgbDir, Path.GetFileName(d));
+                    if (Directory.Exists(dest)) Directory.Delete(dest, true);
+                    Directory.Move(d, dest);
+                }
+                Directory.Delete(sd, true);
+            }
+        }
+
+        UpdateProgress(75, "OpenRGB installed");
     }
 
     [SupportedOSPlatform("windows")]
     private static void RegisterWindowsApp(string installPath, bool desktopShortcut, bool startMenu, bool startup)
     {
         string exePath = Path.Combine(installPath, "Fanzi.FanControl.exe");
+        string launcherPath = Path.Combine(installPath, "Run_Ionity.exe");
+        string targetPath = File.Exists(launcherPath) ? launcherPath : exePath;
 
         using var uninstallKey = Registry.LocalMachine.CreateSubKey(
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\FANZI");
@@ -156,7 +231,7 @@ public partial class InstallerWindow : Window
         uninstallKey.SetValue("NoRepair", 1);
 
         if (desktopShortcut)
-            CreateShortcut(exePath,
+            CreateShortcut(targetPath,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "FANZI.lnk"));
 
         if (startMenu)
@@ -164,13 +239,15 @@ public partial class InstallerWindow : Window
             string startMenuDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs", "FANZI");
             Directory.CreateDirectory(startMenuDir);
-            CreateShortcut(exePath, Path.Combine(startMenuDir, "FANZI.lnk"));
+            CreateShortcut(targetPath, Path.Combine(startMenuDir, "FANZI.lnk"));
+            CreateShortcut(Path.Combine(installPath, "uninstall.bat"),
+                Path.Combine(startMenuDir, "Uninstall FANZI.lnk"));
         }
 
         if (startup)
         {
             using var runKey = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true);
-            runKey?.SetValue("FANZI", $"\"{exePath}\" --minimized");
+            runKey?.SetValue("FANZI", $"\"{targetPath}\" --minimized");
         }
     }
 
@@ -195,18 +272,49 @@ public partial class InstallerWindow : Window
         })?.WaitForExit(5000);
     }
 
+    private static void CreateRunIonityLauncher(string installPath)
+    {
+        // Run_Ionity.bat - a simple branded launcher that elevates and launches FANZI
+        string batPath = Path.Combine(installPath, "Run_Ionity.bat");
+        string content = $"""
+            @echo off
+            title Run_Ionity — Launching FANZI
+            echo ===========================================
+            echo  FANZI by Antwerp Designs · AI@IONITY.TODAY
+            echo ===========================================
+            echo Starting FANZI with hardware access...
+            cd /d "{installPath}"
+            start "" "Fanzi.FanControl.exe" %*
+            exit
+            """;
+        File.WriteAllText(batPath, content);
+
+        // Also create a launcher .vbs that runs silently (no console flash)
+        string vbsPath = Path.Combine(installPath, "Run_Ionity.vbs");
+        string fanziExe = Path.Combine(installPath, "Fanzi.FanControl.exe").Replace("\\", "\\\\");
+        string vbsContent =
+            "Set WshShell = CreateObject(\"WScript.Shell\")" + Environment.NewLine +
+            "WshShell.CurrentDirectory = \"" + installPath.Replace("\\", "\\\\") + "\"" + Environment.NewLine +
+            "WshShell.Run \"\"\"" + fanziExe + "\"\"\", 1, False" + Environment.NewLine;
+        File.WriteAllText(vbsPath, vbsContent);
+    }
+
     private static void CreateUninstaller(string installPath)
     {
         string uninstallBat = Path.Combine(installPath, "uninstall.bat");
         string content = $"""
             @echo off
             echo Uninstalling FANZI...
+            taskkill /F /IM "Fanzi.FanControl.exe" >nul 2>&1
+            taskkill /F /IM "OpenRGB.exe" >nul 2>&1
             reg delete "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v "FANZI" /f >nul 2>&1
             reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\FANZI" /f >nul 2>&1
             del "%USERPROFILE%\Desktop\FANZI.lnk" >nul 2>&1
             rmdir /s /q "%ProgramData%\Microsoft\Windows\Start Menu\Programs\FANZI" >nul 2>&1
-            echo FANZI has been uninstalled. You can delete this folder manually.
-            echo Install location: {installPath}
+            timeout /t 1 >nul
+            echo FANZI has been uninstalled.
+            echo Install folder: {installPath}
+            echo You can delete this folder manually.
             pause
             """;
         File.WriteAllText(uninstallBat, content);
@@ -236,6 +344,6 @@ public partial class InstallerWindow : Window
             ProgressBar.Value = percent;
             ProgressStatus.Text = status;
         });
-        System.Threading.Thread.Sleep(200);
+        System.Threading.Thread.Sleep(120);
     }
 }
