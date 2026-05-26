@@ -125,31 +125,18 @@
                                       OffContent="RGB Disabled"
                                       VerticalAlignment="Center"/>
                     </Grid>
-                    <!-- Connection row -->
-                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
-                        <TextBlock Grid.Column="0" Text="Connect to"
-                                   Foreground="#6B87AD" FontSize="12" VerticalAlignment="Center"/>
-                        <TextBox Grid.Column="1" Text="{Binding OpenRgbHost, Mode=TwoWay}"
-                                 Watermark="localhost" FontSize="12"
-                                 Background="#081320" Foreground="#C4D8F4"
-                                 BorderBrush="#1E3A60" CornerRadius="8" Padding="8,4"
-                                 VerticalAlignment="Center"/>
-                        <NumericUpDown Grid.Column="2" Value="{Binding OpenRgbPort, Mode=TwoWay}"
-                                      Minimum="1" Maximum="65535" Increment="1"
-                                      Width="95" FontSize="12"
-                                      Background="#081320" Foreground="#C4D8F4"
-                                      VerticalAlignment="Center"/>
-                        <Button Grid.Column="3"
-                                Content="{Binding ConnectButtonText}"
-                                Command="{Binding ConnectCommand}"
-                                IsEnabled="{Binding !IsConnecting}"
-                                Classes="primary" MinWidth="85" Padding="10,5" FontSize="11" VerticalAlignment="Center"/>
-                        <Button Grid.Column="4"
-                                Content="Disconnect"
-                                Command="{Binding DisconnectCommand}"
-                                IsEnabled="{Binding IsConnected}"
-                                MinWidth="85" Padding="10,5" FontSize="11" VerticalAlignment="Center"/>
-                    </Grid>
+                    <!-- Connection status — just a passive indicator, no buttons -->
+                    <Border CornerRadius="8" Background="#081320" BorderBrush="#1E3A60" BorderThickness="1" Padding="10,6">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Border Grid.Column="0" Width="10" Height="10" CornerRadius="5"
+                                    Background="{Binding ConnectionBadgeBorderBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="{Binding ConnectionStatus}"
+                                       FontSize="11" Foreground="#7090B0" TextWrapping="NoWrap"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="{Binding DeviceSummary}"
+                                       FontSize="11" Foreground="#5A7899" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
                 </StackPanel>
             </Border>
 

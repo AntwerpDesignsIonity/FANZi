@@ -246,17 +246,24 @@ public partial class InstallerWindow : Window
         uninstallKey.SetValue("NoRepair", 1);
 
         if (desktopShortcut)
-            CreateShortcut(targetPath,
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "FANZI.lnk"));
+        {
+            // Use the per-user Desktop folder so a non-elevated user still sees the icon
+            string userDesktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            string publicDesktop = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
+
+            CreateShortcut(exePath, Path.Combine(userDesktop, "FANZI.lnk"), iconPath: exePath);
+            // Also put one on the All Users desktop so other accounts on this PC see it
+            try { CreateShortcut(exePath, Path.Combine(publicDesktop, "FANZI.lnk"), iconPath: exePath); } catch { }
+        }
 
         if (startMenu)
         {
             string startMenuDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs", "FANZI");
             Directory.CreateDirectory(startMenuDir);
-            CreateShortcut(targetPath, Path.Combine(startMenuDir, "FANZI.lnk"));
+            CreateShortcut(exePath, Path.Combine(startMenuDir, "FANZI.lnk"), iconPath: exePath);
             CreateShortcut(Path.Combine(installPath, "uninstall.bat"),
-                Path.Combine(startMenuDir, "Uninstall FANZI.lnk"));
+                Path.Combine(startMenuDir, "Uninstall FANZI.lnk"), iconPath: exePath);
         }
 
         if (startup)
@@ -267,24 +274,39 @@ public partial class InstallerWindow : Window
     }
 
     [SupportedOSPlatform("windows")]
-    private static void CreateShortcut(string targetPath, string shortcutPath)
+    private static void CreateShortcut(string targetPath, string shortcutPath, string? iconPath = null)
     {
-        string script = $"""
-            $ws = New-Object -ComObject WScript.Shell
-            $s = $ws.CreateShortcut('{shortcutPath.Replace("'", "''")}')
-            $s.TargetPath = '{targetPath.Replace("'", "''")}'
-            $s.WorkingDirectory = '{Path.GetDirectoryName(targetPath)?.Replace("'", "''")}'
-            $s.Description = 'FANZI — AI-Powered Fan Control'
-            $s.Save()
-            """;
-
-        Process.Start(new ProcessStartInfo
+        // Use WScript.Shell COM directly — far more reliable than shelling out to powershell
+        // and works even if PowerShell is locked down by policy.
+        try
         {
-            FileName = "powershell",
-            Arguments = $"-NoProfile -Command \"{script.Replace("\"", "\\\"")}\"",
-            CreateNoWindow = true,
-            UseShellExecute = false,
-        })?.WaitForExit(5000);
+            Type? shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType is null) return;
+            dynamic? shell = Activator.CreateInstance(shellType);
+            if (shell is null) return;
+
+            // Ensure parent dir exists
+            var parent = Path.GetDirectoryName(shortcutPath);
+            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+
+            dynamic shortcut = shell.CreateShortcut(shortcutPath);
+            shortcut.TargetPath = targetPath;
+            shortcut.WorkingDirectory = Path.GetDirectoryName(targetPath) ?? "";
+            shortcut.Description = "FANZI — AI-Powered Fan Control & RGB Lighting";
+            shortcut.IconLocation = (iconPath ?? targetPath) + ",0";
+            shortcut.Save();
+        }
+        catch
+        {
+            // Last-resort fallback: write a .url file (Explorer handles it the same way)
+            try
+            {
+                string urlPath = Path.ChangeExtension(shortcutPath, ".url");
+                File.WriteAllText(urlPath,
+                    $"[InternetShortcut]\r\nURL=file:///{targetPath.Replace('\\', '/')}\r\nIconFile={targetPath}\r\nIconIndex=0\r\n");
+            }
+            catch { }
+        }
     }
 
     private static void CreateRunIonityLauncher(string installPath)
