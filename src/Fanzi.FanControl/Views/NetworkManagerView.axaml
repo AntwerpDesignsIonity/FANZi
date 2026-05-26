@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Fanzi.FanControl.ViewModels"
+             x:Class="Fanzi.FanControl.Views.NetworkManagerView"
+             x:DataType="vm:NetworkManagerViewModel">
+    <ScrollViewer>
+    <Border CornerRadius="20" Background="#0C1828" BorderBrush="#1E3254" BorderThickness="1" Padding="24">
+        <StackPanel Spacing="14">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Network Manager" FontSize="20" FontWeight="Black" Foreground="#E8F0FF"/>
+                    <TextBlock Text="{Binding LastUpdated}" Foreground="#4A6A8F" FontSize="11"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshNowCommand}" Padding="10,5" FontSize="11"/>
+                <Button Grid.Column="2" Content="ncpa.cpl" Command="{Binding OpenNetworkAdaptersCommand}" Padding="10,5" FontSize="11"/>
+            </Grid>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Border Grid.Column="0" Background="#0A1422" CornerRadius="10" Padding="14,10">
+                    <StackPanel>
+                        <TextBlock Text="TOTAL DOWNLOAD" Foreground="#4E6E95" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding TotalDownloadRate}" FontSize="22" FontWeight="Black" Foreground="#22C55E"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Background="#0A1422" CornerRadius="10" Padding="14,10">
+                    <StackPanel>
+                        <TextBlock Text="TOTAL UPLOAD" Foreground="#4E6E95" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding TotalUploadRate}" FontSize="22" FontWeight="Black" Foreground="#3B82F6"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <TextBlock Text="ACTIVE ADAPTERS" Foreground="#4E6E95" FontSize="10" FontWeight="Bold" LetterSpacing="2" Margin="0,6,0,0"/>
+            <Border Background="#061018" CornerRadius="12">
+                <DataGrid ItemsSource="{Binding Adapters}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                          Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="160"/>
+                        <DataGridTextColumn Header="Type" Binding="{Binding Kind}" Width="100"/>
+                        <DataGridTextColumn Header="Link Speed (bps)" Binding="{Binding Speed}" Width="140"/>
+                        <DataGridTextColumn Header="↓ Down" Binding="{Binding DownloadBps, StringFormat={}{0:F0} B/s}" Width="120"/>
+                        <DataGridTextColumn Header="↑ Up" Binding="{Binding UploadBps, StringFormat={}{0:F0} B/s}" Width="120"/>
+                        <DataGridTextColumn Header="Description" Binding="{Binding Description}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+            <TextBlock Text="TOP NETWORK-ACTIVE PROCESSES" Foreground="#4E6E95" FontSize="10" FontWeight="Bold" LetterSpacing="2"/>
+            <Border Background="#061018" CornerRadius="12" MaxHeight="220">
+                <DataGrid ItemsSource="{Binding ActiveProcesses}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                          Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="PID" Binding="{Binding Pid}" Width="70"/>
+                        <DataGridTextColumn Header="Process" Binding="{Binding Name}" Width="*"/>
+                        <DataGridTextColumn Header="↓ Down B/s" Binding="{Binding DownloadBps, StringFormat={}{0:F0}}" Width="120"/>
+                        <DataGridTextColumn Header="↑ Up B/s" Binding="{Binding UploadBps, StringFormat={}{0:F0}}" Width="120"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="Rate Limit (NetLimiter-style, Windows QoS)" FontSize="14" FontWeight="Bold" Foreground="#E8F0FF"/>
+                    <TextBlock Text="Apply a soft bandwidth cap to a specific .exe. Requires FANZI running as administrator."
+                               Foreground="#5A7899" FontSize="11" TextWrapping="Wrap"/>
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                        <TextBox Grid.Column="0" Watermark="App exe (e.g. chrome.exe)" Text="{Binding RateLimitAppName, Mode=TwoWay}" Background="#081320" Foreground="#C4D8F4" BorderBrush="#1E3A60" CornerRadius="8" Padding="10,6"/>
+                        <NumericUpDown Grid.Column="1" Value="{Binding RateLimitKbps, Mode=TwoWay}" Minimum="64" Maximum="1000000" Increment="100" Width="120" Background="#081320" Foreground="#C4D8F4"/>
+                        <Button Grid.Column="2" Content="Apply Limit" Command="{Binding ApplyRateLimitCommand}" Classes="primary" Padding="12,6"/>
+                        <Button Grid.Column="3" Content="Remove" Command="{Binding RemoveRateLimitCommand}" Padding="12,6"/>
+                    </Grid>
+                    <TextBlock Text="{Binding RateLimitStatus}" Foreground="#FB923C" FontSize="11"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </Border>
+    </ScrollViewer>
+</UserControl>

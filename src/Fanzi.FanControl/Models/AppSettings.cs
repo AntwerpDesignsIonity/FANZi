@@ -15,4 +15,9 @@ public sealed class AppSettings
     public int PollingIntervalSeconds { get; set; } = 3;
     public int ReducedPollingIntervalSeconds { get; set; } = 10;
     public string? LastExportPath { get; set; }
+
+    // Modular tab visibility — let the user disable sections they don't need
+    public bool ShowTaskManagerTab { get; set; } = true;
+    public bool ShowNetworkManagerTab { get; set; } = true;
+    public bool ShowPowerMonitorTab { get; set; } = true;
 }

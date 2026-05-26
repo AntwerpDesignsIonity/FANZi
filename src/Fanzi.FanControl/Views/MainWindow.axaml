@@ -493,6 +493,21 @@
                         <views:RgbControlView DataContext="{Binding RgbControl}" Margin="0,12,0,0"/>
                     </TabItem>
 
+                    <!-- ══ TAB: TASK MANAGER ══════════════════════ -->
+                    <TabItem Header="Tasks" IsVisible="{Binding ShowTaskManagerTab}">
+                        <views:TaskManagerView DataContext="{Binding TaskManagerVm}" Margin="0,12,0,0"/>
+                    </TabItem>
+
+                    <!-- ══ TAB: NETWORK MANAGER ═══════════════════ -->
+                    <TabItem Header="Network" IsVisible="{Binding ShowNetworkManagerTab}">
+                        <views:NetworkManagerView DataContext="{Binding NetworkManagerVm}" Margin="0,12,0,0"/>
+                    </TabItem>
+
+                    <!-- ══ TAB: POWER MONITOR ═════════════════════ -->
+                    <TabItem Header="Power" IsVisible="{Binding ShowPowerMonitorTab}">
+                        <views:PowerMonitorView DataContext="{Binding PowerMonitorVm}" Margin="0,12,0,0"/>
+                    </TabItem>
+
                     <!-- ══ TAB: NOTIFICATIONS ═════════════════════ -->
                     <TabItem Header="Alerts">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -563,6 +578,22 @@
                                         <Border CornerRadius="8" Background="#060C14" Padding="12,8">
                                             <TextBlock Text="When minimized, FANZI reduces polling to save CPU. Right-click the tray icon to restore or exit." Foreground="#3A5A80" FontSize="11" TextWrapping="Wrap"/>
                                         </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Modular Section Toggles -->
+                                <Border Classes="card">
+                                    <StackPanel Spacing="14">
+                                        <TextBlock Text="Modular Sections" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"/>
+                                        <TextBlock Text="Show/hide tabs you don't use. Disabled sections stop their background polling." Foreground="#5A7899" FontSize="11" TextWrapping="Wrap"/>
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Task Manager tab" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding ShowTaskManagerTab}" HorizontalAlignment="Right"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Network Manager tab" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <ToggleSwitch Grid.Row="1" Grid.Column="1" IsChecked="{Binding ShowNetworkManagerTab}" HorizontalAlignment="Right"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Power Monitor &amp; Drives tab" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <ToggleSwitch Grid.Row="2" Grid.Column="1" IsChecked="{Binding ShowPowerMonitorTab}" HorizontalAlignment="Right"/>
+                                        </Grid>
                                     </StackPanel>
                                 </Border>
 

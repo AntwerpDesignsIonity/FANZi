@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Fanzi.FanControl.ViewModels"
+             x:Class="Fanzi.FanControl.Views.PowerMonitorView"
+             x:DataType="vm:PowerMonitorViewModel">
+    <ScrollViewer>
+    <Border CornerRadius="20" Background="#0C1828" BorderBrush="#1E3254" BorderThickness="1" Padding="24">
+        <StackPanel Spacing="14">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Power Monitor &amp; Drives" FontSize="20" FontWeight="Black" Foreground="#E8F0FF"/>
+                    <TextBlock Text="{Binding LastUpdated}" Foreground="#4A6A8F" FontSize="11"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshNowCommand}" Padding="10,5" FontSize="11"/>
+                <Button Grid.Column="2" Content="Device Manager" Command="{Binding OpenDeviceManagerCommand}" Padding="10,5" FontSize="11"/>
+                <Button Grid.Column="3" Content="Disk Management" Command="{Binding OpenDiskManagementCommand}" Padding="10,5" FontSize="11"/>
+                <Button Grid.Column="4" Content="Power Options" Command="{Binding OpenPowerOptionsCommand}" Padding="10,5" FontSize="11"/>
+            </Grid>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Border Grid.Column="0" Background="#0A1422" CornerRadius="10" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="MEASURED COMPONENT POWER" Foreground="#4E6E95" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding TotalComponentWatts}" FontSize="28" FontWeight="Black" Foreground="#FB923C"/>
+                        <TextBlock Text="Sum of CPU + GPU + components reporting power" Foreground="#5A7899" FontSize="11"/>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Background="#0A1422" CornerRadius="10" Padding="14,12">
+                    <StackPanel>
+                        <TextBlock Text="ESTIMATED SYSTEM DRAW" Foreground="#4E6E95" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding TotalSystemWatts}" FontSize="28" FontWeight="Black" Foreground="#22C55E"/>
+                        <TextBlock Text="+ ~25 W for fans, board, accessories" Foreground="#5A7899" FontSize="11"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <TextBlock Text="PER-COMPONENT POWER" Foreground="#4E6E95" FontSize="10" FontWeight="Bold" LetterSpacing="2"/>
+            <Border Background="#061018" CornerRadius="12">
+                <DataGrid ItemsSource="{Binding Components}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                          Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120"/>
+                        <DataGridTextColumn Header="Component" Binding="{Binding Name}" Width="*"/>
+                        <DataGridTextColumn Header="Power" Binding="{Binding Watts, StringFormat={}{0:F1} W}" Width="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+            <TextBlock Text="STORAGE DRIVES (click Disk Management above for full controls)" Foreground="#4E6E95" FontSize="10" FontWeight="Bold" LetterSpacing="2"/>
+            <Border Background="#061018" CornerRadius="12">
+                <DataGrid ItemsSource="{Binding Drives}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                          Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Drive" Binding="{Binding Letter}" Width="80"/>
+                        <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="180"/>
+                        <DataGridTextColumn Header="Format" Binding="{Binding Format}" Width="80"/>
+                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="100"/>
+                        <DataGridTextColumn Header="Total (GB)" Binding="{Binding TotalGb, StringFormat={}{0:F1}}" Width="100"/>
+                        <DataGridTextColumn Header="Free (GB)" Binding="{Binding FreeGb, StringFormat={}{0:F1}}" Width="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+        </StackPanel>
+    </Border>
+    </ScrollViewer>
+</UserControl>

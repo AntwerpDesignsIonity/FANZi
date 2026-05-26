@@ -34,7 +34,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private static readonly TimeSpan AlertEmailCooldown = TimeSpan.FromMinutes(10);
 
     public RgbControlViewModel RgbControl { get; }
+    public TaskManagerViewModel TaskManagerVm { get; } = new();
+    public NetworkManagerViewModel NetworkManagerVm { get; } = new();
+    public PowerMonitorViewModel PowerMonitorVm { get; } = new();
     public SmartFanCurveEngine AiEngine => _aiEngine;
+
+    // Section toggles bound to AppSettings
+    [ObservableProperty] private bool _showTaskManagerTab = true;
+    [ObservableProperty] private bool _showNetworkManagerTab = true;
+    [ObservableProperty] private bool _showPowerMonitorTab = true;
 
     // ── Observable properties ─────────────────────────────────────────────────
 
@@ -171,6 +179,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _refreshLock.Dispose();
         _disposeTokenSource.Dispose();
         RgbControl.Dispose();
+        TaskManagerVm.Dispose();
+        NetworkManagerVm.Dispose();
+        PowerMonitorVm.Dispose();
         foreach (var fanChannel in FanChannels)
             fanChannel.Dispose();
     }
@@ -199,6 +210,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             CloseToTray = _appSettings.CloseToTray;
             AiAutoFanEnabled = _appSettings.AiAutoFanEnabled;
             AiAnomalyDetection = _appSettings.AiAnomalyDetection;
+            ShowTaskManagerTab = _appSettings.ShowTaskManagerTab;
+            ShowNetworkManagerTab = _appSettings.ShowNetworkManagerTab;
+            ShowPowerMonitorTab = _appSettings.ShowPowerMonitorTab;
         }
         finally
         {
@@ -234,6 +248,27 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_suppressProfileSync) return;
         _appSettings.CloseToTray = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnShowTaskManagerTabChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.ShowTaskManagerTab = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnShowNetworkManagerTabChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.ShowNetworkManagerTab = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnShowPowerMonitorTabChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.ShowPowerMonitorTab = value;
         _ = SaveSettingsAsync();
     }
 
@@ -410,8 +445,24 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             CpuName = snapshot.CpuName ?? string.Empty;
             GpuName = snapshot.GpuName ?? string.Empty;
             GpuVram = FormatVram(snapshot.GpuMemoryUsedMb, snapshot.GpuMemoryTotalMb);
-            CpuFanName = snapshot.CpuFan?.Name ?? "CPU fan";
-            CpuFanSpeed = snapshot.CpuFan?.SpeedRpm is double rpm ? $"{rpm:F0} RPM" : "Not detected";
+            // Friendly label: prefix with PUMP/AIO when CPU cooling is liquid-cooled
+            if (snapshot.CpuFan is { } cf)
+            {
+                string kindPrefix = cf.DeviceKind switch
+                {
+                    FanDeviceKind.Pump      => "CPU Pump",
+                    FanDeviceKind.AioCooler => "CPU AIO Cooler",
+                    _ => "CPU Fan",
+                };
+                CpuFanName = $"{kindPrefix} · {cf.Name}";
+            }
+            else
+            {
+                CpuFanName = "CPU Cooling — not detected";
+            }
+            CpuFanSpeed = snapshot.CpuFan?.SpeedRpm is double rpm
+                ? $"{rpm:F0} RPM"
+                : "No CPU fan/pump exposed on this motherboard";
             CpuFanControl = snapshot.CpuFan?.CurrentControlPercent is double control ? $"{control:F0}%" : "Auto/BIOS";
             CpuFanCapability = snapshot.CpuFan?.CapabilityMessage ?? "No dedicated CPU fan header was detected.";
             CpuFanCanControl = snapshot.CpuFan?.CanControl == true;
