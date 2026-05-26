@@ -17,6 +17,12 @@ public static class CrashGuardService
     private static int _restartAttempts;
     private const int MaxRestartAttempts = 3;
 
+    // Rate-limit + dedup the crash log so an exception that fires every second
+    // doesn't spam the disk with thousands of identical files.
+    private static DateTime _lastLogWriteUtc = DateTime.MinValue;
+    private static string _lastLoggedSignature = "";
+    private static readonly TimeSpan LogCooldown = TimeSpan.FromMinutes(1);
+
     public static void Initialize()
     {
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
@@ -48,6 +54,18 @@ public static class CrashGuardService
     {
         try
         {
+            // De-spam: same exception within cooldown → skip writing another log.
+            // Always write terminating exceptions though — those matter.
+            string sig = $"{source}|{ex?.GetType().Name}|{ex?.Message}";
+            if (!isTerminating
+                && sig == _lastLoggedSignature
+                && DateTime.UtcNow - _lastLogWriteUtc < LogCooldown)
+            {
+                return;
+            }
+            _lastLoggedSignature = sig;
+            _lastLogWriteUtc = DateTime.UtcNow;
+
             string filename = $"crash_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{source}.log";
             string path = Path.Combine(CrashLogDir, filename);
             string content = $"""

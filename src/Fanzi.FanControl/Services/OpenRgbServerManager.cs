@@ -170,37 +170,56 @@ public sealed class OpenRgbServerManager : IDisposable
     /// TCP port probe — repeatedly attempts a connect to (host, port) every 250 ms until
     /// the socket accepts or the timeout expires. Used after launching OpenRGB so we know
     /// the SDK server is actually ready to accept client connections.
+    ///
+    /// CRITICAL: the in-flight ConnectAsync task MUST be observed (await with try/catch)
+    /// even on timeout, otherwise the SocketException it throws on disposal lands on the
+    /// TaskScheduler.UnobservedTaskException finalizer thread → CrashGuard logs a crash
+    /// → restart loop → death spiral.
     /// </summary>
     private static bool WaitForPortOpen(string host, int port, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            try
-            {
-                using var client = new System.Net.Sockets.TcpClient();
-                var connectTask = client.ConnectAsync(host, port);
-                if (connectTask.Wait(500) && client.Connected)
-                    return true;
-            }
-            catch
-            {
-                // not ready yet — retry
-            }
+            if (TryConnectOnce(host, port, 500)) return true;
             Thread.Sleep(250);
         }
         return false;
     }
 
     /// <summary>True if a TCP probe succeeds against the SDK port right now.</summary>
-    public static bool IsPortListening(int port)
+    public static bool IsPortListening(int port) => TryConnectOnce("127.0.0.1", port, 300);
+
+    /// <summary>
+    /// Single non-leaking TCP probe. The connect task is always observed via ContinueWith
+    /// so a timeout-disposal can never escape as an UnobservedTaskException.
+    /// </summary>
+    private static bool TryConnectOnce(string host, int port, int timeoutMs)
     {
+        var client = new System.Net.Sockets.TcpClient();
+        var task = client.ConnectAsync(host, port);
+
+        // ALWAYS attach a continuation that observes any exception, even if we time out
+        // and dispose the client below. This is the fix for the crash.
+        task.ContinueWith(t =>
+        {
+            _ = t.Exception;            // mark exception as observed
+            try { client.Dispose(); } catch { }
+        }, System.Threading.Tasks.TaskScheduler.Default);
+
         try
         {
-            using var client = new System.Net.Sockets.TcpClient();
-            return client.ConnectAsync("127.0.0.1", port).Wait(300) && client.Connected;
+            if (task.Wait(timeoutMs) && client.Connected)
+            {
+                try { client.Dispose(); } catch { }
+                return true;
+            }
         }
-        catch { return false; }
+        catch
+        {
+            // probe failed — observation is handled by the continuation above
+        }
+        return false;
     }
 
     public async Task<bool> InstallOpenRgbAsync(IProgress<string>? progress = null, CancellationToken ct = default)
