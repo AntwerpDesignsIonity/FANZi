@@ -234,7 +234,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             var progress = new Progress<string>(msg =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => ServerStatus = msg));
 
-            // EnsureRunningAsync: detect → install if missing → start server
+            // EnsureRunningAsync: detect → install if missing → start server (waits for port)
             bool ok = await _serverManager.EnsureRunningAsync(OpenRgbPort, progress, _cts.Token);
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -246,17 +246,64 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(StartServerButtonText));
             });
 
-            if (ok && !IsConnected)
+            // Connect with retry — OpenRGB may need a few extra seconds to scan devices
+            // even after the SDK port is listening.
+            for (int attempt = 1; attempt <= 8 && !IsConnected && !_cts.Token.IsCancellationRequested; attempt++)
             {
-                await Task.Delay(800, _cts.Token);
+                if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                {
+                    // Server not actually ready — wait and try again
+                    await Task.Delay(1500, _cts.Token);
+                    continue;
+                }
+
                 await ConnectAsync();
+                if (IsConnected) break;
+
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    ServerStatus = $"Waiting for OpenRGB to be ready... (attempt {attempt}/8)");
+                await Task.Delay(2000, _cts.Token);
             }
+
+            // Start a background watchdog that auto-reconnects if the link drops
+            _ = ConnectionWatchdogAsync();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 ServerStatus = $"Auto-start failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Background loop that re-establishes the OpenRGB connection if it ever drops.
+    /// Runs every 5 seconds while RGB is enabled.
+    /// </summary>
+    private async Task ConnectionWatchdogAsync()
+    {
+        while (!_cts.Token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(5000, _cts.Token);
+                if (!RgbEnabled) continue;
+
+                if (!_rgbService.IsConnected && OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                {
+                    // Server's there but our client dropped — reconnect silently
+                    await ConnectAsync();
+                }
+                else if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                {
+                    // Port died — server might have crashed; restart it
+                    await _serverManager.EnsureRunningAsync(OpenRgbPort, null, _cts.Token);
+                    if (OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                        await ConnectAsync();
+                }
+            }
+            catch (OperationCanceledException) { return; }
+            catch { /* keep watchdog alive */ }
         }
     }
 

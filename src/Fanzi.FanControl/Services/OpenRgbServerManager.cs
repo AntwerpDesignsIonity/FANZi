@@ -93,8 +93,12 @@ public sealed class OpenRgbServerManager : IDisposable
                 {
                     StartInfo = new ProcessStartInfo
                     {
+                        // --server enables the SDK; we DON'T pass --noautoconnect so the
+                        // server actually scans for devices on startup. WorkingDirectory
+                        // is set so OpenRGB finds its config files relative to the exe.
                         FileName = DetectedPath,
-                        Arguments = $"--server --server-port {port} --noautoconnect",
+                        Arguments = $"--server --server-port {port}",
+                        WorkingDirectory = Path.GetDirectoryName(DetectedPath) ?? "",
                         CreateNoWindow = true,
                         UseShellExecute = false,
                         WindowStyle = ProcessWindowStyle.Hidden,
@@ -109,18 +113,22 @@ public sealed class OpenRgbServerManager : IDisposable
                 };
 
                 _serverProcess.Start();
-                Thread.Sleep(1500);
 
-                if (_serverProcess is { HasExited: false })
+                // Wait for the SDK port to actually become reachable (up to 15s).
+                // OpenRGB needs time to scan devices before binding the SDK socket.
+                if (WaitForPortOpen("127.0.0.1", port, TimeSpan.FromSeconds(15)))
                 {
                     Status = $"Server running on port {port} (PID {_serverProcess.Id})";
                     return true;
                 }
-                else
+
+                if (_serverProcess is { HasExited: false })
                 {
-                    Status = "Server failed to start";
-                    return false;
+                    Status = $"Server PID {_serverProcess.Id} running but port {port} not yet listening";
+                    return true; // process is alive; client retries will catch up
                 }
+                Status = "Server process exited before port opened";
+                return false;
             }
             catch (Exception ex)
             {
@@ -156,6 +164,43 @@ public sealed class OpenRgbServerManager : IDisposable
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// TCP port probe — repeatedly attempts a connect to (host, port) every 250 ms until
+    /// the socket accepts or the timeout expires. Used after launching OpenRGB so we know
+    /// the SDK server is actually ready to accept client connections.
+    /// </summary>
+    private static bool WaitForPortOpen(string host, int port, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                using var client = new System.Net.Sockets.TcpClient();
+                var connectTask = client.ConnectAsync(host, port);
+                if (connectTask.Wait(500) && client.Connected)
+                    return true;
+            }
+            catch
+            {
+                // not ready yet — retry
+            }
+            Thread.Sleep(250);
+        }
+        return false;
+    }
+
+    /// <summary>True if a TCP probe succeeds against the SDK port right now.</summary>
+    public static bool IsPortListening(int port)
+    {
+        try
+        {
+            using var client = new System.Net.Sockets.TcpClient();
+            return client.ConnectAsync("127.0.0.1", port).Wait(300) && client.Connected;
+        }
+        catch { return false; }
     }
 
     public async Task<bool> InstallOpenRgbAsync(IProgress<string>? progress = null, CancellationToken ct = default)
