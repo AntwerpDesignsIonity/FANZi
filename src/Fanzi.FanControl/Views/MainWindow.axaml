@@ -586,6 +586,65 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- Shortcuts & Pinning -->
+                                <Border Classes="card">
+                                    <StackPanel Spacing="14">
+                                        <TextBlock Text="Shortcuts &amp; Pinning" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"/>
+                                        <TextBlock Text="Pin FANZI where you launch things from. The Taskbar pin may need a right-click confirmation on Windows 11."
+                                                   Foreground="#5A7899" FontSize="11" TextWrapping="Wrap"/>
+                                        <WrapPanel>
+                                            <Button Content="📌 Pin to Taskbar"   Command="{Binding PinToTaskbarCommand}"   Padding="14,8" Margin="0,0,8,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                                            <Button Content="🏠 Pin to Start"     Command="{Binding PinToStartCommand}"      Padding="14,8" Margin="0,0,8,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                                            <Button Content="🖥 Desktop Shortcut" Command="{Binding CreateDesktopShortcutCommand}" Padding="14,8" Margin="0,0,8,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                                            <Button Content="📊 Toggle Mini Overlay" Command="{Binding ToggleMiniOverlayCommand}" Padding="14,8" Margin="0,0,8,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                                            <Button Content="📋 Export Hardware Report" Command="{Binding ExportHardwareReportCommand}" Padding="14,8" Margin="0,0,8,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                                        </WrapPanel>
+                                        <TextBlock Text="{Binding PinningStatus}" Foreground="#22C55E" FontSize="11"/>
+                                        <TextBlock Text="{Binding HardwareReportStatus}" Foreground="#FB923C" FontSize="11"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Profile Manager (disk) -->
+                                <Border Classes="card">
+                                    <StackPanel Spacing="14">
+                                        <TextBlock Text="Profile Library" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"/>
+                                        <TextBlock TextWrapping="Wrap" Foreground="#5A7899" FontSize="11">
+                                            <Run Text="Saved at "/>
+                                            <Run Text="{Binding ProfilesDirectoryPath, Mode=OneWay}" FontFamily="Consolas,monospace" Foreground="#7090B0"/>
+                                        </TextBlock>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="💾 Save Current Profile" Command="{Binding SaveCurrentProfileCommand}" Classes="primary" Padding="14,6" FontWeight="Bold"/>
+                                            <Button Content="🔄 Refresh List" Command="{Binding RefreshProfileListCommand}" Padding="14,6"/>
+                                            <Button Content="📁 Open Folder" Command="{Binding OpenProfilesFolderCommand}" Padding="14,6"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding ProfileSaveStatus}" Foreground="#22C55E" FontSize="11"/>
+                                        <Border Background="#061018" CornerRadius="10" MaxHeight="240">
+                                            <DataGrid ItemsSource="{Binding DiskProfiles}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                                      Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*"/>
+                                                    <DataGridTextColumn Header="Saved" Binding="{Binding LastModifiedDisplay}" Width="140"/>
+                                                    <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="80"/>
+                                                    <DataGridTemplateColumn Header="Actions" Width="180">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                    <Button Content="Load" Padding="10,3" FontSize="11"
+                                                                            Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).LoadProfileFromDiskCommand}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Content="Delete" Padding="10,3" FontSize="11" Background="#7C2D12" Foreground="#FFF"
+                                                                            Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).DeleteProfileFromDiskCommand}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
                                 <!-- Modular Section Toggles -->
                                 <Border Classes="card">
                                     <StackPanel Spacing="14">

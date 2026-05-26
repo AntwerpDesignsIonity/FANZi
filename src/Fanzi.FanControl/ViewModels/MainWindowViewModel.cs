@@ -124,6 +124,28 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public IAsyncRelayCommand SendTestEmailCommand { get; }
     public IRelayCommand ShowWindowCommand { get; }
     public IRelayCommand ExitApplicationCommand { get; }
+    public IRelayCommand PinToTaskbarCommand { get; }
+    public IRelayCommand PinToStartCommand { get; }
+    public IRelayCommand CreateDesktopShortcutCommand { get; }
+    public IRelayCommand OpenProfilesFolderCommand { get; }
+    public IAsyncRelayCommand SaveCurrentProfileCommand { get; }
+    public IAsyncRelayCommand RefreshProfileListCommand { get; }
+    public IRelayCommand<ProfileFileInfo> LoadProfileFromDiskCommand { get; }
+    public IRelayCommand<ProfileFileInfo> DeleteProfileFromDiskCommand { get; }
+    public IRelayCommand ToggleMiniOverlayCommand { get; }
+    public IRelayCommand ExportHardwareReportCommand { get; }
+
+    // Profile manager + pinning state
+    private readonly ProfileManagerService _profileMgr = new();
+    public ObservableCollection<ProfileFileInfo> DiskProfiles { get; } = new();
+    [ObservableProperty] private string _profileSaveStatus = "";
+    [ObservableProperty] private string _pinningStatus = "";
+    [ObservableProperty] private string _hardwareReportStatus = "";
+    [ObservableProperty] private bool _miniOverlayVisible;
+    public string ProfilesDirectoryPath => ProfileManagerService.DefaultProfileDir;
+
+    // Mini overlay window — created lazily
+    private Avalonia.Controls.Window? _miniOverlay;
 
     // ── Constructor ────────────────────────────────────��──────────────────────
 
@@ -143,7 +165,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         SendTestEmailCommand = new AsyncRelayCommand(SendTestEmailAsync);
         ShowWindowCommand = new RelayCommand(ShowWindow);
         ExitApplicationCommand = new RelayCommand(ExitApplication);
+
+        PinToTaskbarCommand = new RelayCommand(PinToTaskbar);
+        PinToStartCommand = new RelayCommand(PinToStart);
+        CreateDesktopShortcutCommand = new RelayCommand(CreateDesktopShortcut);
+        OpenProfilesFolderCommand = new RelayCommand(() => _profileMgr.OpenProfilesFolder());
+        SaveCurrentProfileCommand = new AsyncRelayCommand(SaveCurrentProfileToDiskAsync);
+        RefreshProfileListCommand = new AsyncRelayCommand(RefreshDiskProfilesAsync);
+        LoadProfileFromDiskCommand = new RelayCommand<ProfileFileInfo>(LoadProfileFromDisk);
+        DeleteProfileFromDiskCommand = new RelayCommand<ProfileFileInfo>(DeleteProfileFromDisk);
+        ToggleMiniOverlayCommand = new RelayCommand(ToggleMiniOverlay);
+        ExportHardwareReportCommand = new RelayCommand(ExportHardwareReport);
+
         RgbControl = new RgbControlViewModel(rgbService);
+        _ = RefreshDiskProfilesAsync();
 
         _ = RunStartupAsync();
     }
@@ -170,6 +205,144 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.Shutdown();
+        }
+    }
+
+    // ── Pinning / shortcuts ──────────────────────────────────────────────────
+
+    private void PinToTaskbar()
+    {
+        if (!OperatingSystem.IsWindows()) { PinningStatus = "Windows only"; return; }
+        string exe = PinningService.GetCurrentExePath();
+        bool ok = PinningService.PinToTaskbar(exe);
+        PinningStatus = ok
+            ? "Pinned to Taskbar. If Windows 11 didn't accept the pin, right-click the new Start entry → Pin to taskbar."
+            : "Auto-pin not allowed on this Windows build — open the new Start entry, right-click, and pick 'Pin to taskbar'.";
+    }
+
+    private void PinToStart()
+    {
+        if (!OperatingSystem.IsWindows()) { PinningStatus = "Windows only"; return; }
+        string exe = PinningService.GetCurrentExePath();
+        bool ok = PinningService.PinToStartMenu(exe);
+        PinningStatus = ok
+            ? "Added to Start menu (search 'FANZI' or open All Apps)."
+            : "Could not write Start menu shortcut";
+    }
+
+    private void CreateDesktopShortcut()
+    {
+        if (!OperatingSystem.IsWindows()) { PinningStatus = "Windows only"; return; }
+        string exe = PinningService.GetCurrentExePath();
+        bool ok = PinningService.CreateDesktopShortcut(exe);
+        PinningStatus = ok ? "Desktop shortcut created" : "Could not create desktop shortcut";
+    }
+
+    // ── Profile manager (disk) ───────────────────────────────────────────────
+
+    private async Task RefreshDiskProfilesAsync()
+    {
+        var list = await _profileMgr.ListAsync(_disposeTokenSource.Token);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            DiskProfiles.Clear();
+            foreach (var p in list) DiskProfiles.Add(p);
+        });
+    }
+
+    private async Task SaveCurrentProfileToDiskAsync()
+    {
+        var active = _activeProfileTab?.Profile;
+        if (active is null) { ProfileSaveStatus = "No active profile to save"; return; }
+        try
+        {
+            string path = await _profileMgr.SaveAsync(active, _disposeTokenSource.Token);
+            ProfileSaveStatus = $"Saved → {path}";
+            await RefreshDiskProfilesAsync();
+        }
+        catch (Exception ex)
+        {
+            ProfileSaveStatus = $"Save failed: {ex.Message}";
+        }
+    }
+
+    private void LoadProfileFromDisk(ProfileFileInfo? info)
+    {
+        if (info is null) return;
+        _ = LoadProfileFromDiskAsync(info);
+    }
+
+    private async Task LoadProfileFromDiskAsync(ProfileFileInfo info)
+    {
+        var loaded = await _profileMgr.LoadFromPathAsync(info.FullPath, _disposeTokenSource.Token);
+        if (loaded is null)
+        {
+            ProfileSaveStatus = $"Failed to load {info.Name}";
+            return;
+        }
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            // Register with AppSettings and create a tab using the same wiring as built-ins
+            _appSettings.Profiles.Add(loaded);
+            var tab = new ProfileTabViewModel(loaded, OnSelectProfile, OnDeleteProfile, OnRenameProfile);
+            Profiles.Add(tab);
+            ActivateProfileTab(tab, applyToVm: true);
+            ProfileSaveStatus = $"Loaded '{loaded.Name}' from disk";
+        });
+    }
+
+    private void DeleteProfileFromDisk(ProfileFileInfo? info)
+    {
+        if (info is null) return;
+        if (_profileMgr.Delete(info.FullPath))
+        {
+            DiskProfiles.Remove(info);
+            ProfileSaveStatus = $"Deleted {info.Name}";
+        }
+        else ProfileSaveStatus = "Delete failed";
+    }
+
+    // ── Mini overlay window ──────────────────────────────────────────────────
+
+    private void ToggleMiniOverlay()
+    {
+        if (_miniOverlay is null)
+        {
+            _miniOverlay = new Views.MiniOverlayWindow { DataContext = this };
+            _miniOverlay.Closed += (_, _) => { _miniOverlay = null; MiniOverlayVisible = false; };
+            _miniOverlay.Show();
+            MiniOverlayVisible = true;
+        }
+        else
+        {
+            if (_miniOverlay.IsVisible) { _miniOverlay.Hide(); MiniOverlayVisible = false; }
+            else { _miniOverlay.Show(); MiniOverlayVisible = true; }
+        }
+    }
+
+    // ── Hardware report export ───────────────────────────────────────────────
+
+    private void ExportHardwareReport()
+    {
+        try
+        {
+            using var svc = new HardwareReportService();
+            string path = svc.SaveToDefaultLocation();
+            HardwareReportStatus = $"Saved → {path}";
+            // Open in default editor
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true,
+                });
+            }
+            catch { }
+        }
+        catch (Exception ex)
+        {
+            HardwareReportStatus = $"Export failed: {ex.Message}";
         }
     }
 

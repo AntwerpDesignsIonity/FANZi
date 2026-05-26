@@ -1,0 +1,64 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Fanzi.FanControl.ViewModels"
+        x:Class="Fanzi.FanControl.Views.MiniOverlayWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="FANZI"
+        Width="240" Height="170"
+        Topmost="True"
+        ShowInTaskbar="False"
+        CanResize="False"
+        SystemDecorations="None"
+        TransparencyLevelHint="AcrylicBlur"
+        Background="#CC050A12"
+        WindowStartupLocation="Manual">
+
+    <Window.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Foreground" Value="#5A7899"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="LetterSpacing" Value="1.5"/>
+        </Style>
+        <Style Selector="TextBlock.value">
+            <Setter Property="Foreground" Value="#E8F0FF"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="Black"/>
+        </Style>
+    </Window.Styles>
+
+    <Border x:Name="DragRoot" Background="Transparent" BorderBrush="#2563EB" BorderThickness="1" CornerRadius="14" Padding="12">
+        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="6">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Image Source="/Assets/ionity-logo.png" Width="14" Height="14" Opacity="0.85"/>
+                    <TextBlock Text="FANZI" FontSize="10" FontWeight="Bold" Foreground="#2563EB" VerticalAlignment="Center"/>
+                </StackPanel>
+                <Button Grid.Column="1" x:Name="CloseBtn" Content="✕" Background="Transparent" Foreground="#EF4444"
+                        FontSize="10" Padding="4,2" CornerRadius="4" ToolTip.Tip="Hide overlay"/>
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="6" Margin="0,4">
+                <StackPanel Grid.Row="0" Grid.Column="0">
+                    <TextBlock Classes="label" Text="CPU"/>
+                    <TextBlock Classes="value" Text="{Binding CpuPackageTemperature}" Foreground="#FB923C"/>
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="1">
+                    <TextBlock Classes="label" Text="GPU"/>
+                    <TextBlock Classes="value" Text="{Binding GpuCoreTemperature}" Foreground="#22C55E"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="0">
+                    <TextBlock Classes="label" Text="FAN/PUMP"/>
+                    <TextBlock Classes="value" Text="{Binding CpuFanSpeed}" FontSize="14" Foreground="#3B82F6"/>
+                </StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1">
+                    <TextBlock Classes="label" Text="LOAD"/>
+                    <TextBlock Classes="value" Text="{Binding CpuTotalLoad}" FontSize="14" Foreground="#A78BFA"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Grid.Row="2" Text="Drag to move · click ✕ to hide"
+                       Foreground="#3A5070" FontSize="9" HorizontalAlignment="Center"/>
+        </Grid>
+    </Border>
+</Window>
