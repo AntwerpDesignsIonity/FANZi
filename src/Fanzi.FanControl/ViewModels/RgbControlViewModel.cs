@@ -178,6 +178,13 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
     public string StartServerButtonText => IsStartingServer ? "Starting..." : IsServerRunning ? "Server Running" : "Start Server";
 
+    /// <summary>Master enable/disable for RGB. When off, the server is stopped and the engine pauses.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RgbToggleText))]
+    private bool _rgbEnabled = true;
+
+    public string RgbToggleText => RgbEnabled ? "RGB Enabled" : "RGB Disabled";
+
     // ��─ Commands ─────────────────��────────────────────────────────────────────
 
     public IAsyncRelayCommand ConnectCommand       { get; }
@@ -214,6 +221,61 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         _timer.Elapsed += OnTimerTick;
         _timer.AutoReset = true;
         _timer.Start();
+
+        // Auto-start OpenRGB server in the background and auto-connect.
+        // No user action needed — server boots silently with FANZI.
+        _ = AutoStartOpenRgbAsync();
+    }
+
+    private async Task AutoStartOpenRgbAsync()
+    {
+        try
+        {
+            var progress = new Progress<string>(msg =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => ServerStatus = msg));
+
+            // EnsureRunningAsync: detect → install if missing → start server
+            bool ok = await _serverManager.EnsureRunningAsync(OpenRgbPort, progress, _cts.Token);
+
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                IsServerRunning = ok;
+                ServerStatus = _serverManager.Status;
+                OnPropertyChanged(nameof(IsOpenRgbInstalled));
+                OnPropertyChanged(nameof(ShowInstallButton));
+                OnPropertyChanged(nameof(StartServerButtonText));
+            });
+
+            if (ok && !IsConnected)
+            {
+                await Task.Delay(800, _cts.Token);
+                await ConnectAsync();
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                ServerStatus = $"Auto-start failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Toggle handler: when user flips RGB on/off, start or stop the engine + server.</summary>
+    partial void OnRgbEnabledChanged(bool value)
+    {
+        if (value)
+        {
+            _ = AutoStartOpenRgbAsync();
+        }
+        else
+        {
+            // Disable RGB: stop sending frames, disconnect, stop server
+            DisconnectFromServer();
+            _serverManager.StopServer();
+            IsServerRunning = false;
+            ServerStatus = "RGB disabled";
+            OnPropertyChanged(nameof(StartServerButtonText));
+        }
     }
 
     // ── Hardware data update (called by MainWindowViewModel) ──────────────────
@@ -261,10 +323,11 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         });
 
         // Send to hardware every Nth frame to avoid overwhelming OpenRGB.
+        // Gated on RgbEnabled — when user toggles off, frames stop reaching hardware.
         if (++_frameCounter >= HardwareSendEveryNth)
         {
             _frameCounter = 0;
-            if (_rgbService.IsConnected)
+            if (RgbEnabled && _rgbService.IsConnected)
             {
                 // Fire-and-forget; errors are swallowed inside the service.
                 _ = SendFrameToHardwareAsync(elapsed, color);

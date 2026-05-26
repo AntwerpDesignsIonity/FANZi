@@ -9,20 +9,37 @@ public sealed class SmartFanCurveEngine
 {
     private readonly ThermalPredictor _predictor = new();
     private readonly AnomalyDetector _anomalyDetector = new();
+    private readonly AcousticIntelligence _acoustic = new();
+    private readonly DeltaTController _deltaT = new();
     private double _lastSuggestedPercent = 50;
+    private DateTime _lastTick = DateTime.UtcNow;
 
     public ThermalPredictor Predictor => _predictor;
     public AnomalyDetector AnomalyDetector => _anomalyDetector;
+    public AcousticIntelligence Acoustic => _acoustic;
+    public DeltaTController DeltaT => _deltaT;
     public double LastSuggestedPercent => _lastSuggestedPercent;
     public bool IsLearning => _predictor.TrendPerSecond is not null;
+
+    /// <summary>True if Acoustic-First mode dampens revving (recommended for daily use).</summary>
+    public bool AcousticFirstEnabled { get; set; } = true;
+
+    /// <summary>True if Delta-T airflow control affects case fan suggestions.</summary>
+    public bool DeltaTFusionEnabled { get; set; } = true;
 
     public double ComputeOptimalFanSpeed(
         double currentTempC,
         double cpuLoadPct,
         double? fanRpm,
         List<FanCurvePoint>? customCurve = null,
-        double targetTempC = 75)
+        double targetTempC = 75,
+        double? gpuTempC = null,
+        double? caseTempC = null)
     {
+        var now = DateTime.UtcNow;
+        double dt = Math.Max(0.1, (now - _lastTick).TotalSeconds);
+        _lastTick = now;
+
         _predictor.AddSample(currentTempC, cpuLoadPct);
         _anomalyDetector.AddSample(currentTempC, fanRpm);
 
@@ -47,8 +64,26 @@ public sealed class SmartFanCurveEngine
             result = _predictor.SuggestFanPercent(currentTempC, targetTempC);
         }
 
-        double smoothed = _lastSuggestedPercent + (result - _lastSuggestedPercent) * 0.3;
-        _lastSuggestedPercent = Math.Clamp(smoothed, 20, 100);
+        // Delta-T fusion: if GPU/case sensors are providing significant heat-load,
+        // bump the suggestion to ensure case airflow keeps up with GPU heat dump.
+        if (DeltaTFusionEnabled && (gpuTempC.HasValue || caseTempC.HasValue))
+        {
+            var deltaT = _deltaT.Compute(caseTempC, currentTempC, gpuTempC);
+            // Take the MAX of the curve-based result and ΔT recommendation
+            result = Math.Max(result, deltaT.SuggestedFanPercent);
+        }
+
+        if (AcousticFirstEnabled)
+        {
+            // Acoustic smoothing — absorbs spikes, prevents revving, slew-limits ramps
+            _lastSuggestedPercent = _acoustic.Smooth(result, currentTempC, dt);
+        }
+        else
+        {
+            double smoothed = _lastSuggestedPercent + (result - _lastSuggestedPercent) * 0.3;
+            _lastSuggestedPercent = Math.Clamp(smoothed, 20, 100);
+        }
+
         return _lastSuggestedPercent;
     }
 

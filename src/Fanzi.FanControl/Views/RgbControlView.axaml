@@ -113,22 +113,17 @@
                     <!-- Install progress -->
                     <TextBlock IsVisible="{Binding IsInstallingOpenRgb}"
                                Text="{Binding InstallProgress}" FontSize="11" Foreground="#FB923C" Margin="4,0"/>
-                    <!-- Server status row -->
-                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                    <!-- Server status row — Enable/Disable toggle, server auto-launches with FANZI -->
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                         <Border Grid.Column="0" CornerRadius="8" Background="#0A1A10" BorderBrush="#166534" BorderThickness="1" Padding="8,3">
                             <TextBlock Text="{Binding ServerStatus}" FontSize="10" Foreground="#6EE7B7"/>
                         </Border>
-                        <TextBlock Grid.Column="1" Text="OpenRGB SDK Server (integrated)" Foreground="#4A6A8F" FontSize="11" VerticalAlignment="Center"/>
-                        <Button Grid.Column="2"
-                                Content="{Binding StartServerButtonText}"
-                                Command="{Binding StartServerCommand}"
-                                IsEnabled="{Binding !IsServerRunning}"
-                                Classes="primary" MinWidth="110" Padding="10,5" FontSize="11" VerticalAlignment="Center"/>
-                        <Button Grid.Column="3"
-                                Content="Stop"
-                                Command="{Binding StopServerCommand}"
-                                IsEnabled="{Binding IsServerRunning}"
-                                MinWidth="60" Padding="10,5" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="OpenRGB auto-launches with FANZI" Foreground="#4A6A8F" FontSize="11" VerticalAlignment="Center"/>
+                        <ToggleSwitch Grid.Column="2"
+                                      IsChecked="{Binding RgbEnabled}"
+                                      OnContent="RGB Enabled"
+                                      OffContent="RGB Disabled"
+                                      VerticalAlignment="Center"/>
                     </Grid>
                     <!-- Connection row -->
                     <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">

@@ -160,7 +160,15 @@ public sealed class OpenRgbServerManager : IDisposable
 
     public async Task<bool> InstallOpenRgbAsync(IProgress<string>? progress = null, CancellationToken ct = default)
     {
-        const string downloadUrl = "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_6b1df76.zip";
+        // Try mirrors in order — gitlab CI artifacts (always-latest) first, then known release tags.
+        string[] candidates =
+        {
+            "https://gitlab.com/CalcProgrammer1/OpenRGB/-/jobs/artifacts/master/raw/OpenRGB_Windows_64.zip?job=Windows+64",
+            "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_b5f46e3.zip",
+            "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_6b1df76.zip",
+            "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_2bcc167.zip",
+            "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_b5f46e3_x86.zip",
+        };
 
         try
         {
@@ -170,12 +178,39 @@ public sealed class OpenRgbServerManager : IDisposable
             Directory.CreateDirectory(InstallDir);
             var zipPath = Path.Combine(InstallDir, "OpenRGB.zip");
 
-            using (var response = await Http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+            Exception? lastError = null;
+            bool downloaded = false;
+            foreach (var downloadUrl in candidates)
             {
-                response.EnsureSuccessStatusCode();
-                await using var stream = await response.Content.ReadAsStreamAsync(ct);
-                await using var fileStream = File.Create(zipPath);
-                await stream.CopyToAsync(fileStream, ct);
+                try
+                {
+                    progress?.Report($"Trying mirror: {new Uri(downloadUrl).Host}…");
+                    using var response = await Http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+                    response.EnsureSuccessStatusCode();
+                    await using var stream = await response.Content.ReadAsStreamAsync(ct);
+                    await using var fileStream = File.Create(zipPath);
+                    await stream.CopyToAsync(fileStream, ct);
+
+                    // Sanity check the downloaded file is a real zip (>1 MB, valid header)
+                    if (new FileInfo(zipPath).Length > 1_000_000)
+                    {
+                        downloaded = true;
+                        break;
+                    }
+                    File.Delete(zipPath);
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    progress?.Report($"Mirror failed, trying next...");
+                }
+            }
+
+            if (!downloaded)
+            {
+                Status = $"Download failed: {lastError?.Message ?? "all mirrors unreachable"}";
+                progress?.Report("Could not download OpenRGB — check your internet connection.");
+                return false;
             }
 
             progress?.Report("Extracting...");
@@ -231,6 +266,33 @@ public sealed class OpenRgbServerManager : IDisposable
             progress?.Report($"Install failed: {ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>
+    /// One-shot bootstrap called by FANZI on startup:
+    /// 1. Detect existing install
+    /// 2. If not installed, download & extract
+    /// 3. If not running, launch the server
+    /// </summary>
+    public async Task<bool> EnsureRunningAsync(int port = 6742, IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        DetectInstallation();
+
+        if (!IsInstalled)
+        {
+            progress?.Report("OpenRGB not found — downloading...");
+            bool installed = await InstallOpenRgbAsync(progress, ct);
+            if (!installed) return false;
+        }
+
+        if (IsOpenRgbAlreadyRunning())
+        {
+            Status = "OpenRGB already running externally";
+            progress?.Report(Status);
+            return true;
+        }
+
+        return await StartServerAsync(port, ct);
     }
 
     public void Dispose()
