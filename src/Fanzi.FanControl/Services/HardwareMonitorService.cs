@@ -222,13 +222,28 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             List<FanChannelSnapshot> fanSnapshots = BuildFanSnapshots(sensors);
             FanChannelSnapshot? cpuFan = fanSnapshots.FirstOrDefault(IsCpuFanSnapshot);
 
-            // Fallback: prefer pump/AIO if no explicit CPU fan found (common in liquid-cooled systems).
+            // Fallback 1: prefer ANY pump (water-cooled system has no CPU fan, just a pump).
             if (cpuFan is null)
             {
-                cpuFan = fanSnapshots.FirstOrDefault(f => f.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler);
+                cpuFan = fanSnapshots.FirstOrDefault(f => f.DeviceKind == FanDeviceKind.Pump);
             }
 
-            // Last resort: if exactly one channel exists, use it.
+            // Fallback 2: prefer any AIO/liquid cooler channel.
+            if (cpuFan is null)
+            {
+                cpuFan = fanSnapshots.FirstOrDefault(f => f.DeviceKind == FanDeviceKind.AioCooler);
+            }
+
+            // Fallback 3: pick the fastest-spinning fan (CPU coolers tend to spin highest under load).
+            if (cpuFan is null && fanSnapshots.Count > 1)
+            {
+                cpuFan = fanSnapshots
+                    .Where(f => f.SpeedRpm.HasValue && f.SpeedRpm.Value > 300)
+                    .OrderByDescending(f => f.SpeedRpm ?? 0)
+                    .FirstOrDefault();
+            }
+
+            // Fallback 4: if exactly one channel exists, use it.
             if (cpuFan is null && fanSnapshots.Count == 1)
             {
                 cpuFan = fanSnapshots[0];
@@ -468,7 +483,17 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
                 || snapshot.Name.Contains("aio", StringComparison.OrdinalIgnoreCase)
                 || snapshot.Name.Contains("w_pump", StringComparison.OrdinalIgnoreCase)
                 || snapshot.Name.Contains("cooler", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("liquid", StringComparison.OrdinalIgnoreCase);
+                || snapshot.Name.Contains("liquid", StringComparison.OrdinalIgnoreCase)
+                // Known AIO vendors that appear in LibreHardwareMonitor channel names
+                || snapshot.Name.Contains("asetek", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("kraken", StringComparison.OrdinalIgnoreCase)   // NZXT
+                || snapshot.Name.Contains("h100", StringComparison.OrdinalIgnoreCase)     // Corsair Hydro
+                || snapshot.Name.Contains("h115", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("h150", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("ryujin", StringComparison.OrdinalIgnoreCase)   // ASUS ROG Ryujin
+                || snapshot.Name.Contains("eisbaer", StringComparison.OrdinalIgnoreCase)  // Alphacool
+                || snapshot.Name.Contains("au pump", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("a_pump", StringComparison.OrdinalIgnoreCase);
         }
 
         return snapshot.Name.Contains("cpu", StringComparison.OrdinalIgnoreCase)
@@ -484,13 +509,21 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
     {
         string lower = name.ToLowerInvariant();
 
-        if (lower.Contains("pump") || lower.Contains("w_pump") || lower.Contains("wpump"))
+        // Pump signatures — include common AIO header names and vendor markers
+        if (lower.Contains("pump") || lower.Contains("w_pump") || lower.Contains("wpump")
+            || lower.Contains("au pump") || lower.Contains("a_pump") || lower.Contains("apump")
+            || lower.Contains("d5") || lower.Contains("ddc"))
         {
             return FanDeviceKind.Pump;
         }
 
+        // AIO / water cooler signatures - cover the common vendors that ship with sensor names
         if (lower.Contains("aio") || lower.Contains("liquid") || lower.Contains("cooler")
-            || lower.Contains("radiator") || lower.Contains("water"))
+            || lower.Contains("radiator") || lower.Contains("water")
+            || lower.Contains("asetek") || lower.Contains("kraken")
+            || lower.Contains("hydro")  || lower.Contains("ryujin")
+            || lower.Contains("eisbaer") || lower.Contains("celsius")
+            || lower.Contains("h100")   || lower.Contains("h115") || lower.Contains("h150"))
         {
             return FanDeviceKind.AioCooler;
         }

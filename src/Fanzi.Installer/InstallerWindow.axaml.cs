@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -29,6 +30,20 @@ public partial class InstallerWindow : Window
         InstallButton.Click += OnInstallClicked;
         CancelButton.Click += (_, _) => Close();
         BrowseButton.Click += OnBrowseClicked;
+
+        // Wire titlebar window controls (custom chrome - native min/close removed)
+        if (this.FindControl<Border>("TitleBar") is { } titleBar)
+        {
+            titleBar.PointerPressed += (_, e) =>
+            {
+                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                    BeginMoveDrag(e);
+            };
+        }
+        if (this.FindControl<Button>("MinimizeButton") is { } minBtn)
+            minBtn.Click += (_, _) => WindowState = WindowState.Minimized;
+        if (this.FindControl<Button>("CloseButton") is { } closeBtn)
+            closeBtn.Click += (_, _) => Close();
     }
 
     private async void OnBrowseClicked(object? sender, RoutedEventArgs e)

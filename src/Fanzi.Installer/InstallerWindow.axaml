@@ -5,8 +5,9 @@
         mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="520"
         x:Class="Fanzi.Installer.InstallerWindow"
         Title="FANZI Installer"
-        Width="620" Height="520"
-        CanResize="False"
+        Width="640" Height="640"
+        CanResize="True"
+        MinWidth="560" MinHeight="500"
         WindowStartupLocation="CenterScreen"
         Background="#050A12"
         Icon="/Assets/ionity-logo.ico"
@@ -44,11 +45,19 @@
 
     <Panel>
         <!-- Titlebar -->
-        <Border Height="32" VerticalAlignment="Top" ZIndex="100" Background="#050A12">
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="12,0" VerticalAlignment="Center">
-                <Image Source="/Assets/ionity-logo.png" Width="16" Height="16" Opacity="0.8"/>
-                <TextBlock Text="FANZI Installer" FontSize="11" FontWeight="Bold" Foreground="#4A6A8F" VerticalAlignment="Center"/>
-            </StackPanel>
+        <Border x:Name="TitleBar" Height="32" VerticalAlignment="Top" ZIndex="100" Background="#050A12">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" Margin="12,0" VerticalAlignment="Center">
+                    <Image Source="/Assets/ionity-logo.png" Width="16" Height="16" Opacity="0.8"/>
+                    <TextBlock Text="FANZI Installer" FontSize="11" FontWeight="Bold" Foreground="#4A6A8F" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                    <Button x:Name="MinimizeButton" Content="─" Background="Transparent" Foreground="#5A7FA8"
+                            FontSize="13" FontWeight="Bold" Padding="14,4" CornerRadius="0" ToolTip.Tip="Minimize"/>
+                    <Button x:Name="CloseButton" Content="✕" Background="Transparent" Foreground="#EF4444"
+                            FontSize="12" FontWeight="Bold" Padding="14,4" CornerRadius="0" ToolTip.Tip="Close"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <Grid Margin="0,32,0,0" RowDefinitions="Auto,*,Auto">
@@ -68,7 +77,8 @@
 
             <!-- Content -->
             <Border Grid.Row="1" Padding="32,20">
-                <Panel>
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                  <Panel>
                     <!-- Step 1: Options (visible before install) -->
                     <StackPanel x:Name="OptionsPanel" Spacing="16">
                         <TextBlock Text="Installation Options" FontSize="16" FontWeight="Bold" Foreground="#E8F0FF"/>
@@ -114,7 +124,8 @@
                         <TextBlock Text="FANZI has been installed successfully." FontSize="13" Foreground="#6A8AAF" HorizontalAlignment="Center"/>
                         <TextBlock x:Name="InstallLocationLabel" FontSize="11" Foreground="#3A5A80" HorizontalAlignment="Center"/>
                     </StackPanel>
-                </Panel>
+                  </Panel>
+                </ScrollViewer>
             </Border>
 
             <!-- Footer -->

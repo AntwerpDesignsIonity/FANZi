@@ -48,7 +48,8 @@
         </Style>
     </UserControl.Styles>
 
-    <Border CornerRadius="20" Background="#0C1828" BorderBrush="#1E3254" BorderThickness="1" Padding="24">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <Border CornerRadius="20" Background="#0C1828" BorderBrush="#1E3254" BorderThickness="1" Padding="24" Margin="0,0,4,0">
         <Grid RowDefinitions="Auto,16,Auto,16,Auto,16,Auto,16,Auto" RowSpacing="0">
 
             <!-- ── HEADER ──────────────────────────────────────────────── -->
@@ -418,5 +419,6 @@
 
         </Grid>
     </Border>
+    </ScrollViewer>
 
 </UserControl>
