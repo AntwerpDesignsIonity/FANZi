@@ -125,9 +125,9 @@
                                       OffContent="RGB Disabled"
                                       VerticalAlignment="Center"/>
                     </Grid>
-                    <!-- Connection status — just a passive indicator, no buttons -->
+                    <!-- Connection status — passive indicator + recovery actions -->
                     <Border CornerRadius="8" Background="#081320" BorderBrush="#1E3A60" BorderThickness="1" Padding="10,6">
-                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
                             <Border Grid.Column="0" Width="10" Height="10" CornerRadius="5"
                                     Background="{Binding ConnectionBadgeBorderBrush}" VerticalAlignment="Center"/>
                             <TextBlock Grid.Column="1" Text="{Binding ConnectionStatus}"
@@ -135,6 +135,10 @@
                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                             <TextBlock Grid.Column="2" Text="{Binding DeviceSummary}"
                                        FontSize="11" Foreground="#5A7899" VerticalAlignment="Center"/>
+                            <Button Grid.Column="3" Content="Rescan" Command="{Binding RescanDevicesCommand}"
+                                    Padding="10,4" FontSize="11" ToolTip.Tip="Re-enumerate OpenRGB devices"/>
+                            <Button Grid.Column="4" Content="Restart Server" Command="{Binding RestartServerCommand}"
+                                    Padding="10,4" FontSize="11" ToolTip.Tip="Stop and relaunch OpenRGB"/>
                         </Grid>
                     </Border>
                 </StackPanel>

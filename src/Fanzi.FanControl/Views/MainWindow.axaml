@@ -508,6 +508,11 @@
                         <views:PowerMonitorView DataContext="{Binding PowerMonitorVm}" Margin="0,12,0,0"/>
                     </TabItem>
 
+                    <!-- ══ TAB: SYSTEM CLEANER ════════════════════ -->
+                    <TabItem Header="Cleaner" IsVisible="{Binding ShowSystemCleanerTab}">
+                        <views:SystemCleanerView DataContext="{Binding SystemCleanerVm}" Margin="0,12,0,0"/>
+                    </TabItem>
+
                     <!-- ══ TAB: NOTIFICATIONS ═════════════════════ -->
                     <TabItem Header="Alerts">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -593,6 +598,10 @@
                                             <ToggleSwitch Grid.Row="1" Grid.Column="1" IsChecked="{Binding ShowNetworkManagerTab}" HorizontalAlignment="Right"/>
                                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Power Monitor &amp; Drives tab" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
                                             <ToggleSwitch Grid.Row="2" Grid.Column="1" IsChecked="{Binding ShowPowerMonitorTab}" HorizontalAlignment="Right"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto" Margin="0,6,0,0">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="System Cleaner tab (cache + RAM cleaner)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding ShowSystemCleanerTab}" HorizontalAlignment="Right"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>

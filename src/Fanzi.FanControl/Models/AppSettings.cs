@@ -20,4 +20,5 @@ public sealed class AppSettings
     public bool ShowTaskManagerTab { get; set; } = true;
     public bool ShowNetworkManagerTab { get; set; } = true;
     public bool ShowPowerMonitorTab { get; set; } = true;
+    public bool ShowSystemCleanerTab { get; set; } = true;
 }

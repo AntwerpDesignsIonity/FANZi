@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Fanzi.FanControl.ViewModels"
+             x:Class="Fanzi.FanControl.Views.SystemCleanerView"
+             x:DataType="vm:SystemCleanerViewModel">
+    <ScrollViewer>
+    <Border CornerRadius="20" Background="#0C1828" BorderBrush="#1E3254" BorderThickness="1" Padding="24">
+        <StackPanel Spacing="16">
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="System Cleaner &amp; Optimiser" FontSize="22" FontWeight="Black" Foreground="#E8F0FF"/>
+                    <TextBlock Text="Cache cleaning, RAM trim, browser caches, prefetch, Windows update cache, and more" Foreground="#5A7899" FontSize="11"/>
+                </StackPanel>
+                <Border Grid.Column="1" Background="#0A1A10" CornerRadius="10" Padding="14,8" BorderBrush="#166534" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="{Binding TotalSelectedSize}" FontSize="16" FontWeight="Bold" Foreground="#22C55E"/>
+                        <TextBlock Text="will be freed" Foreground="#4A6A8F" FontSize="10"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Quick actions row -->
+            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="QUICK ACTIONS" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2"/>
+                    <ItemsControl>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <Button Content="🧠 Trim RAM" Command="{Binding TrimRamCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                        <Button Content="🗑 Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                        <Button Content="🌐 Flush DNS Cache" Command="{Binding FlushDnsCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                        <Button Content="🧹 Windows Cleanup" Command="{Binding WindowsCleanupCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                        <Button Content="💾 Optimise C: (TRIM)" Command="{Binding OptimiseDriveCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                        <Button Content="♻ Reset SysMain/Superfetch" Command="{Binding ResetSysMainCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding RamStatus}" Foreground="#22C55E" FontSize="11"/>
+                    <TextBlock Text="{Binding LastResult}" Foreground="#FB923C" FontSize="11"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Scan + clean -->
+            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+                <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Grid.Column="0" Text="DEEP SCAN" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="Scan System" Command="{Binding ScanCommand}" Classes="primary" Padding="14,6" FontWeight="Bold"/>
+                        <Button Grid.Column="2" Content="Select All" Command="{Binding SelectAllCommand}" Padding="10,5"/>
+                        <Button Grid.Column="3" Content="None" Command="{Binding SelectNoneCommand}" Padding="10,5"/>
+                    </Grid>
+                    <TextBlock Text="{Binding ScanStatus}" Foreground="#7090B0" FontSize="11"/>
+
+                    <Border Background="#061018" CornerRadius="10" MaxHeight="380">
+                        <DataGrid ItemsSource="{Binding Targets}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                  Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="" Binding="{Binding IsSelected, Mode=TwoWay}" Width="40"/>
+                                <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="100"/>
+                                <DataGridTextColumn Header="Target" Binding="{Binding Name}" Width="200"/>
+                                <DataGridTextColumn Header="Size" Binding="{Binding SizeDisplay}" Width="90"/>
+                                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBlock Grid.Column="0" Text="Tick what you want gone, then Clean Selected. Files go straight to deletion (not Recycle Bin)."
+                                   Foreground="#5A7899" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="Clean Selected" Command="{Binding CleanSelectedCommand}" Background="#7C2D12" Foreground="#FFF" Padding="16,8" FontWeight="Bold" CornerRadius="10"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#1C0D00" BorderBrush="#B45309" BorderThickness="1" CornerRadius="10" Padding="14,10">
+                <TextBlock Text="⚠ Cleaning is irreversible — files are NOT moved to Recycle Bin. Close browsers/apps before cleaning their caches to avoid 'file in use' errors."
+                           Foreground="#FDE68A" FontSize="11" TextWrapping="Wrap"/>
+            </Border>
+
+        </StackPanel>
+    </Border>
+    </ScrollViewer>
+</UserControl>

@@ -30,4 +30,12 @@
   <ItemGroup>
     <AvaloniaResource Include="..\Fanzi.FanControl\Assets\**" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" />
   </ItemGroup>
+
+  <!-- Bundle the published Fanzi.FanControl.exe inside the installer as an
+       embedded resource so the installer is a true single-file deliverable. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\publish\app\Fanzi.FanControl.exe"
+                      Condition="Exists('..\..\publish\app\Fanzi.FanControl.exe')"
+                      LogicalName="Fanzi.FanControl.exe" />
+  </ItemGroup>
 </Project>

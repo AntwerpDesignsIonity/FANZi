@@ -37,12 +37,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public TaskManagerViewModel TaskManagerVm { get; } = new();
     public NetworkManagerViewModel NetworkManagerVm { get; } = new();
     public PowerMonitorViewModel PowerMonitorVm { get; } = new();
+    public SystemCleanerViewModel SystemCleanerVm { get; } = new();
     public SmartFanCurveEngine AiEngine => _aiEngine;
 
     // Section toggles bound to AppSettings
     [ObservableProperty] private bool _showTaskManagerTab = true;
     [ObservableProperty] private bool _showNetworkManagerTab = true;
     [ObservableProperty] private bool _showPowerMonitorTab = true;
+    [ObservableProperty] private bool _showSystemCleanerTab = true;
 
     // ── Observable properties ─────────────────────────────────────────────────
 
@@ -182,6 +184,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         TaskManagerVm.Dispose();
         NetworkManagerVm.Dispose();
         PowerMonitorVm.Dispose();
+        SystemCleanerVm.Dispose();
         foreach (var fanChannel in FanChannels)
             fanChannel.Dispose();
     }
@@ -213,6 +216,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ShowTaskManagerTab = _appSettings.ShowTaskManagerTab;
             ShowNetworkManagerTab = _appSettings.ShowNetworkManagerTab;
             ShowPowerMonitorTab = _appSettings.ShowPowerMonitorTab;
+            ShowSystemCleanerTab = _appSettings.ShowSystemCleanerTab;
         }
         finally
         {
@@ -269,6 +273,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_suppressProfileSync) return;
         _appSettings.ShowPowerMonitorTab = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnShowSystemCleanerTabChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.ShowSystemCleanerTab = value;
         _ = SaveSettingsAsync();
     }
 

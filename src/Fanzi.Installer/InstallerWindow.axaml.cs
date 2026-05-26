@@ -119,16 +119,25 @@ public partial class InstallerWindow : Window
         UpdateProgress(5, "Creating installation directory...");
         Directory.CreateDirectory(installPath);
 
-        UpdateProgress(10, "Locating bundled application files...");
-        string? sourceDir = FindSourceFiles();
-        if (sourceDir is null)
-        {
-            throw new InvalidOperationException(
-                "Could not locate FANZI application files. Expected an 'app' folder next to the installer.");
-        }
+        UpdateProgress(10, "Extracting FANZI from installer...");
 
-        UpdateProgress(25, "Copying FANZI files...");
-        CopyDirectory(sourceDir, installPath);
+        // Try embedded resource first (true single-file installer)
+        if (!TryExtractEmbeddedFanzi(installPath))
+        {
+            UpdateProgress(15, "Embedded payload not found, looking for app folder...");
+            string? sourceDir = FindSourceFiles();
+            if (sourceDir is null)
+            {
+                throw new InvalidOperationException(
+                    "Could not locate FANZI application. Installer EXE has no embedded payload AND no 'app' folder is next to it.");
+            }
+            UpdateProgress(25, "Copying FANZI files...");
+            CopyDirectory(sourceDir, installPath);
+        }
+        else
+        {
+            UpdateProgress(40, "FANZI extracted successfully");
+        }
 
         UpdateProgress(45, "Creating Run_Ionity launcher...");
         CreateRunIonityLauncher(installPath);
@@ -158,6 +167,36 @@ public partial class InstallerWindow : Window
         CreateUninstaller(installPath);
 
         UpdateProgress(100, "Installation complete!");
+    }
+
+    /// <summary>
+    /// Extracts the embedded Fanzi.FanControl.exe resource (embedded at build time
+    /// via &lt;EmbeddedResource&gt; in the installer csproj). Returns false if no
+    /// payload was embedded — caller should fall back to disk-side app folder.
+    /// </summary>
+    private static bool TryExtractEmbeddedFanzi(string installPath)
+    {
+        var asm = typeof(InstallerWindow).Assembly;
+        // Embedded with LogicalName "Fanzi.FanControl.exe"
+        using var stream = asm.GetManifestResourceStream("Fanzi.FanControl.exe");
+        if (stream is null) return false;
+
+        Directory.CreateDirectory(installPath);
+        string outPath = Path.Combine(installPath, "Fanzi.FanControl.exe");
+
+        // Kill any running FANZI before overwriting
+        try
+        {
+            foreach (var p in Process.GetProcessesByName("Fanzi.FanControl"))
+            {
+                try { p.Kill(true); p.WaitForExit(3000); } catch { }
+            }
+        }
+        catch { }
+
+        using var fs = File.Create(outPath);
+        stream.CopyTo(fs);
+        return true;
     }
 
     private static string? FindSourceFiles()

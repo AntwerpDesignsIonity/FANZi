@@ -193,6 +193,8 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     public IAsyncRelayCommand StartServerCommand   { get; }
     public IRelayCommand      StopServerCommand    { get; }
     public IAsyncRelayCommand InstallOpenRgbCommand { get; }
+    public IAsyncRelayCommand RescanDevicesCommand { get; }
+    public IAsyncRelayCommand RestartServerCommand { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -206,6 +208,8 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         StartServerCommand = new AsyncRelayCommand(StartServerAsync);
         StopServerCommand  = new RelayCommand(StopServer);
         InstallOpenRgbCommand = new AsyncRelayCommand(InstallOpenRgbAsync);
+        RescanDevicesCommand = new AsyncRelayCommand(RescanDevicesAsync);
+        RestartServerCommand = new AsyncRelayCommand(RestartServerAsync);
 
         _serverManager.DetectInstallation();
         ServerStatus = _serverManager.Status;
@@ -300,6 +304,11 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                     await _serverManager.EnsureRunningAsync(OpenRgbPort, null, _cts.Token);
                     if (OpenRgbServerManager.IsPortListening(OpenRgbPort))
                         await ConnectAsync();
+                }
+                else if (_rgbService.IsConnected && Devices.Count == 0)
+                {
+                    // Connected but no devices yet — OpenRGB may still be detecting hardware
+                    await RefreshDevicesAsync();
                 }
             }
             catch (OperationCanceledException) { return; }
@@ -581,6 +590,27 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         IsServerRunning = false;
         ServerStatus = _serverManager.Status;
         OnPropertyChanged(nameof(StartServerButtonText));
+    }
+
+    private async Task RescanDevicesAsync()
+    {
+        if (!_rgbService.IsConnected)
+        {
+            ServerStatus = "Not connected — flip RGB toggle ON first";
+            return;
+        }
+        ServerStatus = "Rescanning OpenRGB devices...";
+        await RefreshDevicesAsync();
+        ServerStatus = $"Rescan complete — {Devices.Count} device(s) detected";
+    }
+
+    private async Task RestartServerAsync()
+    {
+        ServerStatus = "Restarting OpenRGB server...";
+        DisconnectFromServer();
+        _serverManager.StopServer();
+        await Task.Delay(800, _cts.Token);
+        await AutoStartOpenRgbAsync();
     }
 
     private async Task InstallOpenRgbAsync()
