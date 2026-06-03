@@ -44,7 +44,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     // ── Observable properties ─────────────────────────────────────────────────
 
     [ObservableProperty]
-    private string _connectionStatus = "Not connected — start OpenRGB with SDK server enabled";
+    private string _connectionStatus = "Starting OpenRGB automatically…";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConnectionBadgeBackground))]

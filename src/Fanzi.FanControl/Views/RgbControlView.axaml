@@ -376,7 +376,7 @@
                             <Border IsVisible="{Binding !Devices.Count}"
                                     CornerRadius="8" Background="#060E18" Padding="14,10">
                                 <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#3D5A7A"
-                                           Text="No OpenRGB devices. Start OpenRGB, enable the SDK Server (Settings → SDK Server → Start), then click Connect above."/>
+                                           Text="No OpenRGB devices detected yet. FANZI launches OpenRGB automatically in the background — if your hardware doesn't appear, click Rescan or Restart Server."/>
                             </Border>
                         </Panel>
                     </Border>

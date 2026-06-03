@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -24,14 +25,47 @@ public sealed class OpenRgbServerManager : IDisposable
     private static readonly string InstallDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FANZI", "OpenRGB");
 
-    private static readonly string[] SearchPaths =
-    [
-        @"C:\Program Files\OpenRGB\OpenRGB.exe",
-        @"C:\Program Files (x86)\OpenRGB\OpenRGB.exe",
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenRGB", "OpenRGB.exe"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "OpenRGB", "OpenRGB.exe"),
-        Path.Combine(InstallDir, "OpenRGB.exe"),
-    ];
+    /// <summary>Platform-specific OpenRGB executable name.</summary>
+    private static string ExeName =>
+        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "OpenRGB.exe" : "OpenRGB";
+
+    /// <summary>
+    /// All locations FANZI looks for an OpenRGB binary, in priority order. The first two
+    /// entries point next to the running FANZI executable — this is where our installer
+    /// drops the bundled OpenRGB (<installDir>\OpenRGB\), so a fresh install is found
+    /// instantly without any download. The rest cover standard system installs and our
+    /// fallback download directory.
+    /// </summary>
+    private static IEnumerable<string> SearchPaths
+    {
+        get
+        {
+            var exe = ExeName;
+            var appDir = AppContext.BaseDirectory;
+
+            // 1. Bundled next to FANZI (installer layout): <app>\OpenRGB\OpenRGB.exe
+            yield return Path.Combine(appDir, "OpenRGB", exe);
+            // 2. Bundled directly alongside FANZI
+            yield return Path.Combine(appDir, exe);
+            // 3. Our managed download location
+            yield return Path.Combine(InstallDir, exe);
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                yield return @"C:\Program Files\OpenRGB\OpenRGB.exe";
+                yield return @"C:\Program Files (x86)\OpenRGB\OpenRGB.exe";
+                yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenRGB", "OpenRGB.exe");
+                yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "OpenRGB", "OpenRGB.exe");
+            }
+            else
+            {
+                // Common Linux/macOS install locations
+                yield return "/usr/bin/openrgb";
+                yield return "/usr/local/bin/openrgb";
+                yield return "/opt/OpenRGB/openrgb";
+            }
+        }
+    }
 
     public string? DetectedPath { get; private set; }
 
@@ -39,12 +73,14 @@ public sealed class OpenRgbServerManager : IDisposable
     {
         DetectedPath = SearchPaths.FirstOrDefault(File.Exists);
 
-        if (DetectedPath is null && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (DetectedPath is null)
         {
+            var exe = ExeName;
+            var separator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
             var envPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-            foreach (var dir in envPath.Split(';'))
+            foreach (var dir in envPath.Split(separator))
             {
-                var candidate = Path.Combine(dir.Trim(), "OpenRGB.exe");
+                var candidate = Path.Combine(dir.Trim(), exe);
                 if (File.Exists(candidate))
                 {
                     DetectedPath = candidate;
@@ -65,17 +101,26 @@ public sealed class OpenRgbServerManager : IDisposable
             ct.ThrowIfCancellationRequested();
             Port = port;
 
+            // The only thing that actually matters is whether the SDK port is reachable.
+            // If something is already listening (our own server from a previous launch, or
+            // an external OpenRGB with its SDK server on), we're done — connect to it.
+            if (IsPortListening(port))
+            {
+                Status = $"OpenRGB SDK server reachable on port {port}";
+                return true;
+            }
+
             if (IsRunning)
             {
                 Status = $"Server already running (PID {_serverProcess!.Id})";
                 return true;
             }
 
-            if (IsOpenRgbAlreadyRunning())
-            {
-                Status = "OpenRGB is already running externally";
-                return true;
-            }
+            // NOTE: we intentionally do NOT treat "an OpenRGB process exists" as success.
+            // A plain OpenRGB GUI launched by the user has the SDK server OFF by default,
+            // so the port never opens and the connection silently fails forever. We only
+            // trust the port probe above. If a GUI instance is holding the hardware, our
+            // own --server launch below will surface a clear, actionable status.
 
             if (DetectedPath is null)
             {
@@ -127,7 +172,13 @@ public sealed class OpenRgbServerManager : IDisposable
                     Status = $"Server PID {_serverProcess.Id} running but port {port} not yet listening";
                     return true; // process is alive; client retries will catch up
                 }
-                Status = "Server process exited before port opened";
+
+                // Our launched process exited without opening the port. The usual cause is
+                // that an OpenRGB GUI was already running (single-instance), so our --server
+                // invocation just forwarded to it and quit without enabling the SDK server.
+                Status = IsOpenRgbAlreadyRunning()
+                    ? "OpenRGB is already open without its SDK server — close it so FANZI can launch it in server mode (or enable Settings → SDK Server)"
+                    : "Server process exited before port opened";
                 return false;
             }
             catch (Exception ex)
@@ -340,6 +391,17 @@ public sealed class OpenRgbServerManager : IDisposable
     /// </summary>
     public async Task<bool> EnsureRunningAsync(int port = 6742, IProgress<string>? progress = null, CancellationToken ct = default)
     {
+        Port = port;
+
+        // Fast path: the SDK server is already reachable (ours from a prior launch, or an
+        // external OpenRGB with the SDK server enabled). Nothing to do — just connect.
+        if (IsPortListening(port))
+        {
+            Status = $"OpenRGB SDK server reachable on port {port}";
+            progress?.Report(Status);
+            return true;
+        }
+
         DetectInstallation();
 
         if (!IsInstalled)
@@ -349,13 +411,9 @@ public sealed class OpenRgbServerManager : IDisposable
             if (!installed) return false;
         }
 
-        if (IsOpenRgbAlreadyRunning())
-        {
-            Status = "OpenRGB already running externally";
-            progress?.Report(Status);
-            return true;
-        }
-
+        // Launch our own headless server. We deliberately rely on the port probe inside
+        // StartServerAsync rather than the mere presence of an OpenRGB process, so a GUI
+        // instance without the SDK server can't fool us into a broken "connected" state.
         return await StartServerAsync(port, ct);
     }
 

@@ -726,7 +726,7 @@
                     <TextBlock Text="FANZI Quick Guide" FontSize="18" FontWeight="Black" Foreground="#E8F0FF"/>
                     <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="FANZI requires administrator privileges to access hardware sensors via LibreHardwareMonitor kernel drivers."/>
                     <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="Fan channels are auto-detected. Use sliders to set manual duty, Apply to commit, Auto to restore BIOS control."/>
-                    <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="RGB control requires OpenRGB running with SDK server enabled (port 6742). Connect via the RGB tab."/>
+                    <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="RGB control works out of the box — FANZI launches OpenRGB automatically in the background (SDK port 6742) and connects on its own. Just open the RGB tab."/>
                     <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="AI engine learns your system's thermal characteristics and predictively adjusts fans. Enable in Settings."/>
                     <Button Content="Close" Command="{Binding ToggleHelpCommand}" HorizontalAlignment="Right" MinWidth="80"/>
                 </StackPanel>
