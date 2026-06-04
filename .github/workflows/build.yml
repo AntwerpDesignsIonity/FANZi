@@ -1,0 +1,28 @@
+name: Build
+
+on:
+  push:
+    branches: [ "Root-Main", "claude/**" ]
+  pull_request:
+    branches: [ "Root-Main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (Windows, .NET 10)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore FANZI.slnx
+
+      - name: Build (Release)
+        run: dotnet build FANZI.slnx --configuration Release --no-restore
