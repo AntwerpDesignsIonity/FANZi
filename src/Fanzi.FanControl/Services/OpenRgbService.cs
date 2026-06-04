@@ -15,9 +15,10 @@ namespace Fanzi.FanControl.Services;
 /// </summary>
 public sealed class OpenRgbService : IRgbService
 {
-    private OpenRgbClient?    _client;
-    private bool              _disposed;
-    private readonly object   _lock = new();
+    private OpenRgbClient?      _client;
+    private OpenRGB.NET.Device[]? _deviceCache;   // zone/LED layout, refreshed on each device scan
+    private bool                _disposed;
+    private readonly object     _lock = new();
 
     public bool   IsConnected   { get; private set; }
     public string ServerVersion { get; private set; } = "Not connected";
@@ -38,6 +39,7 @@ public sealed class OpenRgbService : IRgbService
                 {
                     _client?.Dispose();
                     _client = null;
+                    _deviceCache = null;
                     IsConnected   = false;
                     ServerVersion = "Not connected";
 
@@ -70,6 +72,7 @@ public sealed class OpenRgbService : IRgbService
         {
             _client?.Dispose();
             _client       = null;
+            _deviceCache  = null;
             IsConnected   = false;
             ServerVersion = "Disconnected";
         }
@@ -90,13 +93,30 @@ public sealed class OpenRgbService : IRgbService
                 try
                 {
                     var devices = _client.GetAllControllerData();
+                    _deviceCache = devices;   // cache layout so per-zone sends don't round-trip each frame
+
                     return devices
-                        .Select((d, i) => new RgbDeviceInfo(
-                            DeviceIndex: i,
-                            Name: d.Name,
-                            Type: d.Type.ToString(),
-                            LedCount: d.Leds.Length,
-                            IsConnected: true))
+                        .Select((d, i) =>
+                        {
+                            var zones = new List<RgbZoneInfo>(d.Zones.Length);
+                            for (int z = 0; z < d.Zones.Length; z++)
+                            {
+                                var zoneName = string.IsNullOrWhiteSpace(d.Zones[z].Name)
+                                    ? $"Zone {z + 1}"
+                                    : d.Zones[z].Name;
+                                zones.Add(new RgbZoneInfo(i, z, zoneName, (int)d.Zones[z].LedCount));
+                            }
+
+                            return new RgbDeviceInfo(
+                                DeviceIndex: i,
+                                Name: d.Name,
+                                Type: d.Type.ToString(),
+                                LedCount: d.Leds.Length,
+                                IsConnected: true)
+                            {
+                                Zones = zones,
+                            };
+                        })
                         .ToArray();
                 }
                 catch
@@ -176,6 +196,49 @@ public sealed class OpenRgbService : IRgbService
                             .ToArray();
                         _client.UpdateLeds(i, colors);
                     }
+                }
+                catch { IsConnected = false; }
+            }
+        }, cancellationToken);
+    }
+
+    public Task SetDeviceZoneColorsAsync(
+        int        deviceIndex,
+        RgbColor[] zoneColors,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_lock)
+            {
+                if (_client is null || !IsConnected) return;
+                try
+                {
+                    // Use the cached layout where possible so we don't hit the SDK every frame.
+                    var devices = _deviceCache ?? _client.GetAllControllerData();
+                    if (deviceIndex < 0 || deviceIndex >= devices.Length) return;
+
+                    var dev = devices[deviceIndex];
+                    int ledTotal = dev.Leds.Length;
+
+                    // Build the full per-LED buffer for the device, expanding each zone's
+                    // colour across its LED span. Pre-fill black so unzoned/trailing LEDs
+                    // are always initialised (safe whether Color is a struct or class).
+                    var black = ToOpenRgb(RgbColor.Black);
+                    var leds  = new OpenRGB.NET.Color[ledTotal];
+                    for (int k = 0; k < ledTotal; k++) leds[k] = black;
+
+                    int offset = 0;
+                    for (int z = 0; z < dev.Zones.Length && offset < ledTotal; z++)
+                    {
+                        int count = (int)dev.Zones[z].LedCount;
+                        var col   = z < zoneColors.Length ? ToOpenRgb(zoneColors[z]) : black;
+                        for (int k = 0; k < count && offset < ledTotal; k++)
+                            leds[offset++] = col;
+                    }
+
+                    _client.UpdateLeds(deviceIndex, leds);
                 }
                 catch { IsConnected = false; }
             }

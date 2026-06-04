@@ -721,10 +721,17 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             SyncGpuReadings(snapshot.GpuReadings);
             SynchronizeFans(snapshot.Fans);
 
+            // Detect liquid cooling: CPU cooler reported as a Pump/AIO, or any pump in the fan list.
+            var pump = snapshot.CpuFan is { DeviceKind: FanDeviceKind.Pump or FanDeviceKind.AioCooler }
+                ? snapshot.CpuFan
+                : snapshot.Fans.FirstOrDefault(f => f.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler);
+
             RgbControl.UpdateHardwareData(
                 cpuTempC: snapshot.CpuPackageTemperature ?? snapshot.CpuAverageTemperature,
                 gpuTempC: snapshot.GpuCoreTemperature,
-                cpuLoadPct: snapshot.CpuTotalLoadPercent);
+                cpuLoadPct: snapshot.CpuTotalLoadPercent,
+                pumpRpm: pump?.SpeedRpm,
+                isLiquidCooled: pump is not null);
         }
         catch (OperationCanceledException) { }
         catch (UnauthorizedAccessException)
