@@ -51,6 +51,17 @@ public interface IRgbService : IDisposable
         RgbColor  color,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Paints each zone of a device its own colour in a single hardware update.
+    /// <paramref name="zoneColors"/> is indexed by zone (entry <c>i</c> fills every LED
+    /// of zone <c>i</c>); shorter arrays leave trailing zones black. This is what drives
+    /// per-zone / per-endpoint control (e.g. individual RAM stick colours).
+    /// </summary>
+    Task SetDeviceZoneColorsAsync(
+        int        deviceIndex,
+        RgbColor[] zoneColors,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Closes the OpenRGB connection.</summary>
     void Disconnect();
 }

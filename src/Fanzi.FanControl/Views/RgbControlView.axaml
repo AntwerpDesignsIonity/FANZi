@@ -50,7 +50,7 @@
 
     <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <Border CornerRadius="20" Background="#0C1828" BorderBrush="#1E3254" BorderThickness="1" Padding="24" Margin="0,0,4,0">
-        <Grid RowDefinitions="Auto,16,Auto,16,Auto,16,Auto,16,Auto" RowSpacing="0">
+        <Grid RowDefinitions="Auto,16,Auto,16,Auto,16,Auto,16,Auto,16,Auto" RowSpacing="0">
 
             <!-- ── HEADER ──────────────────────────────────────────────── -->
             <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
@@ -125,6 +125,19 @@
                                       OffContent="RGB Disabled"
                                       VerticalAlignment="Center"/>
                     </Grid>
+                    <!-- Live hardware readout — drives the reactive effects -->
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Border CornerRadius="8" Background="#0A1622" BorderBrush="#1E3A60" BorderThickness="1" Padding="10,4">
+                            <TextBlock Text="{Binding CpuTempDisplay}" Foreground="#8EACD0" FontSize="11" FontWeight="SemiBold"/>
+                        </Border>
+                        <Border CornerRadius="8" Background="#0A1622" BorderBrush="#1E3A60" BorderThickness="1" Padding="10,4">
+                            <TextBlock Text="{Binding GpuTempDisplay}" Foreground="#8EACD0" FontSize="11" FontWeight="SemiBold"/>
+                        </Border>
+                        <Border CornerRadius="8" Background="#0A1622" BorderBrush="#1E3A60" BorderThickness="1" Padding="10,4">
+                            <TextBlock Text="{Binding PumpSpeedDisplay}" Foreground="#6EE7B7" FontSize="11" FontWeight="SemiBold"/>
+                        </Border>
+                    </StackPanel>
+
                     <!-- Connection status — passive indicator + recovery actions -->
                     <Border CornerRadius="8" Background="#081320" BorderBrush="#1E3A60" BorderThickness="1" Padding="10,6">
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
@@ -376,7 +389,7 @@
                             <Border IsVisible="{Binding !Devices.Count}"
                                     CornerRadius="8" Background="#060E18" Padding="14,10">
                                 <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#3D5A7A"
-                                           Text="No OpenRGB devices. Start OpenRGB, enable the SDK Server (Settings → SDK Server → Start), then click Connect above."/>
+                                           Text="No OpenRGB devices detected yet. FANZI launches OpenRGB automatically in the background — if your hardware doesn't appear, click Rescan or Restart Server."/>
                             </Border>
                         </Panel>
                     </Border>
@@ -402,6 +415,72 @@
                                Foreground="#5A7899" FontSize="12"/>
                 </StackPanel>
             </Grid>
+
+            <!-- ── SECTION 5 : PER-ZONE CONTROL ──────────────────────── -->
+            <Border Grid.Row="10" CornerRadius="14" Background="#071015" BorderBrush="#162030"
+                    BorderThickness="1" Padding="16,12">
+                <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="PER-ZONE CONTROL" Foreground="#4E6E95" FontSize="11"
+                                       FontWeight="Bold" LetterSpacing="2"/>
+                            <TextBlock Text="Give each zone — RAM stick, fan ring, GPU block — its own colour, effect and reactive source."
+                                       Foreground="#3D5A7A" FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1"
+                                      IsChecked="{Binding ZoneModeEnabled}"
+                                      OnContent="Per-zone" OffContent="Global"
+                                      VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Placeholder when no zones are exposed -->
+                    <Border IsVisible="{Binding !HasZones}" CornerRadius="8" Background="#060E18" Padding="12,8">
+                        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#3D5A7A"
+                                   Text="No addressable zones detected yet. Once OpenRGB enumerates your RAM, ARGB headers or GPU, each zone appears here for individual control."/>
+                    </Border>
+
+                    <!-- One row per zone -->
+                    <ItemsControl ItemsSource="{Binding ZoneControls}" IsVisible="{Binding HasZones}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ZoneEffectViewModel">
+                                <Border Margin="0,0,0,8" CornerRadius="10" Background="#0A1520"
+                                        BorderBrush="#162842" BorderThickness="1" Padding="12">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                        <!-- Zone preview swatch -->
+                                        <Border Grid.Column="0" Width="34" Height="34" CornerRadius="17"
+                                                VerticalAlignment="Center"
+                                                Background="{Binding PreviewColor, Converter={StaticResource RgbBrush}}"
+                                                BorderBrush="#334" BorderThickness="1"/>
+                                        <StackPanel Grid.Column="1" Spacing="6">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding DisplayLabel}" Foreground="#C4D8F4"
+                                                           FontSize="13" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding LedLabel}" Foreground="#4E6E95"
+                                                           FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+                                                <ComboBox Grid.Column="0" ItemsSource="{Binding Effects}"
+                                                          SelectedItem="{Binding SelectedEffect, Mode=TwoWay}"
+                                                          FontSize="12" HorizontalAlignment="Stretch"
+                                                          ToolTip.Tip="Effect for this zone"/>
+                                                <ComboBox Grid.Column="1" ItemsSource="{Binding Sources}"
+                                                          SelectedItem="{Binding ReactiveSource, Mode=TwoWay}"
+                                                          FontSize="12" HorizontalAlignment="Stretch"
+                                                          ToolTip.Tip="Hardware signal that drives reactive effects"/>
+                                                <TextBox Grid.Column="2" Text="{Binding PrimaryHex}"
+                                                         Width="84" FontSize="12" FontFamily="Consolas,monospace"
+                                                         Background="#060E1A" Foreground="#C4D8F4"
+                                                         BorderBrush="#1E3A60" CornerRadius="6" Padding="6,3"
+                                                         ToolTip.Tip="Zone colour (hex)"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
 
         </Grid>
     </Border>

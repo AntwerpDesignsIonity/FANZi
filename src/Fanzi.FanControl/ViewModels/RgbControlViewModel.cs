@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
@@ -34,6 +35,11 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     private double? _cpuTempC;
     private double? _gpuTempC;
     private double? _cpuLoadPct;
+    private double? _pumpRpm;
+    private double? _pumpLoadPct;   // pump RPM normalised to 0-100 for reactive effects
+
+    // Assumed maximum AIO pump speed used to normalise RPM into a 0-100 reactive signal.
+    private const double MaxPumpRpm = 5000.0;
 
     // Frame counter for throttling hardware sends.
     private int _frameCounter;
@@ -44,7 +50,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     // ── Observable properties ─────────────────────────────────────────────────
 
     [ObservableProperty]
-    private string _connectionStatus = "Not connected — start OpenRGB with SDK server enabled";
+    private string _connectionStatus = "Starting OpenRGB automatically…";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConnectionBadgeBackground))]
@@ -130,6 +136,48 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     private string _deviceSummary = "No devices detected";
+
+    // ── Live hardware readout (drives reactive effects) ───────────────────────
+
+    [ObservableProperty]
+    private string _cpuTempDisplay = "CPU —";
+
+    [ObservableProperty]
+    private string _gpuTempDisplay = "GPU —";
+
+    [ObservableProperty]
+    private string _pumpSpeedDisplay = "Pump —";
+
+    /// <summary>True when the CPU cooler is a pump / AIO (liquid cooling).</summary>
+    [ObservableProperty]
+    private bool _isLiquidCooled;
+
+    // ── Per-zone control ──────────────────────────────────────────────────────
+
+    /// <summary>One entry per addressable zone across all connected devices.</summary>
+    public ObservableCollection<ZoneEffectViewModel> ZoneControls { get; } = new();
+
+    /// <summary>Signature of the current zone layout, so we only rebuild on real changes.</summary>
+    private string _zoneSignature = "";
+
+    /// <summary>
+    /// Immutable snapshot of the zones the frame loop sends to. Swapped atomically when the
+    /// layout changes so the timer thread never enumerates the live ObservableCollection.
+    /// </summary>
+    private ZoneEffectViewModel[] _zoneSendList = Array.Empty<ZoneEffectViewModel>();
+
+    /// <summary>
+    /// When on, each zone is driven independently by its own effect/colour/source and
+    /// pushed per-zone to the hardware. When off, the single global effect lights everything.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZoneModeText))]
+    private bool _zoneModeEnabled;
+
+    public string ZoneModeText => ZoneModeEnabled ? "Per-zone control ON" : "Global effect";
+
+    [ObservableProperty]
+    private bool _hasZones;
 
     // ── Effect display ────────────────────────────────────────────────────────
 
@@ -338,13 +386,33 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Called by <see cref="MainWindowViewModel"/> each time new hardware
-    /// data is available.  Thread-safe (volatile fields).
+    /// data is available.  Thread-safe (plain field writes).
     /// </summary>
-    public void UpdateHardwareData(double? cpuTempC, double? gpuTempC, double? cpuLoadPct)
+    public void UpdateHardwareData(
+        double? cpuTempC,
+        double? gpuTempC,
+        double? cpuLoadPct,
+        double? pumpRpm        = null,
+        bool    isLiquidCooled = false)
     {
         _cpuTempC   = cpuTempC;
         _gpuTempC   = gpuTempC;
         _cpuLoadPct = cpuLoadPct;
+        _pumpRpm    = pumpRpm;
+        _pumpLoadPct = pumpRpm is double rpm
+            ? Math.Clamp(rpm / MaxPumpRpm * 100.0, 0, 100)
+            : null;
+
+        // Push the human-readable readout to the UI (effects use the raw fields above).
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            CpuTempDisplay = cpuTempC is double ct ? $"CPU {ct:F0}°C" : "CPU —";
+            GpuTempDisplay = gpuTempC is double gt ? $"GPU {gt:F0}°C" : "GPU —";
+            IsLiquidCooled = isLiquidCooled;
+            PumpSpeedDisplay = isLiquidCooled
+                ? (pumpRpm is double pr ? $"Pump {pr:F0} RPM" : "Pump — RPM")
+                : "Air cooled";
+        });
     }
 
     // ── Timer tick (frame loop) ───────────────────────────────────────────────
@@ -386,7 +454,10 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             if (RgbEnabled && _rgbService.IsConnected)
             {
                 // Fire-and-forget; errors are swallowed inside the service.
-                _ = SendFrameToHardwareAsync(elapsed, color);
+                if (ZoneModeEnabled && HasZones)
+                    _ = SendZoneFrameToHardwareAsync(elapsed);
+                else
+                    _ = SendFrameToHardwareAsync(elapsed, color);
             }
         }
     }
@@ -420,6 +491,60 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                     await _rgbService.SetDeviceColorAsync(i, deviceColor, _cts.Token);
                 }
             }
+        }
+        catch (OperationCanceledException) { }
+        catch { /* swallow — connection may have dropped */ }
+    }
+
+    /// <summary>
+    /// Per-zone frame: each zone computes its own colour (from its own effect + reactive
+    /// source) and every device receives a single update painting all its zones at once.
+    /// </summary>
+    private async Task SendZoneFrameToHardwareAsync(double elapsed)
+    {
+        try
+        {
+            var zones = _zoneSendList;            // atomic snapshot — safe off the UI thread
+            if (zones.Length == 0) return;
+
+            double? cpuTemp  = HardwareReactiveEnabled ? _cpuTempC    : null;
+            double? gpuTemp  = HardwareReactiveEnabled ? _gpuTempC    : null;
+            double? cpuLoad  = HardwareReactiveEnabled ? _cpuLoadPct  : null;
+            double? pumpLoad = HardwareReactiveEnabled ? _pumpLoadPct : null;
+
+            // Group zones by device so each device gets one consolidated update.
+            var byDevice = new Dictionary<int, List<ZoneEffectViewModel>>();
+            foreach (var z in zones)
+            {
+                if (!byDevice.TryGetValue(z.DeviceIndex, out var list))
+                    byDevice[z.DeviceIndex] = list = new List<ZoneEffectViewModel>();
+                list.Add(z);
+            }
+
+            foreach (var (deviceIndex, deviceZones) in byDevice)
+            {
+                int maxZone = 0;
+                foreach (var z in deviceZones) maxZone = Math.Max(maxZone, z.ZoneIndex);
+
+                var colors = new RgbColor[maxZone + 1];
+                foreach (var z in deviceZones)
+                {
+                    var c = z.Compute(
+                        elapsed, SpeedMultiplier, Brightness,
+                        cpuTemp, gpuTemp, cpuLoad, pumpLoad,
+                        deviceZones.Count);
+                    colors[z.ZoneIndex] = c;
+                    z.LastComputed = c;
+                }
+
+                await _rgbService.SetDeviceZoneColorsAsync(deviceIndex, colors, _cts.Token);
+            }
+
+            // Reflect each zone's colour into its preview swatch.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var z in zones) z.PreviewColor = z.LastComputed;
+            });
         }
         catch (OperationCanceledException) { }
         catch { /* swallow — connection may have dropped */ }
@@ -472,6 +597,21 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             DeviceSummary = Devices.Count == 0
                 ? "No RGB devices found in OpenRGB"
                 : $"{Devices.Count} device{(Devices.Count == 1 ? "" : "s")} connected";
+
+            // Rebuild per-zone controls only when the layout actually changes, so user
+            // edits survive the periodic watchdog refreshes.
+            var sig = string.Join("|", list.Select(d => $"{d.DeviceIndex}:{d.Name}:{d.Zones.Count}"));
+            if (sig != _zoneSignature)
+            {
+                _zoneSignature = sig;
+                ZoneControls.Clear();
+                foreach (var d in list)
+                    foreach (var z in d.Zones)
+                        ZoneControls.Add(new ZoneEffectViewModel(z, d.Name));
+
+                _zoneSendList = ZoneControls.ToArray();
+                HasZones = _zoneSendList.Length > 0;
+            }
         });
     }
 
