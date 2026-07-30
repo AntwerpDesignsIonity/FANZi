@@ -386,11 +386,14 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         {
             try
             {
-                await Task.Delay(5000, token);
+                await Task.Delay(15000, token);
                 if (!RgbEnabled || _autoStartInProgress) continue;
 
                 if (!_rgbService.IsConnected && OpenRgbServerManager.IsPortListening(OpenRgbPort))
                 {
+                    // Properly dispose the old client BEFORE reconnecting —
+                    // prevents socket leak and TIME_WAIT accumulation.
+                    _rgbService.Disconnect();
                     ConnectionStatus = "AEDi: Reconnecting...";
                     await ConnectAsync();
                     if (IsConnected)
