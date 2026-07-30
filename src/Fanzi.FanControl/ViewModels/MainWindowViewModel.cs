@@ -143,8 +143,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _startMinimized;
     [ObservableProperty] private bool _minimizeToTray = true;
     [ObservableProperty] private bool _closeToTray = true;
-    [ObservableProperty] private bool _overlayTransparent = true;
-    [ObservableProperty] private double _overlayOpacity = 0.80;
+    [ObservableProperty] private bool _overlayTransparent = false;
+    [ObservableProperty] private double _overlayOpacity = 0.90;
 
     // ── Collections ─────────���─────────────────────────────────────────────────
 
@@ -540,6 +540,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         Task<AppSettings> loadTask = _settingsService.LoadAsync(_disposeTokenSource.Token);
         await Task.Delay(TimeSpan.FromMilliseconds(800));
         _appSettings = await loadTask;
+        _appSettings.Migrate();
         ApplySettingsToVm();
         InitialiseProfiles();
         IsLoading = false;

@@ -5,7 +5,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="FANZi IO-nity"
         Width="240" Height="170"
-        Topmost="True"
+        Topmost="False"
         ShowInTaskbar="False"
         CanResize="False"
         SystemDecorations="None"
