@@ -8,11 +8,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Net.Mail;
+using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Fanzi.FanControl.ViewModels;
 
+[SupportedOSPlatform("windows")]
 public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private readonly IHardwareMonitorService _hardwareMonitorService;
@@ -22,6 +24,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly EmailNotificationService _emailService = new();
     private readonly SmartFanCurveEngine _aiEngine = new();
     private readonly ProcessWatcher _processWatcher = new();
+    private readonly ThermalCoach _thermalCoach = new();
+    private readonly GameModeDetector _gameModeDetector = new();
+    private readonly SystemHealthScorer _healthScorer = new();
+    private readonly AediKnowledgeEngine _aediEngine = new();
+    private readonly GoogleProfileService _googleProfile = new();
 
     private AppSettings _appSettings = new();
     private ProfileTabViewModel? _activeProfileTab;
@@ -95,17 +102,49 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private bool _aiAutoFanEnabled;
     [ObservableProperty] private bool _aiAnomalyDetection = true;
-    [ObservableProperty] private string _aiStatus = "AI Engine: Learning...";
+    [ObservableProperty] private string _aiStatus = "AEDi: Learning...";
     [ObservableProperty] private string _aiTrend = "Stable";
     [ObservableProperty] private string _aiPrediction = "--";
     [ObservableProperty] private string _aiSuggestedFan = "--";
     [ObservableProperty] private bool _hasAnomaly;
     [ObservableProperty] private string _anomalyMessage = string.Empty;
     [ObservableProperty] private string _anomalySeverity = "Normal";
+    // ── IO-nity AI properties ──────────────────────────────────────────────
+
+    [ObservableProperty] private string _healthScore = "100";
+    [ObservableProperty] private string _healthGrade = "A+";
+    [ObservableProperty] private string _healthEmoji = "🟢";
+    [ObservableProperty] private string _healthSummary = "System Health: 100/100 (A+)";
+    [ObservableProperty] private string _healthInsights = "";
+    [ObservableProperty] private bool _isGameMode;
+    [ObservableProperty] private string _gameModeStatus = "Desktop mode";
+    [ObservableProperty] private string _detectedGame = "";
+    [ObservableProperty] private string _coachRecommendations = "";
+    [ObservableProperty] private bool _hasCoachRecommendations;
+    [ObservableProperty] private string _ionityVersion = "IO-nity v2.1";
+
+    // ── Google Profile ────────────────────────────────────────────────────
+
+    [ObservableProperty] private bool _isLoggedInGoogle;
+    [ObservableProperty] private string _googleUserName = "";
+    [ObservableProperty] private string _googleUserEmail = "";
+    [ObservableProperty] private string _googleStatus = "Not signed in";
+    [ObservableProperty] private string _googleSyncStatus = "";
+
+    // ── AEDi Search ───────────────────────────────────────────────────────
+
+    [ObservableProperty] private string _aediQuery = "";
+    [ObservableProperty] private string _aediResults = "";
+    [ObservableProperty] private bool _hasAediResults;
+    [ObservableProperty] private string _aediWelcome = "Hi! I'm AEDi — your FANZi assistant. Search or type a command like 'fans', 'rgb', 'clean ram', 'port scan'...";
+    [ObservableProperty] private int _aediNavigateTab = -1;
+
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private bool _startMinimized;
     [ObservableProperty] private bool _minimizeToTray = true;
     [ObservableProperty] private bool _closeToTray = true;
+    [ObservableProperty] private bool _overlayTransparent = true;
+    [ObservableProperty] private double _overlayOpacity = 0.80;
 
     // ── Collections ─────────���─────────────────────────────────────────────────
 
@@ -134,6 +173,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public IRelayCommand<ProfileFileInfo> DeleteProfileFromDiskCommand { get; }
     public IRelayCommand ToggleMiniOverlayCommand { get; }
     public IRelayCommand ExportHardwareReportCommand { get; }
+    public IAsyncRelayCommand GoogleLoginCommand { get; }
+    public IRelayCommand GoogleLogoutCommand { get; }
+    public IAsyncRelayCommand GoogleSyncUpCommand { get; }
+    public IAsyncRelayCommand GoogleSyncDownCommand { get; }
+    public IRelayCommand AediSearchCommand { get; }
+    public IRelayCommand<object> AediNavigateCommand { get; }
 
     // Profile manager + pinning state
     private readonly ProfileManagerService _profileMgr = new();
@@ -176,6 +221,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         DeleteProfileFromDiskCommand = new RelayCommand<ProfileFileInfo>(DeleteProfileFromDisk);
         ToggleMiniOverlayCommand = new RelayCommand(ToggleMiniOverlay);
         ExportHardwareReportCommand = new RelayCommand(ExportHardwareReport);
+        GoogleLoginCommand = new AsyncRelayCommand(GoogleLoginAsync);
+        GoogleLogoutCommand = new RelayCommand(GoogleLogout);
+        GoogleSyncUpCommand = new AsyncRelayCommand(GoogleSyncUpAsync);
+        GoogleSyncDownCommand = new AsyncRelayCommand(GoogleSyncDownAsync);
+        AediSearchCommand = new RelayCommand(AediSearch);
+        AediNavigateCommand = new RelayCommand<object>(AediNavigate);
 
         RgbControl = new RgbControlViewModel(rgbService);
         _ = RefreshDiskProfilesAsync();
@@ -346,6 +397,126 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
     }
 
+    // ── Google Profile ────────────────────────────────────────────────────
+
+    private async Task GoogleLoginAsync()
+    {
+        GoogleStatus = "Signing in to Google...";
+        bool ok = await _googleProfile.LoginAsync(_disposeTokenSource.Token);
+        IsLoggedInGoogle = ok;
+        GoogleUserName = _googleProfile.UserName ?? "";
+        GoogleUserEmail = _googleProfile.UserEmail ?? "";
+        GoogleStatus = _googleProfile.Status;
+    }
+
+    private void GoogleLogout()
+    {
+        _googleProfile.Logout();
+        IsLoggedInGoogle = false;
+        GoogleUserName = "";
+        GoogleUserEmail = "";
+        GoogleStatus = "Signed out";
+        GoogleSyncStatus = "";
+    }
+
+    private async Task GoogleSyncUpAsync()
+    {
+        if (!IsLoggedInGoogle) { GoogleSyncStatus = "Sign in first"; return; }
+        var active = _activeProfileTab?.Profile;
+        if (active is null) { GoogleSyncStatus = "No active profile"; return; }
+
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(active);
+            string fileName = $"fanzi_profile_{active.Name.Replace(' ', '_')}.json";
+            bool ok = await _googleProfile.UploadProfileAsync(json, fileName, _disposeTokenSource.Token);
+            GoogleSyncStatus = ok ? $"Uploaded '{active.Name}' to Google Drive" : "Upload failed";
+        }
+        catch (Exception ex) { GoogleSyncStatus = $"Sync up failed: {ex.Message}"; }
+    }
+
+    private async Task GoogleSyncDownAsync()
+    {
+        if (!IsLoggedInGoogle) { GoogleSyncStatus = "Sign in first"; return; }
+        var active = _activeProfileTab?.Profile;
+        if (active is null) { GoogleSyncStatus = "No active profile"; return; }
+
+        try
+        {
+            string fileName = $"fanzi_profile_{active.Name.Replace(' ', '_')}.json";
+            var json = await _googleProfile.DownloadProfileAsync(fileName, _disposeTokenSource.Token);
+            if (json is not null)
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<FanProfile>(json);
+                if (loaded is not null && _activeProfileTab is not null)
+                {
+                    var existing = _activeProfileTab.Profile;
+                    existing.Name = loaded.Name;
+                    existing.CpuFanDesiredPercent = loaded.CpuFanDesiredPercent;
+                    existing.CpuWarningThresholdDegrees = loaded.CpuWarningThresholdDegrees;
+                    existing.NotificationEmail = loaded.NotificationEmail;
+                    existing.FanCurve = loaded.FanCurve;
+                    existing.FanChannelPercents = loaded.FanChannelPercents;
+                    ApplyProfileToVm(existing);
+                    GoogleSyncStatus = $"Downloaded '{existing.Name}' from Google Drive";
+                }
+            }
+            else GoogleSyncStatus = "Profile not found in Google Drive";
+        }
+        catch (Exception ex) { GoogleSyncStatus = $"Sync down failed: {ex.Message}"; }
+    }
+
+    // ── AEDi Search & Navigate ────────────────────────────────────────────
+
+    private void AediSearch()
+    {
+        if (string.IsNullOrWhiteSpace(AediQuery)) return;
+
+        // Try quick command first
+        var ping = _aediEngine.Ping(AediQuery);
+        if (ping is not null)
+        {
+            AediResults = $"🎯 {ping.Entry.Title}\n{ping.Entry.Description}\n\n→ {ping.Entry.Action}";
+            HasAediResults = true;
+            AediNavigateTab = ping.TargetTab;
+            SelectedTabIndex = ping.TargetTab;
+            AediWelcome = $"Navigated to {ping.Entry.Section}";
+            return;
+        }
+
+        // Full search
+        var results = _aediEngine.Search(AediQuery);
+        if (results.Count == 0)
+        {
+            AediResults = "No results found. Try: fans, rgb, clean, network, health, game, overlay, settings";
+            HasAediResults = true;
+            return;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var r in results)
+        {
+            sb.AppendLine($"📌 {r.Entry.Title} ({r.Entry.Section})");
+            sb.AppendLine($"   {r.Entry.Description}");
+            sb.AppendLine($"   → {r.Entry.Action}");
+            sb.AppendLine();
+        }
+        AediResults = sb.ToString().TrimEnd();
+        HasAediResults = true;
+
+        // Navigate to top result
+        AediNavigateTab = results[0].TargetTab;
+        SelectedTabIndex = results[0].TargetTab;
+    }
+
+    private void AediNavigate(object? tabIndex)
+    {
+        if (tabIndex is int i && i >= 0)
+            SelectedTabIndex = i;
+        else if (tabIndex is string s && int.TryParse(s, out int parsed) && parsed >= 0)
+            SelectedTabIndex = parsed;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -390,6 +561,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ShowNetworkManagerTab = _appSettings.ShowNetworkManagerTab;
             ShowPowerMonitorTab = _appSettings.ShowPowerMonitorTab;
             ShowSystemCleanerTab = _appSettings.ShowSystemCleanerTab;
+            OverlayTransparent = _appSettings.OverlayTransparent;
+            OverlayOpacity = _appSettings.OverlayOpacity;
         }
         finally
         {
@@ -468,6 +641,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_suppressProfileSync) return;
         _appSettings.AiAnomalyDetection = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnOverlayTransparentChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.OverlayTransparent = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnOverlayOpacityChanged(double value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.OverlayOpacity = value;
         _ = SaveSettingsAsync();
     }
 
@@ -634,8 +821,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             {
                 string kindPrefix = cf.DeviceKind switch
                 {
-                    FanDeviceKind.Pump      => "CPU Pump",
-                    FanDeviceKind.AioCooler => "CPU AIO Cooler",
+                    FanDeviceKind.Pump        => "CPU Pump",
+                    FanDeviceKind.AioCooler   => "CPU AIO Cooler",
+                    FanDeviceKind.Watercooler => "CPU Watercooler",
+                    FanDeviceKind.IoPump      => "CPU IO Pump",
                     _ => "CPU Fan",
                 };
                 CpuFanName = $"{kindPrefix} · {cf.Name}";
@@ -674,7 +863,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 AiPrediction = _aiEngine.Predictor.PredictedTempIn30s.HasValue
                     ? $"{_aiEngine.Predictor.PredictedTempIn30s.Value:F1}C in 30s"
                     : "Learning...";
-                AiStatus = _aiEngine.IsLearning ? "AI Engine: Active" : "AI Engine: Learning...";
+                AiStatus = _aiEngine.IsLearning ? "AEDi: Active" : "AEDi: Learning...";
 
                 if (AiAutoFanEnabled && CpuFanCanControl && !string.IsNullOrEmpty(_cpuFanChannelId))
                 {
@@ -698,6 +887,47 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                     }
                 }
             }
+
+            // ── IO-nity AI: Thermal Coach ─────────────────────────────
+            if (hottest.HasValue && snapshot.CpuFan?.SpeedRpm is double fanRpm)
+            {
+                _thermalCoach.Record(hottest.Value, cpuLoad, fanRpm);
+                var coachRecs = _thermalCoach.GetRecommendations();
+                if (coachRecs.Count > 0)
+                {
+                    HasCoachRecommendations = true;
+                    CoachRecommendations = string.Join("\n", coachRecs.Select(r =>
+                        $"{(r.Severity == CoachSeverity.Critical ? "🔴" : r.Severity == CoachSeverity.Warning ? "🟡" : "🔵")} {r.Title}: {r.Message}"));
+                }
+                else
+                {
+                    HasCoachRecommendations = false;
+                    CoachRecommendations = "";
+                }
+            }
+
+            // ── IO-nity AI: Game Mode Detection ───────────────────────
+            _gameModeDetector.Update(snapshot.GpuLoadPercent ?? 0, hottest ?? 0);
+            var gameDetection = await _gameModeDetector.DetectAsync(_disposeTokenSource.Token);
+            if (gameDetection.IsGameRunning)
+                _gameModeDetector.SetDetectedGame(gameDetection.GameName);
+            IsGameMode = _gameModeDetector.IsGameModeActive;
+            GameModeStatus = _gameModeDetector.StatusMessage;
+            DetectedGame = _gameModeDetector.DetectedGame;
+
+            // ── IO-nity AI: System Health Score ───────────────────────
+            _healthScorer.Update(
+                cpuTempC: snapshot.CpuPackageTemperature ?? snapshot.CpuAverageTemperature ?? 0,
+                gpuTempC: snapshot.GpuCoreTemperature ?? 0,
+                cpuLoadPct: snapshot.CpuTotalLoadPercent ?? 0,
+                gpuLoadPct: snapshot.GpuLoadPercent ?? 0,
+                fanRpm: snapshot.CpuFan?.SpeedRpm,
+                fanPercent: snapshot.CpuFan?.CurrentControlPercent);
+            HealthScore = $"{_healthScorer.CurrentScore:F0}";
+            HealthGrade = _healthScorer.Grade;
+            HealthEmoji = _healthScorer.GradeEmoji;
+            HealthSummary = _healthScorer.Summary;
+            HealthInsights = string.Join(" • ", _healthScorer.Insights);
 
             // ── Temperature warning check ─────────────────────────────
             if (hottest.HasValue && hottest.Value >= CpuWarningThresholdDegrees)
@@ -872,7 +1102,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     partial void OnCpuWarningThresholdDegreesChanged(double value)
     {
-        double clamped = Math.Clamp(value, 50, 110);
+        double clamped = Math.Clamp(value, 30, 110);
         if (clamped != value) { CpuWarningThresholdDegrees = clamped; return; }
         if (!_suppressProfileSync) { UpdateActiveProfileFromVm(); _ = SaveSettingsAsync(); }
     }

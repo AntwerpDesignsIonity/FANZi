@@ -5,11 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Fanzi.FanControl.ViewModels;
 
+[SupportedOSPlatform("windows")]
 public sealed partial class SystemCleanerViewModel : ViewModelBase, IDisposable
 {
     private readonly SystemCleanerService _service = new();
@@ -28,6 +30,12 @@ public sealed partial class SystemCleanerViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _ramStatus = "Click 'Trim RAM' to release working sets";
     [ObservableProperty] private bool _isWorking;
 
+    // Clean confirmation
+    [ObservableProperty] private bool _showCleanConfirmation;
+    [ObservableProperty] private string _cleanConfirmInput = "";
+    [ObservableProperty] private string _cleanConfirmError = "";
+    private const string CLEAN_CONFIRM_WORD = "CLEAN";
+
     // CCleaner-grade additions
     [ObservableProperty] private string _installedProgramsStatus = "Click 'Scan Installed Programs' to load";
     [ObservableProperty] private InstalledProgram? _selectedProgram;
@@ -39,7 +47,9 @@ public sealed partial class SystemCleanerViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _diskAnalyzerRoot = "C:\\";
 
     public IAsyncRelayCommand ScanCommand { get; }
-    public IAsyncRelayCommand CleanSelectedCommand { get; }
+    public IRelayCommand CleanSelectedCommand { get; }
+    public IAsyncRelayCommand ConfirmCleanCommand { get; }
+    public IRelayCommand CancelCleanCommand { get; }
     public IAsyncRelayCommand TrimRamCommand { get; }
     public IAsyncRelayCommand EmptyRecycleBinCommand { get; }
     public IAsyncRelayCommand FlushDnsCommand { get; }
@@ -61,7 +71,9 @@ public sealed partial class SystemCleanerViewModel : ViewModelBase, IDisposable
     public SystemCleanerViewModel()
     {
         ScanCommand = new AsyncRelayCommand(ScanAsync);
-        CleanSelectedCommand = new AsyncRelayCommand(CleanSelectedAsync);
+        CleanSelectedCommand = new RelayCommand(RequestCleanConfirmation);
+        ConfirmCleanCommand = new AsyncRelayCommand(ExecuteCleanAsync);
+        CancelCleanCommand = new RelayCommand(CancelClean);
         TrimRamCommand = new AsyncRelayCommand(TrimRamAsync);
         EmptyRecycleBinCommand = new AsyncRelayCommand(EmptyRecycleBinAsync);
         FlushDnsCommand = new AsyncRelayCommand(FlushDnsAsync);
@@ -222,8 +234,31 @@ public sealed partial class SystemCleanerViewModel : ViewModelBase, IDisposable
         finally { IsWorking = false; }
     }
 
-    private async Task CleanSelectedAsync()
+    private void RequestCleanConfirmation()
     {
+        var picked = Targets.Where(t => t.IsSelected).Select(t => t.Target).ToList();
+        if (picked.Count == 0) { LastResult = "Nothing selected"; return; }
+        ShowCleanConfirmation = true;
+        CleanConfirmInput = "";
+        CleanConfirmError = "";
+    }
+
+    private void CancelClean()
+    {
+        ShowCleanConfirmation = false;
+        CleanConfirmInput = "";
+        CleanConfirmError = "";
+    }
+
+    private async Task ExecuteCleanAsync()
+    {
+        if (CleanConfirmInput?.Trim().ToUpperInvariant() != CLEAN_CONFIRM_WORD)
+        {
+            CleanConfirmError = $"Type '{CLEAN_CONFIRM_WORD}' to confirm deletion";
+            return;
+        }
+
+        ShowCleanConfirmation = false;
         var picked = Targets.Where(t => t.IsSelected).Select(t => t.Target).ToList();
         if (picked.Count == 0) { LastResult = "Nothing selected"; return; }
 

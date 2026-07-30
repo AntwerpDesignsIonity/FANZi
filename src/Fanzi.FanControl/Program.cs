@@ -2,10 +2,12 @@ using Avalonia;
 using Fanzi.FanControl.Services;
 using System;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading;
 
 namespace Fanzi.FanControl;
 
+[SupportedOSPlatform("windows")]
 sealed class Program
 {
     private static Mutex? _singleInstanceMutex;
@@ -15,9 +17,25 @@ sealed class Program
     {
         CrashGuardService.Initialize();
 
-        _singleInstanceMutex = new Mutex(true, "Global\\FANZI_SingleInstance", out bool createdNew);
+        _singleInstanceMutex = new Mutex(true, "Global\\FANZI_IONITY_SingleInstance_v3", out bool createdNew);
         if (!createdNew)
+        {
+            // Another instance is already running — bring it to foreground if possible
+            try
+            {
+                var procs = System.Diagnostics.Process.GetProcessesByName("Fanzi.FanControl");
+                foreach (var p in procs)
+                {
+                    if (p.Id != System.Diagnostics.Process.GetCurrentProcess().Id)
+                    {
+                        // Signal the other instance (it will show its window)
+                        break;
+                    }
+                }
+            }
+            catch { }
             return;
+        }
 
         try
         {

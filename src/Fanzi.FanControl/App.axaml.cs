@@ -10,9 +10,11 @@ using Fanzi.FanControl.ViewModels;
 using Fanzi.FanControl.Views;
 using System;
 using System.Linq;
+using System.Runtime.Versioning;
 
 namespace Fanzi.FanControl;
 
+[SupportedOSPlatform("windows")]
 public partial class App : Application
 {
     private IHardwareMonitorService? _hardwareMonitorService;

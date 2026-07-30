@@ -6,12 +6,12 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon>Assets\ionity-logo.ico</ApplicationIcon>
-    <Product>FANZI</Product>
-    <Company>Antwerp Designs</Company>
-    <Authors>Johan Wilhelm van Antwerp</Authors>
-    <Copyright>© 2018-2026 Antwerp Designs. ALL Rights Reserved. POL986 AED License 990|900. FREE TO USE.</Copyright>
-    <Description>FANZI — AI-powered fan control, RGB lighting, and thermal intelligence. AI@IONITY.TODAY</Description>
-    <Version>2.0.0</Version>
+    <Product>FANZi IO-nity</Product>
+    <Company>Ionity Global (Pty) Ltd</Company>
+    <Authors>Johan Wilhelm van Antwerp — Ionity Global</Authors>
+    <Copyright>© 2018-2026 Ionity Global (Pty) Ltd. ALL Rights Reserved.</Copyright>
+    <Description>FANZi IO-nity — AI Thermal Intelligence, Smart Fan Control, RGB Lighting &amp; System Health Monitoring. Powered by AEDi (Antwerp Ecosystems Designs Ionity) AI Engine.</Description>
+    <Version>2.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

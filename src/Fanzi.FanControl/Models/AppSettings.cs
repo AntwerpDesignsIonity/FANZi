@@ -21,4 +21,8 @@ public sealed class AppSettings
     public bool ShowNetworkManagerTab { get; set; } = true;
     public bool ShowPowerMonitorTab { get; set; } = true;
     public bool ShowSystemCleanerTab { get; set; } = true;
+
+    // Overlay
+    public bool OverlayTransparent { get; set; } = true;
+    public double OverlayOpacity { get; set; } = 0.80;
 }

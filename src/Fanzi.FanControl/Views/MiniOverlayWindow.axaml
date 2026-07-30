@@ -3,13 +3,12 @@
         xmlns:vm="using:Fanzi.FanControl.ViewModels"
         x:Class="Fanzi.FanControl.Views.MiniOverlayWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="FANZI"
+        Title="FANZi IO-nity"
         Width="240" Height="170"
         Topmost="True"
         ShowInTaskbar="False"
         CanResize="False"
         SystemDecorations="None"
-        TransparencyLevelHint="AcrylicBlur"
         Background="#CC050A12"
         WindowStartupLocation="Manual">
 
@@ -32,7 +31,7 @@
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <Image Source="/Assets/ionity-logo.png" Width="14" Height="14" Opacity="0.85"/>
-                    <TextBlock Text="FANZI" FontSize="10" FontWeight="Bold" Foreground="#2563EB" VerticalAlignment="Center"/>
+                    <TextBlock Text="IO-nity" FontSize="10" FontWeight="Bold" Foreground="#2563EB" VerticalAlignment="Center"/>
                 </StackPanel>
                 <Button Grid.Column="1" x:Name="CloseBtn" Content="✕" Background="Transparent" Foreground="#EF4444"
                         FontSize="10" Padding="4,2" CornerRadius="4" ToolTip.Tip="Hide overlay"/>

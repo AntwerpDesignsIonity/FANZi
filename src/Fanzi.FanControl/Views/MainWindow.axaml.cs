@@ -5,9 +5,11 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Fanzi.FanControl.ViewModels;
 using System;
+using System.Runtime.Versioning;
 
 namespace Fanzi.FanControl.Views;
 
+[SupportedOSPlatform("windows")]
 public partial class MainWindow : Window
 {
     public MainWindow()

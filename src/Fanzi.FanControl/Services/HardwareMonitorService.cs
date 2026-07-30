@@ -475,8 +475,9 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
 
     private static bool IsCpuFanSnapshot(FanChannelSnapshot snapshot)
     {
-        // Pumps and AIO coolers ARE valid CPU cooling devices (e.g. W_PUMP headers).
-        if (snapshot.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler)
+        // Pumps, AIO coolers, watercoolers, and IO pumps ARE valid CPU cooling devices
+        if (snapshot.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler
+            or FanDeviceKind.Watercooler or FanDeviceKind.IoPump)
         {
             return snapshot.Name.Contains("cpu", StringComparison.OrdinalIgnoreCase)
                 || snapshot.Name.Contains("pump", StringComparison.OrdinalIgnoreCase)
@@ -484,7 +485,9 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
                 || snapshot.Name.Contains("w_pump", StringComparison.OrdinalIgnoreCase)
                 || snapshot.Name.Contains("cooler", StringComparison.OrdinalIgnoreCase)
                 || snapshot.Name.Contains("liquid", StringComparison.OrdinalIgnoreCase)
-                // Known AIO vendors that appear in LibreHardwareMonitor channel names
+                || snapshot.Name.Contains("water", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("io", StringComparison.OrdinalIgnoreCase)
+                // Known AIO / watercooler vendors
                 || snapshot.Name.Contains("asetek", StringComparison.OrdinalIgnoreCase)
                 || snapshot.Name.Contains("kraken", StringComparison.OrdinalIgnoreCase)   // NZXT
                 || snapshot.Name.Contains("h100", StringComparison.OrdinalIgnoreCase)     // Corsair Hydro
@@ -493,7 +496,19 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
                 || snapshot.Name.Contains("ryujin", StringComparison.OrdinalIgnoreCase)   // ASUS ROG Ryujin
                 || snapshot.Name.Contains("eisbaer", StringComparison.OrdinalIgnoreCase)  // Alphacool
                 || snapshot.Name.Contains("au pump", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("a_pump", StringComparison.OrdinalIgnoreCase);
+                || snapshot.Name.Contains("a_pump", StringComparison.OrdinalIgnoreCase)
+                // EKWB / custom loop
+                || snapshot.Name.Contains("ekwb", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("ek-", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("barrow", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("bykski", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("swiftech", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("alphacool", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("optimum", StringComparison.OrdinalIgnoreCase)
+                // IO pump signatures
+                || snapshot.Name.Contains("io_pump", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("io pump", StringComparison.OrdinalIgnoreCase)
+                || snapshot.Name.Contains("ionity", StringComparison.OrdinalIgnoreCase);
         }
 
         return snapshot.Name.Contains("cpu", StringComparison.OrdinalIgnoreCase)
@@ -509,21 +524,41 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
     {
         string lower = name.ToLowerInvariant();
 
+        // IO Pump signatures (Ionity / custom IO cooling)
+        if (lower.Contains("io_pump") || lower.Contains("io pump") || lower.Contains("io-pump")
+            || lower.Contains("ionity") || lower.Contains("io cooler"))
+        {
+            return FanDeviceKind.IoPump;
+        }
+
+        // Watercooler / custom loop signatures
+        if (lower.Contains("watercool") || lower.Contains("water cool") || lower.Contains("custom loop")
+            || lower.Contains("ekwb") || lower.Contains("ek-") || lower.Contains("barrow")
+            || lower.Contains("bykski") || lower.Contains("swiftech") || lower.Contains("alphacool")
+            || lower.Contains("optimum") || lower.Contains("reservoir") || lower.Contains("res")
+            || lower.Contains("coolant") || lower.Contains("block") || lower.Contains("rad")
+            || lower.Contains("radiator") || lower.Contains("water block"))
+        {
+            return FanDeviceKind.Watercooler;
+        }
+
         // Pump signatures — include common AIO header names and vendor markers
         if (lower.Contains("pump") || lower.Contains("w_pump") || lower.Contains("wpump")
             || lower.Contains("au pump") || lower.Contains("a_pump") || lower.Contains("apump")
-            || lower.Contains("d5") || lower.Contains("ddc"))
+            || lower.Contains("d5") || lower.Contains("ddc")
+            || lower.Contains("w_flow") || lower.Contains("flow sensor") || lower.Contains("flow meter"))
         {
             return FanDeviceKind.Pump;
         }
 
         // AIO / water cooler signatures - cover the common vendors that ship with sensor names
         if (lower.Contains("aio") || lower.Contains("liquid") || lower.Contains("cooler")
-            || lower.Contains("radiator") || lower.Contains("water")
+            || lower.Contains("water") || lower.Contains("radiator")
             || lower.Contains("asetek") || lower.Contains("kraken")
             || lower.Contains("hydro")  || lower.Contains("ryujin")
             || lower.Contains("eisbaer") || lower.Contains("celsius")
-            || lower.Contains("h100")   || lower.Contains("h115") || lower.Contains("h150"))
+            || lower.Contains("h100")   || lower.Contains("h115") || lower.Contains("h150")
+            || lower.Contains("platinum") || lower.Contains("tuf") || lower.Contains("strix"))
         {
             return FanDeviceKind.AioCooler;
         }

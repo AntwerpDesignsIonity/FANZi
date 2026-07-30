@@ -15,8 +15,8 @@ $PublishBase = "$PSScriptRoot\publish"
 
 Write-Host ""
 Write-Host "  ╔══════════════════════════════════════════╗" -ForegroundColor Blue
-Write-Host "  ║      FANZI v2.0 — Build System           ║" -ForegroundColor Blue
-Write-Host "  ║    Ionity Global (Pty) Ltd               ║" -ForegroundColor DarkGray
+Write-Host "  ║      FANZI v2.1 — Build System           ║" -ForegroundColor Blue
+Write-Host "  ║    Ionity Global Pty Ltd                 ║" -ForegroundColor DarkGray
 Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor Blue
 Write-Host ""
 
@@ -55,7 +55,7 @@ function Publish-Runtime {
     $exe = Get-ChildItem "$outDir\Fanzi.FanControl*" | Where-Object { $_.Extension -in ".exe", "" } | Select-Object -First 1
     if ($exe) {
         $sizeMB = [math]::Round($exe.Length / 1MB, 1)
-        Write-Host "[DONE] $Rid -> $($exe.Name) ($sizeMB MB)" -ForegroundColor Green
+        Write-Host "[DONE] $Rid -> $($exe.Name) - $sizeMB MB" -ForegroundColor Green
     }
 }
 
@@ -90,14 +90,14 @@ if ($Installer) {
     $installerExe = Get-ChildItem "$installerOut\FANZI-Installer*" | Select-Object -First 1
     if ($installerExe) {
         $sizeMB = [math]::Round($installerExe.Length / 1MB, 1)
-        Write-Host "[DONE] Installer -> $($installerExe.Name) ($sizeMB MB)" -ForegroundColor Green
+        Write-Host "[DONE] Installer -> $($installerExe.Name) - $sizeMB MB" -ForegroundColor Green
     }
 
     Write-Host ""
-    Write-Host "  Installer output: $installerOut\" -ForegroundColor Yellow
+    Write-Host "  Installer output: $installerOut" -ForegroundColor Yellow
 }
 
 Write-Host ""
 Write-Host "  Build complete!" -ForegroundColor Green
-Write-Host "  Output: $PublishBase\" -ForegroundColor Gray
+Write-Host "  Output: $PublishBase" -ForegroundColor Gray
 Write-Host ""

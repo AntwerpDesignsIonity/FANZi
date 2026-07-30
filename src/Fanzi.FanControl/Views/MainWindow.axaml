@@ -9,7 +9,7 @@
         x:Class="Fanzi.FanControl.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/ionity-logo.ico"
-        Title="FANZI — AI-Powered Fan Control &amp; RGB | Ionity Global"
+        Title="FANZi IO-nity — AI Thermal Intelligence &amp; RGB | Ionity Global"
         MinWidth="1100"
         MinHeight="780"
         Background="#050A12"
@@ -25,6 +25,15 @@
             <Setter Property="Background" Value="#0C1524"/>
             <Setter Property="BorderBrush" Value="#1A2845"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
+                    <ThicknessTransition Property="BorderThickness" Duration="0:0:0.2"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.card:pointerover">
+            <Setter Property="BorderBrush" Value="#2A4875"/>
         </Style>
         <Style Selector="Border.card-glow">
             <Setter Property="CornerRadius" Value="16"/>
@@ -33,6 +42,15 @@
             <Setter Property="BorderBrush" Value="#1E3A6E"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BoxShadow" Value="0 0 20 2 #102040"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.card-glow:pointerover">
+            <Setter Property="BorderBrush" Value="#2E5A9E"/>
+            <Setter Property="BoxShadow" Value="0 0 28 4 #153060"/>
         </Style>
         <Style Selector="Border.card-accent">
             <Setter Property="CornerRadius" Value="16"/>
@@ -41,6 +59,14 @@
             <Setter Property="BorderBrush" Value="#2563EB"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BoxShadow" Value="0 0 24 2 #0A2050"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.card-accent:pointerover">
+            <Setter Property="BoxShadow" Value="0 0 32 4 #103070"/>
         </Style>
 
         <!-- ═══ TEXT STYLES ═══ -->
@@ -73,9 +99,17 @@
             <Setter Property="Padding" Value="14,8"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                </Transitions>
+            </Setter>
         </Style>
         <Style Selector="Button:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="#1E3050"/>
+        </Style>
+        <Style Selector="Button:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#0E1825"/>
         </Style>
         <Style Selector="Button.primary">
             <Setter Property="Background" Value="#2563EB"/>
@@ -84,13 +118,22 @@
         <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="#3B82F6"/>
         </Style>
+        <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="#1D4ED8"/>
+        </Style>
         <Style Selector="Button.danger">
             <Setter Property="Background" Value="#7F1D1D"/>
             <Setter Property="Foreground" Value="#FCA5A5"/>
         </Style>
+        <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#991B1B"/>
+        </Style>
         <Style Selector="Button.success">
             <Setter Property="Background" Value="#064E3B"/>
             <Setter Property="Foreground" Value="#6EE7B7"/>
+        </Style>
+        <Style Selector="Button.success:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#065F46"/>
         </Style>
 
         <!-- ═══ SLIDER ═══ -->
@@ -102,6 +145,14 @@
         <Style Selector="Border.profile-tab">
             <Setter Property="Background" Value="#141E30"/>
             <Setter Property="CornerRadius" Value="20"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.profile-tab:pointerover">
+            <Setter Property="Background" Value="#1A2A42"/>
         </Style>
         <Style Selector="Border.profile-tab.active">
             <Setter Property="Background" Value="#1D4ED8"/>
@@ -121,6 +172,12 @@
             <Setter Property="Padding" Value="20,10"/>
             <Setter Property="Margin" Value="0,0,2,0"/>
             <Setter Property="MinWidth" Value="120"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                    <BrushTransition Property="Foreground" Duration="0:0:0.2"/>
+                </Transitions>
+            </Setter>
         </Style>
         <Style Selector="TabItem:selected">
             <Setter Property="Background" Value="#0C1524"/>
@@ -128,6 +185,7 @@
         </Style>
         <Style Selector="TabItem:pointerover">
             <Setter Property="Foreground" Value="#A0C0E0"/>
+            <Setter Property="Background" Value="#0A1220"/>
         </Style>
 
         <!-- ═══ TOGGLE SWITCH ═══ -->
@@ -147,10 +205,10 @@
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="14,0" VerticalAlignment="Center">
                     <Image Source="/Assets/ionity-logo.png" Width="20" Height="20" Opacity="0.8"/>
-                    <TextBlock Text="FANZI" FontSize="12" FontWeight="Black" Foreground="#2563EB" VerticalAlignment="Center"/>
-                    <TextBlock Text="v2.0" FontSize="10" Foreground="#3A5070" VerticalAlignment="Center"/>
+                    <TextBlock Text="FANZi IO-nity" FontSize="12" FontWeight="Black" Foreground="#2563EB" VerticalAlignment="Center"/>
+                    <TextBlock Text="v2.1" FontSize="10" Foreground="#3A5070" VerticalAlignment="Center"/>
                 </StackPanel>
-                <TextBlock Grid.Column="1" Text="AI-Powered Fan Control" FontSize="11" Foreground="#3A5070" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="AI Thermal Intelligence" FontSize="11" Foreground="#3A5070" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0" Margin="0,0,4,0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding LastUpdated}" FontSize="10" Foreground="#2A4060" VerticalAlignment="Center" Margin="0,0,14,0"/>
                     <!-- Window Controls -->
@@ -165,8 +223,8 @@
         <Border IsVisible="{Binding IsLoading}" Background="#050A12" ZIndex="100">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="24">
                 <Image Source="/Assets/ionity-logo.png" Width="200" Opacity="0.9"/>
-                <TextBlock Text="FANZI" FontSize="56" FontWeight="Black" Foreground="#2563EB" HorizontalAlignment="Center"/>
-                <TextBlock Text="AI-Powered Fan Control &amp; RGB" FontSize="16" Foreground="#4A6A8F" HorizontalAlignment="Center"/>
+                <TextBlock Text="FANZi IO-nity" FontSize="56" FontWeight="Black" Foreground="#2563EB" HorizontalAlignment="Center"/>
+                <TextBlock Text="AI Thermal Intelligence &amp; RGB Control" FontSize="16" Foreground="#4A6A8F" HorizontalAlignment="Center"/>
                 <ProgressBar IsIndeterminate="True" Width="240" Height="3" Foreground="#2563EB" Margin="0,8,0,0"/>
                 <TextBlock Text="Initializing thermal intelligence..." FontSize="12" Foreground="#2A4060" HorizontalAlignment="Center"/>
                 <TextBlock Text="Ionity Global (Pty) Ltd" FontSize="11" Foreground="#1A3050" HorizontalAlignment="Center" Margin="0,20,0,0"/>
@@ -175,7 +233,10 @@
 
         <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
         <Panel IsVisible="{Binding !IsLoading}" Margin="0,38,0,0">
-            <Grid RowDefinitions="Auto,Auto,*" Margin="20,12,20,20" RowSpacing="12">
+            <Grid ColumnDefinitions="*,280" Margin="20,12,20,20" ColumnSpacing="12">
+
+                <!-- ═══ LEFT: Main Content ═══ -->
+                <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*" RowSpacing="12">
 
                 <!-- ── PROFILES BAR ──────────────────────────────── -->
                 <Border Grid.Row="0" CornerRadius="12" Background="#080E18" BorderBrush="#1A2845" BorderThickness="1" Padding="12,8">
@@ -252,12 +313,138 @@
                             <StackPanel Spacing="14" Margin="0,12,0,12">
 
                                 <!-- Anomaly Alert -->
-                                <Border IsVisible="{Binding HasAnomaly}" CornerRadius="12" Background="#1C0808" BorderBrush="#991B1B" BorderThickness="1" Padding="16,10">
+                                <Border IsVisible="{Binding HasAnomaly}" CornerRadius="12" Background="#1C0808" BorderBrush="#991B1B" BorderThickness="1" Padding="16,10"
+                                        BoxShadow="0 0 20 2 #300A0A">
+                                    <Border.Transitions>
+                                        <Transitions>
+                                            <BrushTransition Property="BorderBrush" Duration="0:0:0.3"/>
+                                        </Transitions>
+                                    </Border.Transitions>
                                     <StackPanel Orientation="Horizontal" Spacing="12">
-                                        <Border CornerRadius="8" Background="#450A0A" Padding="8,4">
+                                        <Border CornerRadius="8" Background="#450A0A" Padding="8,4"
+                                                BoxShadow="0 0 8 1 #600000">
                                             <TextBlock Text="{Binding AnomalySeverity}" FontSize="11" FontWeight="Black" Foreground="#FCA5A5"/>
                                         </Border>
                                         <TextBlock Text="{Binding AnomalyMessage}" FontSize="12" Foreground="#FECACA" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- IO-nity AI Health & Game Mode Panel — HERO -->
+                                <Border CornerRadius="20" BorderBrush="#1E3A6E" BorderThickness="2" Padding="24,20"
+                                        BoxShadow="0 0 50 4 #102050">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.5">
+                                            <GradientStop Color="#060D1A" Offset="0"/>
+                                            <GradientStop Color="#0A1428" Offset="0.5"/>
+                                            <GradientStop Color="#081020" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                    <Grid ColumnDefinitions="320,*" ColumnSpacing="24">
+
+                                        <!-- LEFT: Massive Health Score -->
+                                        <Border Grid.Column="0" CornerRadius="16" Padding="20,16" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                BorderThickness="1" BorderBrush="#1E40AF">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#0A1A30" Offset="0"/>
+                                                    <GradientStop Color="#0F2040" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                                                <TextBlock Text="IO-NITY HEALTH SCORE" FontSize="11" FontWeight="Black" Foreground="#4E6E95" LetterSpacing="3" HorizontalAlignment="Center"/>
+
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+                                                    <TextBlock Text="{Binding HealthEmoji}" FontSize="56" VerticalAlignment="Center"/>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding HealthScore}" FontSize="72" FontWeight="Black" Foreground="#E8F0FF" LineHeight="72"/>
+                                                        <TextBlock Text="/ 100" FontSize="18" FontWeight="Bold" Foreground="#3A5A80" Margin="4,-8,0,0"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <Border CornerRadius="10" Background="#0A1422" Padding="12,6" HorizontalAlignment="Center">
+                                                    <TextBlock Text="{Binding HealthGrade}" FontSize="24" FontWeight="Black" Foreground="#60A5FA" HorizontalAlignment="Center"/>
+                                                </Border>
+
+                                                <TextBlock Text="{Binding HealthSummary}" FontSize="12" Foreground="#6A8FC0" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
+                                                <TextBlock Text="{Binding HealthInsights}" FontSize="10" Foreground="#4A6A8F" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- RIGHT: Game Mode + AI Coach stacked -->
+                                        <Grid Grid.Column="1" RowDefinitions="*,*" RowSpacing="14">
+
+                                            <!-- Game Mode AI -->
+                                            <Border Grid.Row="0" CornerRadius="14" Padding="18,14" BorderBrush="#1A2845" BorderThickness="1">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#0A1422" Offset="0"/>
+                                                        <GradientStop Color="#0D1A2E" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="4">
+                                                        <TextBlock Text="GAME MODE AI" FontSize="11" FontWeight="Black" Foreground="#4E6E95" LetterSpacing="3"/>
+                                                        <TextBlock Text="{Binding GameModeStatus}" FontSize="22" FontWeight="Black" Foreground="#22C55E"/>
+                                                        <TextBlock Text="{Binding DetectedGame}" FontSize="13" Foreground="#5A7899" IsVisible="{Binding IsGameMode}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6" HorizontalAlignment="Right">
+                                                        <Border IsVisible="{Binding IsGameMode}" CornerRadius="10" Padding="14,8" HorizontalAlignment="Right"
+                                                                BorderBrush="#166534" BorderThickness="1">
+                                                            <Border.Background>
+                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                                    <GradientStop Color="#064E3B" Offset="0"/>
+                                                                    <GradientStop Color="#0A1A10" Offset="1"/>
+                                                                </LinearGradientBrush>
+                                                            </Border.Background>
+                                                            <TextBlock Text="🎮 Gaming Profile Active" FontSize="13" FontWeight="Black" Foreground="#34D399"/>
+                                                        </Border>
+                                                        <Border IsVisible="{Binding !IsGameMode}" CornerRadius="10" Background="#0F1A2A" Padding="14,8" HorizontalAlignment="Right">
+                                                            <TextBlock Text="🖥️ Desktop Mode" FontSize="13" FontWeight="Black" Foreground="#5A7FA8"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- AI Thermal Coach -->
+                                            <Border Grid.Row="1" CornerRadius="14" Padding="18,14" BorderBrush="#1A2845" BorderThickness="1">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#0A1422" Offset="0"/>
+                                                        <GradientStop Color="#0D1A2E" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <StackPanel Spacing="8">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Grid.Column="0" Text="AI THERMAL COACH" FontSize="11" FontWeight="Black" Foreground="#4E6E95" LetterSpacing="3"/>
+                                                        <Border Grid.Column="1" CornerRadius="8" Background="#0A1A10" Padding="10,4" BorderBrush="#166534" BorderThickness="1">
+                                                            <TextBlock Text="{Binding AiStatus}" FontSize="11" FontWeight="Black" Foreground="#34D399"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="16">
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="TREND" FontSize="9" FontWeight="Bold" Foreground="#3A5A80" LetterSpacing="1"/>
+                                                            <TextBlock Text="{Binding AiTrend}" FontSize="20" FontWeight="Black" Foreground="#60A5FA" Margin="0,2,0,0"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="1">
+                                                            <TextBlock Text="30s PREDICTION" FontSize="9" FontWeight="Bold" Foreground="#3A5A80" LetterSpacing="1"/>
+                                                            <TextBlock Text="{Binding AiPrediction}" FontSize="20" FontWeight="Black" Foreground="#FBBF24" Margin="0,2,0,0"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2">
+                                                            <TextBlock Text="AI FAN SPEED" FontSize="9" FontWeight="Bold" Foreground="#3A5A80" LetterSpacing="1"/>
+                                                            <TextBlock Text="{Binding AiSuggestedFan}" FontSize="20" FontWeight="Black" Foreground="#34D399" Margin="0,2,0,0"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Coach Recommendations -->
+                                <Border IsVisible="{Binding HasCoachRecommendations}" CornerRadius="12" Background="#0A1422" BorderBrush="#1E3A6E" BorderThickness="1" Padding="16,10">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="🧠 AI COACH RECOMMENDATIONS" FontSize="10" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2"/>
+                                        <TextBlock Text="{Binding CoachRecommendations}" FontSize="11" Foreground="#A0C0E0" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
 
@@ -529,7 +716,7 @@
                                         </Border>
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <TextBlock Text="Warn above" Foreground="#6A8AAF" FontSize="12" VerticalAlignment="Center"/>
-                                            <NumericUpDown Value="{Binding CpuWarningThresholdDegrees, Mode=TwoWay}" Minimum="50" Maximum="110" Increment="5" Width="110" Foreground="#E8F0FF" Background="#0A1220" FontSize="12" FormatString="0 °C"/>
+                                            <NumericUpDown Value="{Binding CpuWarningThresholdDegrees, Mode=TwoWay}" Minimum="30" Maximum="110" Increment="1" Width="110" Foreground="#E8F0FF" Background="#0A1220" FontSize="12" FormatString="0 '°C'"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
@@ -570,7 +757,7 @@
                                 <Border Classes="card">
                                     <StackPanel Spacing="14">
                                         <TextBlock Text="Startup &amp; System Tray" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"/>
-                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="12">
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
                                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Start with Windows" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
                                             <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding StartWithWindows}" HorizontalAlignment="Right"/>
                                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Start minimized to tray" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
@@ -579,6 +766,10 @@
                                             <ToggleSwitch Grid.Row="2" Grid.Column="1" IsChecked="{Binding MinimizeToTray}" HorizontalAlignment="Right"/>
                                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Close to tray (keep running)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
                                             <ToggleSwitch Grid.Row="3" Grid.Column="1" IsChecked="{Binding CloseToTray}" HorizontalAlignment="Right"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Overlay transparent (acrylic blur)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <ToggleSwitch Grid.Row="4" Grid.Column="1" IsChecked="{Binding OverlayTransparent}" HorizontalAlignment="Right"/>
+                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Overlay opacity" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <Slider Grid.Row="5" Grid.Column="1" Minimum="0.1" Maximum="1.0" Value="{Binding OverlayOpacity, Mode=TwoWay}" Width="140" HorizontalAlignment="Right" Foreground="#2563EB"/>
                                         </Grid>
                                         <Border CornerRadius="8" Background="#060C14" Padding="12,8">
                                             <TextBlock Text="When minimized, FANZI reduces polling to save CPU. Right-click the tray icon to restore or exit." Foreground="#3A5A80" FontSize="11" TextWrapping="Wrap"/>
@@ -699,8 +890,8 @@
                                         <StackPanel Orientation="Horizontal" Spacing="14">
                                             <Image Source="/Assets/ionity-logo.png" Width="48" Opacity="0.9"/>
                                             <StackPanel Spacing="2" VerticalAlignment="Center">
-                                                <TextBlock Text="FANZI v2.0" FontSize="18" FontWeight="Black" Foreground="#2563EB"/>
-                                                <TextBlock Text="AI-Powered Fan Control &amp; RGB Lighting" FontSize="12" Foreground="#6A8AAF"/>
+                                                <TextBlock Text="FANZI v2.1" FontSize="18" FontWeight="Black" Foreground="#2563EB"/>
+                                                <TextBlock Text="AI Thermal Intelligence &amp; RGB Lighting" FontSize="12" Foreground="#6A8AAF"/>
                                             </StackPanel>
                                         </StackPanel>
                                         <TextBlock Text="© 2018-2026 Antwerp Designs. ALL Rights Reserved." Foreground="#2A4060" FontSize="11"/>
@@ -716,6 +907,112 @@
                     </TabItem>
 
                 </TabControl>
+
+                </Grid> <!-- End left content -->
+
+                <!-- ═══ RIGHT: AEDi Sidebar ═══ -->
+                <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" RowSpacing="10">
+
+                    <!-- AEDi Header -->
+                    <Border Grid.Row="0" CornerRadius="14" Padding="14,10" BorderBrush="#1E3A6E" BorderThickness="1"
+                            BoxShadow="0 0 20 1 #0A2050">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#0C1A30" Offset="0"/>
+                                <GradientStop Color="#081020" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <StackPanel Spacing="6">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <Border Grid.Column="0" CornerRadius="8" Background="#1D4ED8" Padding="6,3">
+                                    <TextBlock Text="AEDi" FontSize="12" FontWeight="Black" Foreground="#FFF"/>
+                                </Border>
+                                <TextBlock Grid.Column="1" Text="by Ionity" FontSize="10" Foreground="#4A6A8F" VerticalAlignment="Center" Margin="6,0"/>
+                                <TextBlock Grid.Column="2" Text="v2.1" FontSize="9" Foreground="#3A5070" VerticalAlignment="Center"/>
+                            </Grid>
+                            <TextBlock Text="Search &amp; Ping AI" FontSize="9" Foreground="#5A7899" LetterSpacing="1"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Search Area -->
+                    <Border Grid.Row="1" CornerRadius="14" Padding="12,10" BorderBrush="#1A2845" BorderThickness="1" Background="#080E18">
+                        <StackPanel Spacing="8">
+                            <!-- Search Input -->
+                            <TextBox Text="{Binding AediQuery, Mode=TwoWay}" Watermark="Search or type command..."
+                                     Background="#0A1422" Foreground="#E8F0FF" BorderBrush="#1E3A60" CornerRadius="8"
+                                     Padding="10,6" FontSize="12">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Return" Command="{Binding AediSearchCommand}"/>
+                                </TextBox.KeyBindings>
+                            </TextBox>
+                            <Button Content="🔍 Search" Command="{Binding AediSearchCommand}" Classes="primary"
+                                    HorizontalAlignment="Stretch" Padding="10,6" FontSize="11"/>
+
+                            <!-- Welcome / Status -->
+                            <TextBlock Text="{Binding AediWelcome}" FontSize="10" Foreground="#4A6A8F" TextWrapping="Wrap"/>
+
+                            <!-- Results -->
+                            <ScrollViewer MaxHeight="400" VerticalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding AediResults}" FontSize="11" Foreground="#A0C0E0"
+                                           TextWrapping="Wrap" IsVisible="{Binding HasAediResults}" LineSpacing="2"/>
+                            </ScrollViewer>
+
+                            <!-- Quick Commands -->
+                            <StackPanel Spacing="4" Margin="0,4,0,0">
+                                <TextBlock Text="QUICK PING" FontSize="9" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="1"/>
+                                <WrapPanel>
+                                    <Button Content="Dashboard" Command="{Binding AediNavigateCommand}" CommandParameter="0" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Fans" Command="{Binding AediNavigateCommand}" CommandParameter="1" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Sensors" Command="{Binding AediNavigateCommand}" CommandParameter="2" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="RGB" Command="{Binding AediNavigateCommand}" CommandParameter="3" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Tasks" Command="{Binding AediNavigateCommand}" CommandParameter="4" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Network" Command="{Binding AediNavigateCommand}" CommandParameter="5" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Power" Command="{Binding AediNavigateCommand}" CommandParameter="6" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Clean" Command="{Binding AediNavigateCommand}" CommandParameter="7" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Alerts" Command="{Binding AediNavigateCommand}" CommandParameter="8" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Settings" Command="{Binding AediNavigateCommand}" CommandParameter="9" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Google Profile -->
+                    <Border Grid.Row="2" CornerRadius="14" Padding="12,10" BorderBrush="#1A2845" BorderThickness="1" Background="#080E18">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="GOOGLE PROFILE" FontSize="9" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="1"/>
+
+                            <!-- Logged out state -->
+                            <StackPanel IsVisible="{Binding !IsLoggedInGoogle}" Spacing="4">
+                                <Button Content="🔑 Sign in with Google" Command="{Binding GoogleLoginCommand}"
+                                        HorizontalAlignment="Stretch" Padding="10,6" FontSize="10"
+                                        Background="#1A3A60" Foreground="#E8F0FF"/>
+                                <TextBlock Text="Save profiles to Google Drive" FontSize="9" Foreground="#4A6A8F"/>
+                            </StackPanel>
+
+                            <!-- Logged in state -->
+                            <StackPanel IsVisible="{Binding IsLoggedInGoogle}" Spacing="4">
+                                <Border CornerRadius="8" Background="#0A1A10" Padding="8,4" BorderBrush="#166534" BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding GoogleUserName}" FontSize="11" FontWeight="Bold" Foreground="#34D399"/>
+                                        <TextBlock Text="{Binding GoogleUserEmail}" FontSize="9" Foreground="#5A7899"/>
+                                    </StackPanel>
+                                </Border>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="4">
+                                    <Button Grid.Column="0" Content="↑ Sync Up" Command="{Binding GoogleSyncUpCommand}"
+                                            Padding="6,4" FontSize="9" Background="#141E30" Foreground="#60A5FA"/>
+                                    <Button Grid.Column="1" Content="↓ Sync Down" Command="{Binding GoogleSyncDownCommand}"
+                                            Padding="6,4" FontSize="9" Background="#141E30" Foreground="#60A5FA"/>
+                                </Grid>
+                                <Button Content="Sign Out" Command="{Binding GoogleLogoutCommand}"
+                                        Padding="6,3" FontSize="9" Background="Transparent" Foreground="#6A8AAF"
+                                        HorizontalAlignment="Left"/>
+                                <TextBlock Text="{Binding GoogleSyncStatus}" FontSize="9" Foreground="#5A7899" TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding GoogleStatus}" FontSize="9" Foreground="#3A5070"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
 
             </Grid>
 

@@ -16,8 +16,8 @@ public sealed class AutoUpdateService : IDisposable
     };
 
     private const string RepoOwner = "AntwerpDesignsIonity";
-    private const string RepoName = "Fanzy";
-    private const string CurrentVersion = "2.0.0";
+    private const string RepoName = "FANZi";
+    private const string CurrentVersion = "2.1.0";
 
     public string? LatestVersion { get; private set; }
     public string? DownloadUrl { get; private set; }

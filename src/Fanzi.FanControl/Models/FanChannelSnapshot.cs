@@ -4,7 +4,9 @@ public enum FanDeviceKind
 {
     Fan,
     Pump,
-    AioCooler
+    AioCooler,
+    Watercooler,
+    IoPump
 }
 
 public sealed record FanChannelSnapshot(

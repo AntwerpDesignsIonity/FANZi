@@ -69,8 +69,28 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                         <TextBlock Grid.Column="0" Text="Tick what you want gone, then Clean Selected. Files go straight to deletion (not Recycle Bin)."
                                    Foreground="#5A7899" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                        <Button Grid.Column="1" Content="Clean Selected" Command="{Binding CleanSelectedCommand}" Background="#7C2D12" Foreground="#FFF" Padding="16,8" FontWeight="Bold" CornerRadius="10"/>
+                        <Button Grid.Column="1" Content="🗑 Clean Selected" Command="{Binding CleanSelectedCommand}" Background="#7C2D12" Foreground="#FFF" Padding="16,8" FontWeight="Bold" CornerRadius="10"/>
                     </Grid>
+
+                    <!-- Confirmation dialog -->
+                    <Border IsVisible="{Binding ShowCleanConfirmation}" Background="#1A0505" BorderBrush="#DC2626" BorderThickness="2" CornerRadius="12" Padding="16,12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="⚠️ ARE YOU SURE?" FontSize="16" FontWeight="Black" Foreground="#FCA5A5"/>
+                            <TextBlock Text="This will PERMANENTLY DELETE selected files. This cannot be undone." FontSize="12" Foreground="#FECACA" TextWrapping="Wrap"/>
+                            <TextBlock Foreground="#FBBF24" FontSize="12" FontWeight="Bold">
+                                <Run Text="Type"/>
+                                <Run Text=" CLEAN " FontWeight="Black" Foreground="#FFF"/>
+                                <Run Text="below and click Confirm to proceed:"/>
+                            </TextBlock>
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <TextBox Grid.Column="0" Text="{Binding CleanConfirmInput, Mode=TwoWay}" Watermark="Type CLEAN here..."
+                                         Background="#0A0202" Foreground="#FFF" BorderBrush="#DC2626" CornerRadius="8" Padding="10,6" FontSize="13" FontWeight="Bold"/>
+                                <Button Grid.Column="1" Content="✅ Confirm" Command="{Binding ConfirmCleanCommand}" Background="#DC2626" Foreground="#FFF" Padding="14,6" FontWeight="Black" CornerRadius="8"/>
+                                <Button Grid.Column="2" Content="Cancel" Command="{Binding CancelCleanCommand}" Background="#1E3A60" Foreground="#FFF" Padding="14,6" FontWeight="Bold" CornerRadius="8"/>
+                            </Grid>
+                            <TextBlock Text="{Binding CleanConfirmError}" Foreground="#EF4444" FontSize="11" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
 

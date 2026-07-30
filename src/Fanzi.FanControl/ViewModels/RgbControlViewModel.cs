@@ -30,6 +30,9 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     private readonly System.Timers.Timer     _timer;
     private readonly Stopwatch               _stopwatch = Stopwatch.StartNew();
     private readonly CancellationTokenSource _cts       = new();
+    private readonly SemaphoreSlim           _autoStartLock = new(1, 1);
+    private CancellationTokenSource?         _watchdogCts;
+    private bool _autoStartInProgress;
 
     // ── Hardware data (set by MainWindowViewModel on each refresh) ────────────
     private double? _cpuTempC;
@@ -243,6 +246,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     public IAsyncRelayCommand InstallOpenRgbCommand { get; }
     public IAsyncRelayCommand RescanDevicesCommand { get; }
     public IAsyncRelayCommand RestartServerCommand { get; }
+    public IAsyncRelayCommand TestRgbCommand       { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -258,6 +262,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         InstallOpenRgbCommand = new AsyncRelayCommand(InstallOpenRgbAsync);
         RescanDevicesCommand = new AsyncRelayCommand(RescanDevicesAsync);
         RestartServerCommand = new AsyncRelayCommand(RestartServerAsync);
+        TestRgbCommand = new AsyncRelayCommand(TestRgbAsync);
 
         _serverManager.DetectInstallation();
         ServerStatus = _serverManager.Status;
@@ -281,81 +286,127 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
     private async Task AutoStartOpenRgbAsync()
     {
+        if (!await _autoStartLock.WaitAsync(0, _cts.Token)) return;
+        _autoStartInProgress = true;
+
         try
         {
-            var progress = new Progress<string>(msg =>
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => ServerStatus = msg));
+            // Cancel any existing watchdog before starting a new auto-start cycle
+            _watchdogCts?.Cancel();
+            _watchdogCts?.Dispose();
+            _watchdogCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
 
-            // EnsureRunningAsync: detect → install if missing → start server (waits for port)
-            bool ok = await _serverManager.EnsureRunningAsync(OpenRgbPort, progress, _cts.Token);
+            var progress = new Progress<string>(msg =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    ServerStatus = msg;
+                }));
+
+            ConnectionStatus = "AEDi: Starting OpenRGB server...";
+            bool serverOk = await _serverManager.EnsureRunningAsync(OpenRgbPort, progress, _cts.Token);
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                IsServerRunning = ok;
+                IsServerRunning = serverOk;
                 ServerStatus = _serverManager.Status;
                 OnPropertyChanged(nameof(IsOpenRgbInstalled));
                 OnPropertyChanged(nameof(ShowInstallButton));
                 OnPropertyChanged(nameof(StartServerButtonText));
             });
 
-            // Connect with retry — OpenRGB may need a few extra seconds to scan devices
-            // even after the SDK port is listening.
-            for (int attempt = 1; attempt <= 8 && !IsConnected && !_cts.Token.IsCancellationRequested; attempt++)
+            if (!serverOk)
+            {
+                ConnectionStatus = "AEDi: OpenRGB not available — RGB effects run in preview mode only";
+                return;
+            }
+
+            ConnectionStatus = "AEDi: Server running — connecting to RGB devices...";
+            for (int attempt = 1; attempt <= 12 && !_cts.Token.IsCancellationRequested; attempt++)
             {
                 if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
                 {
-                    // Server not actually ready — wait and try again
+                    ConnectionStatus = $"AEDi: Waiting for server port... ({attempt}/12)";
                     await Task.Delay(1500, _cts.Token);
                     continue;
                 }
 
                 await ConnectAsync();
-                if (IsConnected) break;
+                if (IsConnected)
+                {
+                    await Task.Delay(1000, _cts.Token);
+                    await RefreshDevicesAsync();
 
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    ServerStatus = $"Waiting for OpenRGB to be ready... (attempt {attempt}/8)");
+                    if (Devices.Count > 0)
+                    {
+                        ConnectionStatus = $"AEDi: Connected — {Devices.Count} device(s) live";
+                        break;
+                    }
+                    else
+                    {
+                        ConnectionStatus = $"AEDi: Connected but no devices yet — scanning hardware... ({attempt}/12)";
+                        IsConnected = false;
+                    }
+                }
+                else
+                {
+                    ConnectionStatus = $"AEDi: Connection attempt {attempt}/12 — retrying...";
+                }
+
                 await Task.Delay(2000, _cts.Token);
             }
 
-            // Start a background watchdog that auto-reconnects if the link drops
-            _ = ConnectionWatchdogAsync();
+            if (!IsConnected)
+            {
+                ConnectionStatus = "AEDi: Could not connect — ensure OpenRGB SDK Server is enabled in Settings";
+            }
+
+            _ = ConnectionWatchdogAsync(_watchdogCts.Token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                ServerStatus = $"Auto-start failed: {ex.Message}");
+                ConnectionStatus = $"AEDi: Auto-start error: {ex.Message}");
+        }
+        finally
+        {
+            _autoStartInProgress = false;
+            _autoStartLock.Release();
         }
     }
 
     /// <summary>
     /// Background loop that re-establishes the OpenRGB connection if it ever drops.
-    /// Runs every 5 seconds while RGB is enabled.
+    /// Runs every 5 seconds while RGB is enabled. Properly cancelled when RGB is toggled off
+    /// or a new auto-start cycle begins.
     /// </summary>
-    private async Task ConnectionWatchdogAsync()
+    private async Task ConnectionWatchdogAsync(CancellationToken token)
     {
-        while (!_cts.Token.IsCancellationRequested)
+        while (!token.IsCancellationRequested)
         {
             try
             {
-                await Task.Delay(5000, _cts.Token);
-                if (!RgbEnabled) continue;
+                await Task.Delay(5000, token);
+                if (!RgbEnabled || _autoStartInProgress) continue;
 
                 if (!_rgbService.IsConnected && OpenRgbServerManager.IsPortListening(OpenRgbPort))
                 {
-                    // Server's there but our client dropped — reconnect silently
+                    ConnectionStatus = "AEDi: Reconnecting...";
                     await ConnectAsync();
+                    if (IsConnected)
+                        ConnectionStatus = $"AEDi: Reconnected — {Devices.Count} device(s)";
                 }
                 else if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
                 {
-                    // Port died — server might have crashed; restart it
-                    await _serverManager.EnsureRunningAsync(OpenRgbPort, null, _cts.Token);
+                    await _serverManager.EnsureRunningAsync(OpenRgbPort, null, token);
                     if (OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                    {
+                        ConnectionStatus = "AEDi: Server restarted — reconnecting...";
                         await ConnectAsync();
+                    }
                 }
                 else if (_rgbService.IsConnected && Devices.Count == 0)
                 {
-                    // Connected but no devices yet — OpenRGB may still be detecting hardware
                     await RefreshDevicesAsync();
                 }
             }
@@ -373,11 +424,14 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            // Disable RGB: stop sending frames, disconnect, stop server
+            _watchdogCts?.Cancel();
+            _watchdogCts?.Dispose();
+            _watchdogCts = null;
             DisconnectFromServer();
             _serverManager.StopServer();
             IsServerRunning = false;
             ServerStatus = "RGB disabled";
+            ConnectionStatus = "AEDi: RGB disabled";
             OnPropertyChanged(nameof(StartServerButtonText));
         }
     }
@@ -782,12 +836,47 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
     // ── IDisposable ─────────���────────────────────────���────────────────────────
 
+    // ── Test RGB (cycles colours to verify hardware output) ──────────────────
+
+    private async Task TestRgbAsync()
+    {
+        if (!_rgbService.IsConnected)
+        {
+            ConnectionStatus = "AEDi: Cannot test — not connected to OpenRGB";
+            return;
+        }
+
+        ConnectionStatus = "AEDi: Testing RGB — cycling colours on all devices...";
+        RgbColor[] testColors = [RgbColor.Red, RgbColor.Green, RgbColor.Blue, RgbColor.White, RgbColor.Black];
+
+        foreach (var color in testColors)
+        {
+            try
+            {
+                await _rgbService.SetAllDevicesColorAsync(color, _cts.Token);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    PreviewColor = color;
+                    PreviewHex = color.ToHex();
+                });
+                await Task.Delay(600, _cts.Token);
+            }
+            catch (OperationCanceledException) { return; }
+            catch { break; }
+        }
+
+        ConnectionStatus = $"AEDi: RGB test complete — {Devices.Count} device(s)";
+    }
+
     public void Dispose()
     {
         _timer.Stop();
         _timer.Dispose();
+        _watchdogCts?.Cancel();
+        _watchdogCts?.Dispose();
         _cts.Cancel();
         _cts.Dispose();
+        _autoStartLock.Dispose();
         _serverManager.Dispose();
         _rgbService.Dispose();
     }
