@@ -74,7 +74,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     public string ConnectButtonText          => IsConnecting ? "Connecting…" : "Connect";
 
     [ObservableProperty]
-    private string _openRgbHost = "localhost";
+    private string _openRgbHost = "127.0.0.1";
 
     [ObservableProperty]
     private int _openRgbPort = 6742;

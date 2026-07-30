@@ -51,8 +51,13 @@ public sealed class OpenRgbService : IRgbService
                     ServerVersion = "Not connected";
                     ModeSwitchStatus = "";
 
+                    // Force IPv4 — OpenRGB server only binds 0.0.0.0, and
+                    // "localhost" resolves to ::1 (IPv6) on Windows which fails.
+                    string connectHost = host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                        ? "127.0.0.1" : host;
+
                     var client = new OpenRgbClient(
-                        ip:                     host,
+                        ip:                     connectHost,
                         port:                   port,
                         name:                   "FANZI",
                         autoConnect:            false,
