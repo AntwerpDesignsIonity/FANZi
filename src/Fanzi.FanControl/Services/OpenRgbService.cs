@@ -10,18 +10,25 @@ namespace Fanzi.FanControl.Services;
 
 /// <summary>
 /// OpenRGB-backed implementation of <see cref="IRgbService"/>.
-/// Requires the OpenRGB application to be running with its SDK server enabled
-/// (Settings → SDK Server, default port 6742).
+/// Connects to the OpenRGB SDK server (default port 6742), auto-switches all
+/// discovered devices to Direct/Custom mode so per-LED colours actually reach hardware,
+/// and caches the device layout to avoid per-frame SDK round-trips.
 /// </summary>
 public sealed class OpenRgbService : IRgbService
 {
     private OpenRgbClient?      _client;
-    private OpenRGB.NET.Device[]? _deviceCache;   // zone/LED layout, refreshed on each device scan
+    private OpenRGB.NET.Device[]? _deviceCache;
     private bool                _disposed;
     private readonly object     _lock = new();
 
     public bool   IsConnected   { get; private set; }
     public string ServerVersion { get; private set; } = "Not connected";
+
+    /// <summary>
+    /// Summary of the last mode-switch pass — surfaced in the UI so users can see
+    /// which devices were switched to Direct mode and which (if any) failed.
+    /// </summary>
+    public string ModeSwitchStatus { get; private set; } = "";
 
     // ── Connection ────────────────────────────────────────────────────────────
 
@@ -42,6 +49,7 @@ public sealed class OpenRgbService : IRgbService
                     _deviceCache = null;
                     IsConnected   = false;
                     ServerVersion = "Not connected";
+                    ModeSwitchStatus = "";
 
                     var client = new OpenRgbClient(
                         ip:                     host,
@@ -75,6 +83,7 @@ public sealed class OpenRgbService : IRgbService
             _deviceCache  = null;
             IsConnected   = false;
             ServerVersion = "Disconnected";
+            ModeSwitchStatus = "";
         }
     }
 
@@ -93,7 +102,13 @@ public sealed class OpenRgbService : IRgbService
                 try
                 {
                     var devices = _client.GetAllControllerData();
-                    _deviceCache = devices;   // cache layout so per-zone sends don't round-trip each frame
+                    _deviceCache = devices;
+
+                    // Auto-switch every device to Direct/Custom mode so per-LED
+                    // colour updates actually reach the hardware.  Without this,
+                    // devices stay in their built-in effect (Rainbow, Spectrum,
+                    // etc.) and silently ignore UpdateLeds() calls.
+                    SwitchAllDevicesToDirectMode(devices);
 
                     return devices
                         .Select((d, i) =>
@@ -119,13 +134,85 @@ public sealed class OpenRgbService : IRgbService
                         })
                         .ToArray();
                 }
-                catch
+                catch (Exception ex)
                 {
+                    ServerVersion = $"Error: {ex.Message.Split('\n')[0]}";
                     IsConnected = false;
                     return Array.Empty<RgbDeviceInfo>();
                 }
             }
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Iterates every discovered device and switches it to "Direct" or "Custom"
+    /// mode — the mode that lets FANZI drive each LED individually.
+    /// Devices already in Direct mode are left alone.
+    /// </summary>
+    private void SwitchAllDevicesToDirectMode(OpenRGB.NET.Device[] devices)
+    {
+        int switched = 0, already = 0, failed = 0;
+
+        for (int i = 0; i < devices.Length; i++)
+        {
+            try
+            {
+                var dev = devices[i];
+                var activeMode = dev.ActiveMode;
+
+                // Already in Direct/Custom/Static-per-LED? Nothing to do.
+                string modeName = activeMode.Name ?? "";
+                bool isDirect = modeName.Contains("Direct", StringComparison.OrdinalIgnoreCase)
+                             || modeName.Contains("Custom", StringComparison.OrdinalIgnoreCase)
+                             || modeName.Contains("Static", StringComparison.OrdinalIgnoreCase);
+
+                if (isDirect)
+                {
+                    already++;
+                    continue;
+                }
+
+                // Find the Direct or Custom mode index on this device.
+                int directIndex = -1;
+                for (int m = 0; m < dev.Modes.Length; m++)
+                {
+                    string name = dev.Modes[m].Name ?? "";
+                    if (name.Equals("Direct", StringComparison.OrdinalIgnoreCase)
+                     || name.Equals("Custom", StringComparison.OrdinalIgnoreCase))
+                    {
+                        directIndex = m;
+                        break;
+                    }
+                }
+
+                // Prefer "Direct" — if not found, try "Custom" via SetCustomMode.
+                if (directIndex >= 0)
+                {
+                    _client!.UpdateMode(i, directIndex);
+                    switched++;
+                }
+                else
+                {
+                    // SetCustomMode sends the RGBController::SetCustomMode() command
+                    // which on most devices activates the per-LED direct control path.
+                    _client!.SetCustomMode(i);
+                    switched++;
+                }
+            }
+            catch
+            {
+                failed++;
+            }
+        }
+
+        var parts = new List<string>();
+        if (switched > 0) parts.Add($"{switched} switched to Direct");
+        if (already > 0)  parts.Add($"{already} already Direct");
+        if (failed > 0)   parts.Add($"{failed} failed");
+
+        ModeSwitchStatus = parts.Count > 0
+            ? string.Join(", ", parts)
+            : "No devices";
     }
 
     // ── Colour setting ────────────────────────────────────────────────────────
@@ -143,7 +230,8 @@ public sealed class OpenRgbService : IRgbService
                 if (_client is null || !IsConnected) return;
                 try
                 {
-                    var devices = _client.GetAllControllerData();
+                    // Use cached device layout — avoids a full SDK round-trip every frame.
+                    var devices = _deviceCache ?? _client.GetAllControllerData();
                     if (deviceIndex < 0 || deviceIndex >= devices.Length) return;
 
                     int count  = devices[deviceIndex].Leds.Length;
@@ -188,11 +276,13 @@ public sealed class OpenRgbService : IRgbService
                 if (_client is null || !IsConnected) return;
                 try
                 {
-                    var devices = _client.GetAllControllerData();
+                    // Use cached device layout — critical for performance.
+                    var devices = _deviceCache ?? _client.GetAllControllerData();
+                    var openColor = ToOpenRgb(color);
                     for (int i = 0; i < devices.Length; i++)
                     {
                         var colors = Enumerable
-                            .Repeat(ToOpenRgb(color), devices[i].Leds.Length)
+                            .Repeat(openColor, devices[i].Leds.Length)
                             .ToArray();
                         _client.UpdateLeds(i, colors);
                     }
@@ -215,16 +305,12 @@ public sealed class OpenRgbService : IRgbService
                 if (_client is null || !IsConnected) return;
                 try
                 {
-                    // Use the cached layout where possible so we don't hit the SDK every frame.
                     var devices = _deviceCache ?? _client.GetAllControllerData();
                     if (deviceIndex < 0 || deviceIndex >= devices.Length) return;
 
                     var dev = devices[deviceIndex];
                     int ledTotal = dev.Leds.Length;
 
-                    // Build the full per-LED buffer for the device, expanding each zone's
-                    // colour across its LED span. Pre-fill black so unzoned/trailing LEDs
-                    // are always initialised (safe whether Color is a struct or class).
                     var black = ToOpenRgb(RgbColor.Black);
                     var leds  = new OpenRGB.NET.Color[ledTotal];
                     for (int k = 0; k < ledTotal; k++) leds[k] = black;

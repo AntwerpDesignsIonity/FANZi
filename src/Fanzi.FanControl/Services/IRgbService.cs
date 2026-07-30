@@ -19,6 +19,12 @@ public interface IRgbService : IDisposable
     string ServerVersion { get; }
 
     /// <summary>
+    /// Summary of the last mode-switch pass (e.g. "3 switched to Direct, 1 already Direct").
+    /// Empty string if no mode switching has occurred yet.
+    /// </summary>
+    string ModeSwitchStatus { get; }
+
+    /// <summary>
     /// Attempts to connect to the OpenRGB server.
     /// Returns true on success; false if server is not reachable.
     /// </summary>

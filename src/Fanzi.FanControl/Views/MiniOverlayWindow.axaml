@@ -9,7 +9,9 @@
         ShowInTaskbar="False"
         CanResize="False"
         SystemDecorations="None"
-        Background="#CC050A12"
+        Background="#080E18"
+        TransparencyLevelHint="Transparent"
+        TransparencyBackgroundFallback="#050A12"
         WindowStartupLocation="Manual">
 
     <Window.Styles>

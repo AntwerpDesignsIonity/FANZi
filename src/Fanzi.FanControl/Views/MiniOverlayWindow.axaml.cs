@@ -29,7 +29,6 @@ public partial class MiniOverlayWindow : Window
         var closeBtn = this.FindControl<Button>("CloseBtn");
         if (closeBtn is not null) closeBtn.Click += (_, _) => Hide();
 
-        // Apply transparency from settings when DataContext is set
         DataContextChanged += OnDataContextChanged;
     }
 
@@ -40,7 +39,6 @@ public partial class MiniOverlayWindow : Window
             _vm = vm;
             ApplyTransparency();
 
-            // Listen for changes
             vm.PropertyChanged += (s, args) =>
             {
                 if (args.PropertyName == nameof(MainWindowViewModel.OverlayTransparent) ||
@@ -56,17 +54,21 @@ public partial class MiniOverlayWindow : Window
     {
         if (_vm is null) return;
 
+        byte alpha = (byte)(Math.Clamp(_vm.OverlayOpacity, 0.1, 1.0) * 255);
+
         if (_vm.OverlayTransparent)
         {
-            // Transparent mode: acrylic blur + semi-transparent background
-            TransparencyLevelHint = new[] { Avalonia.Controls.WindowTransparencyLevel.AcrylicBlur };
-            byte alpha = (byte)(Math.Clamp(_vm.OverlayOpacity, 0.1, 1.0) * 255);
+            // Use solid colour with alpha — avoids AcrylicBlur which is broken
+            // on many Windows 11 builds (flickering, garbage pixels, ghost windows).
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+            TransparencyBackgroundFallback = new SolidColorBrush(Color.FromArgb(255, 5, 10, 18));
             Background = new SolidColorBrush(Color.FromArgb(alpha, 5, 10, 18));
         }
         else
         {
-            // Opaque mode: solid dark background, no blur
-            TransparencyLevelHint = new[] { Avalonia.Controls.WindowTransparencyLevel.None };
+            // Fully opaque — no transparency at all.
+            TransparencyLevelHint = new[] { WindowTransparencyLevel.None };
+            TransparencyBackgroundFallback = new SolidColorBrush(Color.FromArgb(255, 8, 14, 24));
             Background = new SolidColorBrush(Color.FromArgb(255, 8, 14, 24));
         }
     }
