@@ -15,7 +15,7 @@
     <Authors>Johan Wilhelm van Antwerp</Authors>
     <Copyright>© 2018-2026 Antwerp Designs. ALL Rights Reserved. POL986 AED License 990|900.</Copyright>
     <Description>FANZI Installer — AI-Powered Fan Control &amp; RGB Lighting</Description>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
     <AssemblyName>FANZI-Installer</AssemblyName>
   </PropertyGroup>
 

@@ -71,7 +71,7 @@
                             <TextBlock Text="AI-Powered Fan Control &amp; RGB Lighting" FontSize="13" Foreground="#6A8AAF"/>
                         </StackPanel>
                     </StackPanel>
-                    <TextBlock Text="Version 2.0.0 — © 2018-2026 Antwerp Designs" FontSize="11" Foreground="#2A4060" Margin="0,8,0,0"/>
+                    <TextBlock Text="Version 2.1.0 — © 2018-2026 Ionity Global Pty Ltd" FontSize="11" Foreground="#2A4060" Margin="0,8,0,0"/>
                 </StackPanel>
             </Border>
 
@@ -97,8 +97,8 @@
                                 <CheckBox x:Name="StartMenuCheck" Content="Create Start Menu entry" IsChecked="True"/>
                                 <CheckBox x:Name="StartupCheck" Content="Start FANZI with Windows" IsChecked="False"/>
                                 <CheckBox x:Name="LaunchAfterCheck" Content="Launch FANZI after installation" IsChecked="True"/>
-                                <CheckBox x:Name="InstallOpenRgbCheck" Content="Download and install OpenRGB (required for RGB control)" IsChecked="True"/>
-                                <CheckBox x:Name="InstallVcRedistCheck" Content="Install Visual C++ runtime (LibreHardwareMonitor dependency)" IsChecked="True"/>
+                                <CheckBox x:Name="InstallOpenRgbCheck" Content="Download and install OpenRGB (required for RGB lighting control)" IsChecked="True"/>
+                                <CheckBox x:Name="InstallVcRedistCheck" Content="Install Visual C++ runtime (required for hardware sensor access)" IsChecked="True"/>
                             </StackPanel>
                         </Border>
 
@@ -131,7 +131,7 @@
             <!-- Footer -->
             <Border Grid.Row="2" Padding="32,14" Background="#080E18" BorderBrush="#1A2845" BorderThickness="0,1,0,0">
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                    <TextBlock Grid.Column="0" Text="© 2018-2026 Antwerp Designs · AI@IONITY.TODAY" FontSize="10" Foreground="#2A4060" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="0" Text="© 2018-2026 Ionity Global Pty Ltd · AI@IONITY.TODAY" FontSize="10" Foreground="#2A4060" VerticalAlignment="Center"/>
                     <Button Grid.Column="1" x:Name="CancelButton" Content="Cancel" Classes="secondary"/>
                     <Button Grid.Column="2" x:Name="InstallButton" Content="Install" Classes="primary" MinWidth="120"/>
                 </Grid>
