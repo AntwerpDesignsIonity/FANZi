@@ -70,6 +70,15 @@ public static class HeatBar
         return Math.Clamp((bar.Value - bar.Minimum) / range, 0, 1);
     }
 
+    /// <summary>Fraction 0..1 of the bar's reading (base value — the target of a running glide).</summary>
+    internal static double ReadingFraction(ProgressBar bar)
+    {
+        double range = bar.Maximum - bar.Minimum;
+        double value = LiveGlide.ReadingOf(bar);
+        if (range <= 0 || double.IsNaN(value)) return 0;
+        return Math.Clamp((value - bar.Minimum) / range, 0, 1);
+    }
+
     /// <summary>Millisecond clock for the rolling peak (replaceable in tests).</summary>
     internal static Func<long> Clock { get; set; } = () => Environment.TickCount64;
 
@@ -93,11 +102,22 @@ public static class HeatBar
             return;
         }
 
+        // The fill follows the shown (possibly mid-glide, see LiveGlide) value every frame; the rolling peak only
+        // records real readings (base value), so a glide never adds dozens of in-between "samples" or fakes a peak.
         double fraction = Fraction(bar);
         int percent = (int)Math.Round(fraction * 100, MidpointRounding.AwayFromZero);
 
         var state = States.GetOrCreateValue(bar);
-        state.Add(Clock(), fraction);
+        double readingFraction = ReadingFraction(bar);
+        bool newReading = !readingFraction.Equals(state.LastReading)
+                          || bar.Minimum != state.LastMinimum || bar.Maximum != state.LastMaximum;
+        if (newReading)
+        {
+            state.LastReading = readingFraction;
+            state.LastMinimum = bar.Minimum;
+            state.LastMaximum = bar.Maximum;
+            state.Add(Clock(), readingFraction);
+        }
 
         bar.Foreground = state.IsNewPeak ? NewPeakFill(percent) : Fill(percent);
 
@@ -200,6 +220,9 @@ public static class HeatBar
     private sealed class PeakState
     {
         public readonly Queue<(long At, double Fraction)> Samples = new();
+        public double LastReading = double.NaN;
+        public double LastMinimum = double.NaN;
+        public double LastMaximum = double.NaN;
         public double Peak { get; private set; }
         public bool IsNewPeak { get; private set; }
 

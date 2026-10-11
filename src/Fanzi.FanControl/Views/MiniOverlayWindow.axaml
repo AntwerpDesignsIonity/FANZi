@@ -143,7 +143,7 @@
                             ToolTip.Tip="{Binding HealthSummary}" IsVisible="{Binding OverlayShowHealth}">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <TextBlock Text="HEALTH" FontSize="8" FontWeight="Bold" LetterSpacing="1" Foreground="#6A8AAF" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="HealthText" Text="{Binding HealthScore}" FontSize="11" FontWeight="Black" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="HealthText" controls:AnimatedNumber.Text="{Binding HealthScore}" FontSize="11" FontWeight="Black" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Button Grid.Column="4" Classes="overlay-close" Content="✕" Click="OnHideClick" ToolTip.Tip="Hide overlay (Ctrl+O)"
@@ -175,17 +175,17 @@
                     <Grid ColumnDefinitions="64,*,72" ColumnSpacing="8" IsVisible="{Binding OverlayFanRowVisible}">
                         <TextBlock Classes="overlay-label" Text="FAN/PUMP"/>
                         <ProgressBar Grid.Column="1" Classes="thin" Maximum="3000" Value="{Binding CpuFanRpmValue}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Classes="overlay-value" Text="{Binding CpuFanRpmValue, StringFormat='{}{0:F0} RPM'}"/>
+                        <TextBlock Grid.Column="2" Classes="overlay-value" controls:AnimatedNumber.Text="{Binding CpuFanRpmValue, StringFormat='{}{0:F0} RPM'}"/>
                     </Grid>
                     <Grid ColumnDefinitions="64,*,72" ColumnSpacing="8" IsVisible="{Binding OverlayCpuLoadRowVisible}">
                         <TextBlock Classes="overlay-label" Text="CPU LOAD"/>
                         <ProgressBar Grid.Column="1" Classes="thin" Value="{Binding CpuLoadValue}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Classes="overlay-value" Text="{Binding CpuTotalLoad}"/>
+                        <TextBlock Grid.Column="2" Classes="overlay-value" controls:AnimatedNumber.Text="{Binding CpuTotalLoad}"/>
                     </Grid>
                     <Grid ColumnDefinitions="64,*,72" ColumnSpacing="8" IsVisible="{Binding OverlayGpuLoadRowVisible}">
                         <TextBlock Classes="overlay-label" Text="GPU LOAD"/>
                         <ProgressBar Grid.Column="1" Classes="thin" Value="{Binding GpuLoadValue}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Classes="overlay-value" Text="{Binding GpuLoad}"/>
+                        <TextBlock Grid.Column="2" Classes="overlay-value" controls:AnimatedNumber.Text="{Binding GpuLoad}"/>
                     </Grid>
                     <Grid x:Name="OverlayRamRow" ColumnDefinitions="64,*,72" ColumnSpacing="8" IsVisible="{Binding OverlayRamRowVisible}">
                         <TextBlock Classes="overlay-label" Text="RAM"/>

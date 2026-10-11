@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Fanzi.FanControl.Services;
 using System;
 using System.Collections.Generic;
@@ -143,8 +144,10 @@ public sealed class ThermalHistoryChart : Control
 
     // ── Layout ────────────────────────────────────────────────────────────────
 
+    /// <param name="Head">Value at the curve's right end (the live dot): the newest reading, or in live scrolling the
+    /// value interpolated at the scrolled-to moment.</param>
     private sealed record Layout(Rect Plot, AxisRange Axis, Point[] Points, SeriesStats? Stats, DateTime Start, DateTime End,
-        SeriesPeak? Peak, Point? PeakPoint);
+        SeriesPeak? Peak, Point? PeakPoint, double? Head);
 
     /// <summary>Plot area inside <paramref name="size"/>: room for the header row and axis labels when shown.</summary>
     internal static Rect PlotRect(Size size, bool showLabels)
@@ -164,7 +167,12 @@ public sealed class ThermalHistoryChart : Control
             ? SeriesMath.ComputeAxis(s.Min, s.Max, MinimumSpan)
             : SeriesMath.ComputeAxis(40, 80, MinimumSpan);
 
-        DateTime end = window.Count > 0 ? window[^1].TimeUtc : DateTime.UtcNow;
+        DateTime now = UtcNow();
+        if (window.Count >= 2 && !MotionPreferences.ReduceMotion && SeriesMath.IsLive(window, now))
+            return ComputeLiveLayout(plot, axis, window, stats, now);
+
+        _displayEnd = null;
+        DateTime end = window.Count > 0 ? window[^1].TimeUtc : now;
         DateTime start = end - TimeWindow;
 
         var points = window.Count >= 2
@@ -176,7 +184,108 @@ public sealed class ThermalHistoryChart : Control
         Point? peakPoint = peak is { } pk
             ? SeriesMath.Project(new[] { new HistorySample(pk.TimeUtc, pk.Value) }, start, end, plot, axis)[0]
             : null;
-        return new Layout(plot, axis, points, stats, start, end, peak, peakPoint);
+        double? head = stats?.Current;
+        return new Layout(plot, axis, points, stats, start, end, peak, peakPoint, head);
+    }
+
+    /// <summary>
+    /// v4.0.3 live layout: the right edge runs on the wall clock, one sample interval behind the newest reading
+    /// (<see cref="SeriesMath.DisplayLag"/>), and the curve ends on a point interpolated at that moment. Redrawn by
+    /// <see cref="OnScrollTick"/>, the chart scrolls continuously and each new reading slides in from the right —
+    /// instead of the whole curve and the "now" dot stepping once per poll. Min / max / now in the header stay the
+    /// real latest readings.
+    /// </summary>
+    private Layout ComputeLiveLayout(Rect plot, AxisRange axis, IReadOnlyList<HistorySample> window, SeriesStats? stats, DateTime now)
+    {
+        DateTime last = window[^1].TimeUtc;
+        DateTime target = now - SeriesMath.DisplayLag(window);
+        if (target > last) target = last;
+
+        DateTime end = target;
+        if (_displayEnd is { } previous && previous <= last && last - previous < TimeWindow)
+        {
+            // Never scroll backwards, and catch up after a late poll at ≤ 1.5× real time instead of jumping.
+            double realMs = Math.Max(0, (now - _displayWall).TotalMilliseconds);
+            var maxEnd = previous + TimeSpan.FromMilliseconds(realMs * 1.5 + 20);
+            end = target < previous ? previous : target > maxEnd ? maxEnd : target;
+            if (end > last) end = last;
+        }
+        _displayEnd = end;
+        _displayWall = now;
+
+        DateTime start = end - TimeWindow;
+        var slice = SeriesMath.Slice(window, start, end);
+        if (slice.Count < 2)
+            return new Layout(plot, axis, Array.Empty<Point>(), stats, start, end, null, null, stats?.Current);
+
+        var bucket = TimeSpan.FromTicks(Math.Max(1, TimeWindow.Ticks / Math.Max(2, (int)(plot.Width / 2))));
+        var points = SeriesMath.Project(SeriesMath.DownsampleByTime(slice, bucket), start, end, plot, axis);
+        double head = slice[^1].Value;
+
+        // Peak and "new peak" from the real readings; a peak that hasn't scrolled in yet sits on the live dot.
+        var peak = ShowPeak ? SeriesMath.ComputePeak(window) : null;
+        Point? peakPoint = null;
+        if (peak is { } pk)
+        {
+            peakPoint = pk.TimeUtc >= end
+                ? points[^1]
+                : pk.TimeUtc < start ? null
+                : SeriesMath.Project(new[] { new HistorySample(pk.TimeUtc, pk.Value) }, start, end, plot, axis)[0];
+            if (peakPoint is null) peak = null;
+        }
+        return new Layout(plot, axis, points, stats, start, end, peak, peakPoint, head);
+    }
+
+    // ── v4.0.3 continuous scrolling ──────────────────────────────────────────
+
+    /// <summary>Wall clock for the live layout (replaceable in tests).</summary>
+    internal static Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
+
+    private DispatcherTimer? _scrollTimer;
+    private DateTime? _displayEnd;
+    private DateTime _displayWall;
+
+    /// <summary>True while the chart is drawing in live (wall-clock scrolling) mode. Exposed for tests.</summary>
+    internal bool IsLiveScrolling => _displayEnd is not null;
+
+    /// <summary>
+    /// Redraw rate for smooth scrolling: about three frames per pixel of travel (a 1-minute chart moves faster than
+    /// a 5-minute sparkline), between 60 fps and 10 fps — a few cheap redraws a second for slow charts.
+    /// </summary>
+    internal static TimeSpan ScrollFrameInterval(TimeSpan window, double plotWidth)
+    {
+        if (plotWidth < 1 || window <= TimeSpan.Zero) return TimeSpan.FromMilliseconds(100);
+        double msPerPixel = window.TotalMilliseconds / plotWidth;
+        return TimeSpan.FromMilliseconds(Math.Clamp(msPerPixel / 3, 16, 100));
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _scrollTimer ??= new DispatcherTimer(DispatcherPriority.Render);
+        _scrollTimer.Tick -= OnScrollTick;
+        _scrollTimer.Tick += OnScrollTick;
+        _scrollTimer.Interval = ScrollFrameInterval(TimeWindow, Bounds.Width);
+        _scrollTimer.Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _scrollTimer?.Stop();
+        _displayEnd = null;
+    }
+
+    private void OnScrollTick(object? sender, EventArgs e)
+    {
+        // Only while the chart is on screen with live data and motion allowed; otherwise the tick is a no-op.
+        if (!IsEffectivelyVisible || MotionPreferences.ReduceMotion || History is not { Count: >= 2 } history) return;
+        if (_displayEnd is null && !SeriesMath.IsLive(history.GetWindow(TimeSpan.FromSeconds(10)), UtcNow())) return;
+
+        var interval = ScrollFrameInterval(TimeWindow, _layout?.Plot.Width ?? Bounds.Width);
+        if (_scrollTimer is { } timer && timer.Interval != interval) timer.Interval = interval;
+        InvalidateArrange();
+        InvalidateVisual();
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -196,7 +305,7 @@ public sealed class ThermalHistoryChart : Control
         {
             // NEW peak → the live dot turns orange; otherwise it carries the heat colour of the live value.
             bool newPeak = _layout.Peak is { IsNew: true };
-            var color = newPeak ? TemperatureColorScale.PeakColor : HeatColor(stats.Current);
+            var color = newPeak ? TemperatureColorScale.PeakColor : HeatColor(_layout.Head ?? stats.Current);
             _dot.Classes.Set("new-peak", newPeak);
             _glow.Classes.Set("new-peak", newPeak);
             if (newPeak) { glowSize *= 1.35; dotSize += 1; }

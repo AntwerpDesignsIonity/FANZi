@@ -58,6 +58,12 @@ public partial class ThermalGauge : UserControl
     private readonly Transitions? _sweepTransitions;
     private readonly Transitions? _glowTransitions;
 
+    /// <summary>Measured update rhythm of <see cref="Value"/> (sets the sweep duration).</summary>
+    private readonly LiveCadence _cadence = new(TimeSpan.FromMilliseconds(600));
+
+    /// <summary>Duration the arc's next sweep uses. Exposed for tests.</summary>
+    internal TimeSpan SweepDuration => _sweepTransitions is { Count: > 0 } && _sweepTransitions[0] is DoubleTransition d ? d.Duration : TimeSpan.Zero;
+
     public ThermalGauge()
     {
         InitializeComponent();
@@ -113,6 +119,10 @@ public partial class ThermalGauge : UserControl
         }
         else if (p == ValueProperty)
         {
+            // v4.0.3: the arc sweeps linearly over ~92 % of the measured poll interval, so it tracks the
+            // readings continuously instead of snapping (cubic ease-out) and resting for the rest of the second.
+            if (_sweepTransitions is { Count: > 0 } && _sweepTransitions[0] is DoubleTransition sweep)
+                sweep.Duration = _cadence.Next();
             UpdateValue();
             UpdateTexts();
         }

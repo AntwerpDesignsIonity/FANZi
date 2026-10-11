@@ -63,6 +63,17 @@ public static class NumberTween
         return 1 - inverse * inverse * inverse;
     }
 
-    /// <summary>The value shown at <paramref name="progress"/> (0..1) of a count from <paramref name="from"/> to <paramref name="to"/>.</summary>
+    /// <summary>The value shown at <paramref name="progress"/> (0..1) of an eased count from <paramref name="from"/> to <paramref name="to"/>.</summary>
     public static double ValueAt(double from, double to, double progress) => from + (to - from) * Ease(progress);
+
+    /// <summary>
+    /// v4.0.3 live glide: linear interpolation at <paramref name="progress"/> (0..1, clamped). Used for live readings,
+    /// where the count spans the whole update interval — constant speed reads as a continuous signal, an ease-out
+    /// as a jump followed by a stall.
+    /// </summary>
+    public static double GlideAt(double from, double to, double progress)
+    {
+        double t = double.IsNaN(progress) ? 1 : Math.Clamp(progress, 0, 1);
+        return from + (to - from) * t;
+    }
 }

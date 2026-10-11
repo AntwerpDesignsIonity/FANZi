@@ -486,6 +486,8 @@
         <Setter Property="Maximum" Value="100"/>
         <!-- Heat fill (tip = heat colour of the value), orange rolling-peak tick, orange tip on a NEW peak -->
         <Setter Property="controls:HeatBar.IsEnabled" Value="True"/>
+        <!-- v4.0.3: fill glides linearly from reading to reading over the measured poll interval (after HeatBar) -->
+        <Setter Property="controls:LiveGlide.IsEnabled" Value="True"/>
     </Style>
 
     <!-- ═══ PROFILE TABS ═══ -->
@@ -683,12 +685,8 @@
         <Setter Property="Minimum" Value="0"/>
         <Setter Property="Maximum" Value="100"/>
         <Setter Property="Margin" Value="0,5,0,0"/>
-        <Setter Property="Transitions">
-            <Transitions>
-                <BrushTransition Property="Foreground" Duration="0:0:0.6"/>
-                <DoubleTransition Property="Value" Duration="0:0:0.6" Easing="CubicEaseOut"/>
-            </Transitions>
-        </Setter>
+        <!-- v4.0.3: LiveGlide owns the transitions (linear value glide over the measured cadence + 0.6 s colour fade) -->
+        <Setter Property="controls:LiveGlide.IsEnabled" Value="True"/>
     </Style>
 
     <!-- ═══ TOAST NOTIFICATIONS (WindowNotificationManager cards) ═══ -->
@@ -835,6 +833,7 @@
     <!-- ═══ REDUCE MOTION (Settings → Appearance & accessibility) ═══ -->
     <!-- Gauge sweeps and number counts are switched off in code (MotionPreferences); here the heatmap bars
          jump instead of sliding and the loader shows a still, full-opacity logo with a static ring. -->
+    <!-- Live bars (ProgressBar.thin / .heat-bar): LiveGlide drops its transitions in code while Reduce motion is on. -->
     <Style Selector=":is(Window).reduce-motion ProgressBar.heat-bar">
         <Setter Property="Transitions" Value="{x:Null}"/>
     </Style>

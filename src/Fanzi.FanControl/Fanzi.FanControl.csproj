@@ -11,7 +11,7 @@
     <Authors>Johan Wilhelm van Antwerp — Ionity Global</Authors>
     <Copyright>© 2018-2026 Ionity Global (Pty) Ltd. ALL Rights Reserved.</Copyright>
     <Description>FANZi IO-nity — AI Thermal Intelligence, Smart Fan Control, RGB Lighting &amp; System Health Monitoring. Powered by AEDi (Antwerp Ecosystems Designs Ionity) AI Engine.</Description>
-    <Version>4.0.2</Version>
+    <Version>4.0.3</Version>
   </PropertyGroup>
 
   <ItemGroup>

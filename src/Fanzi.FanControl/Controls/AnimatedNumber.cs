@@ -13,7 +13,9 @@ namespace Fanzi.FanControl.Controls;
 /// <summary>
 /// Attached behaviour for big metric values: bind <c>controls:AnimatedNumber.Text</c> instead of
 /// <c>TextBlock.Text</c> and a change from one reading to the next counts up/down over
-/// <see cref="Duration"/> with a cubic ease-out, printed in the target's own format ("72,4 °C").
+/// ~92 % of the metric's measured update interval (v4.0.3, <see cref="LiveCadence"/>; <see cref="Duration"/>
+/// until that is known) at constant speed, so it flows from one real reading to the next instead of snapping and
+/// then freezing for the rest of the poll. Printed in the target's own format ("72,4 °C").
 /// <para>The count runs on Avalonia's animation clock (the same one as the gauge sweeps), so it only
 /// advances while the window renders. The text is set at once (no animation) when
 /// <see cref="MotionPreferences.ReduceMotion"/> is on, when the block is not on screen, or when either text
@@ -45,11 +47,16 @@ public static class AnimatedNumber
     /// <summary>True while a count is in progress (tests, render harness).</summary>
     internal static bool IsAnimating(TextBlock block) => States.TryGetValue(block, out var state) && state.Active is not null;
 
+    /// <summary>Glide the block's next count will use (null before its first reading). Exposed for tests.</summary>
+    internal static TimeSpan? NextGlide(TextBlock block) => States.TryGetValue(block, out var state) ? state.Cadence.Glide : null;
+
     private sealed class State
     {
         public Tween? Active;
         public CancellationTokenSource? Cancel;
         public bool Hooked;
+        /// <summary>v4.0.3: how often this metric really updates — the count lasts ~92 % of that interval.</summary>
+        public readonly LiveCadence Cadence = new(Duration);
     }
 
     private sealed record Tween(double From, NumberText To, string TargetText);
@@ -57,6 +64,8 @@ public static class AnimatedNumber
     private static void OnTextChanged(TextBlock block, string? target)
     {
         var state = States.GetValue(block, _ => new State());
+        // Every new reading feeds the cadence (also the instant ones), so the count length tracks the real poll.
+        var glide = state.Cadence.Next();
         state.Cancel?.Cancel();
         state.Cancel = null;
 
@@ -86,14 +95,14 @@ public static class AnimatedNumber
         var tween = new Tween(from.Value, to, target!);
         state.Active = tween;
         state.Cancel = new CancellationTokenSource();
-        _ = RunAsync(block, state, tween, state.Cancel.Token);
+        _ = RunAsync(block, state, tween, glide, state.Cancel.Token);
     }
 
-    private static async Task RunAsync(TextBlock block, State state, Tween tween, CancellationToken token)
+    private static async Task RunAsync(TextBlock block, State state, Tween tween, TimeSpan glide, CancellationToken token)
     {
         var animation = new Animation
         {
-            Duration = Duration,
+            Duration = glide,
             Easing = new LinearEasing(),
             FillMode = FillMode.None,
             Children =
@@ -128,7 +137,7 @@ public static class AnimatedNumber
             return;
         }
 
-        block.Text = tween.To.Format(NumberTween.ValueAt(tween.From, tween.To.Value, progress));
+        block.Text = tween.To.Format(NumberTween.GlideAt(tween.From, tween.To.Value, progress));
     }
 
     private static void Finish(TextBlock block)

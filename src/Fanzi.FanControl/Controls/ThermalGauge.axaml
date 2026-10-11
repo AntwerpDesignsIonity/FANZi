@@ -29,7 +29,8 @@
              StrokeLineCap="Round">
             <Arc.Transitions>
                 <Transitions>
-                    <DoubleTransition Property="SweepAngle" Duration="0:0:0.6" Easing="CubicEaseOut"/>
+                    <!-- Duration is re-tuned per reading from the live cadence (ThermalGauge.axaml.cs, LiveCadence) -->
+                    <DoubleTransition Property="SweepAngle" Duration="0:0:0.6" Easing="LinearEasing"/>
                 </Transitions>
             </Arc.Transitions>
         </Arc>

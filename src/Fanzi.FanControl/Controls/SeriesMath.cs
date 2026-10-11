@@ -127,6 +127,104 @@ internal static class SeriesMath
         return points;
     }
 
+    // ── v4.0.3 live scrolling ───────────────────────────────────────────────
+
+    /// <summary>
+    /// How far behind the newest sample a live chart draws its right edge: one measured sample interval
+    /// (gap between the two newest samples, clamped 0.2–5 s) plus 15 % and 60 ms of slack for poll jitter.
+    /// The newest reading then slides in from the right instead of the whole curve stepping left once per poll.
+    /// </summary>
+    public static TimeSpan DisplayLag(IReadOnlyList<HistorySample> samples)
+    {
+        if (samples.Count < 2) return TimeSpan.Zero;
+        double gapMs = (samples[^1].TimeUtc - samples[^2].TimeUtc).TotalMilliseconds;
+        gapMs = Math.Clamp(double.IsFinite(gapMs) ? gapMs : 1000, 200, 5000);
+        return TimeSpan.FromMilliseconds(gapMs * 1.15 + 60);
+    }
+
+    /// <summary>
+    /// True when <paramref name="samples"/> are a live feed at <paramref name="nowUtc"/>: the newest sample is no
+    /// older than three sample intervals (+0.5 s) and not in the future. Historic / test data keeps the classic
+    /// "right edge = newest sample" layout.
+    /// </summary>
+    public static bool IsLive(IReadOnlyList<HistorySample> samples, DateTime nowUtc)
+    {
+        if (samples.Count < 2) return false;
+        var age = nowUtc - samples[^1].TimeUtc;
+        var gap = samples[^1].TimeUtc - samples[^2].TimeUtc;
+        if (gap <= TimeSpan.Zero) return false;
+        return age >= TimeSpan.FromSeconds(-1) && age <= gap * 3 + TimeSpan.FromMilliseconds(500);
+    }
+
+    /// <summary>Value of the series at <paramref name="time"/> by linear interpolation (clamped to the ends).</summary>
+    public static double ValueAtTime(IReadOnlyList<HistorySample> samples, DateTime time)
+    {
+        if (samples.Count == 0) return double.NaN;
+        if (time <= samples[0].TimeUtc) return samples[0].Value;
+        if (time >= samples[^1].TimeUtc) return samples[^1].Value;
+        int hi = 1;
+        while (hi < samples.Count - 1 && samples[hi].TimeUtc < time) hi++;
+        var a = samples[hi - 1];
+        var b = samples[hi];
+        double span = (b.TimeUtc - a.TimeUtc).Ticks;
+        if (span <= 0) return b.Value;
+        return a.Value + (b.Value - a.Value) * ((time - a.TimeUtc).Ticks / span);
+    }
+
+    /// <summary>
+    /// The part of <paramref name="samples"/> inside [<paramref name="start"/>, <paramref name="end"/>], with the
+    /// edges interpolated exactly at <paramref name="start"/> and <paramref name="end"/>, so a chart that scrolls
+    /// continuously shows a curve that enters on the left and grows on the right without stepping.
+    /// </summary>
+    public static IReadOnlyList<HistorySample> Slice(IReadOnlyList<HistorySample> samples, DateTime start, DateTime end)
+    {
+        if (samples.Count == 0 || end < start) return Array.Empty<HistorySample>();
+        if (end > samples[^1].TimeUtc) end = samples[^1].TimeUtc;
+        if (start < samples[0].TimeUtc) start = samples[0].TimeUtc;
+        if (end <= start) return Array.Empty<HistorySample>();
+
+        var result = new List<HistorySample>(samples.Count + 2) { new(start, ValueAtTime(samples, start)) };
+        foreach (var s in samples)
+            if (s.TimeUtc > start && s.TimeUtc < end) result.Add(s);
+        result.Add(new HistorySample(end, ValueAtTime(samples, end)));
+        return result;
+    }
+
+    /// <summary>
+    /// Downsampling for a scrolling chart: samples are averaged per fixed slot of absolute time
+    /// (<paramref name="bucket"/>), so the buckets don't shift as the window slides and the curve doesn't shimmer.
+    /// The first and last samples (the interpolated edges) are kept exactly.
+    /// </summary>
+    public static IReadOnlyList<HistorySample> DownsampleByTime(IReadOnlyList<HistorySample> samples, TimeSpan bucket)
+    {
+        int n = samples.Count;
+        if (n <= 2 || bucket <= TimeSpan.Zero) return samples;
+
+        var result = new List<HistorySample>(n) { samples[0] };
+        long size = bucket.Ticks;
+        long currentSlot = long.MinValue, origin = 0, offsets = 0;
+        double sum = 0;
+        int count = 0;
+        for (int i = 1; i < n - 1; i++)
+        {
+            long ticks = samples[i].TimeUtc.Ticks;
+            long slot = ticks / size;
+            if (slot != currentSlot && count > 0)
+            {
+                result.Add(new HistorySample(new DateTime(origin + offsets / count, DateTimeKind.Utc), sum / count));
+                count = 0; sum = 0; offsets = 0;
+            }
+            if (count == 0) { currentSlot = slot; origin = ticks; }
+            offsets += ticks - origin;
+            sum += samples[i].Value;
+            count++;
+        }
+        if (count > 0)
+            result.Add(new HistorySample(new DateTime(origin + offsets / count, DateTimeKind.Utc), sum / count));
+        result.Add(samples[n - 1]);
+        return result;
+    }
+
     /// <summary>Inverse of the Y mapping in <see cref="Project"/>: the value drawn at pixel row <paramref name="y"/>.</summary>
     public static double ValueAtY(double y, Rect plot, AxisRange axis)
         => plot.Height > 0 ? axis.Min + (plot.Bottom - y) / plot.Height * (axis.Max - axis.Min) : axis.Min;
