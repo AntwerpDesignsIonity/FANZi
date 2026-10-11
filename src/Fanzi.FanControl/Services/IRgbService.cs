@@ -31,6 +31,12 @@ public interface IRgbService : IDisposable
     string? LastDeviceQueryError => null;
 
     /// <summary>
+    /// True when the connected server silently refused mode changes (OpenRGB 1.0 with
+    /// Server → legacy_workaround off). Restarting FANZi's own OpenRGB server fixes it.
+    /// </summary>
+    bool ModeChangesRejected => false;
+
+    /// <summary>
     /// Attempts to connect to the OpenRGB server.
     /// Returns true on success; false if server is not reachable.
     /// </summary>

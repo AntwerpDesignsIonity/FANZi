@@ -208,7 +208,26 @@ FANZi targets **OpenRGB 1.0** (SDK server on port **6742**).
 
 If installation or connection fails, the RGB tab keeps a banner with the exact error plus **Retry**, **Locate OpenRGB.exe…**, **Open download page** and **PawnIO** buttons. Automatic re-download is attempted at most once every 10 minutes.
 
-**PawnIO:** since 1.0rc2, OpenRGB needs the [PawnIO](https://pawnio.eu) driver and Administrator rights to control RAM and motherboard RGB. If FANZi reports "Connected to OpenRGB but no devices found", install PawnIO and run FANZi/OpenRGB as Administrator.
+**PawnIO:** since 1.0rc2, OpenRGB needs the [PawnIO](https://pawnio.eu) driver and Administrator rights to control RAM and motherboard RGB. FANZi runs as Administrator; when PawnIO is missing the RGB tab shows an **Install PawnIO** button that downloads the signed installer from `github.com/namazso/PawnIO.Setup` (Authenticode-verified, signer `namazso.eu`), runs it silently and restarts OpenRGB so the new devices appear. GPUs on NVIDIA NvAPI I2C work without PawnIO.
+
+### How FANZi drives each device (v3.0)
+
+Each device row in the RGB tab shows how it is controlled:
+
+| Control | Devices | How colours are sent |
+|---|---|---|
+| **Per-LED** (Direct / Custom) | Motherboards, RAM, LED strips, monitors such as the ViewSonic XG270QG | Switched to the per-LED mode, then every frame goes out with `UpdateLeds`. |
+| **Single colour** (Static) | GPUs with no per-LED mode, for example the ZOTAC RTX 30-series | The frame's average colour is written into the Static mode, at most every 120 ms and only when it changes. |
+| **Effects only** | Devices that expose no colour mode | Listed, not coloured. |
+
+Two OpenRGB 1.0 compatibility fixes make this work:
+
+- **Mode packets:** OpenRGB.NET 3.1.1 sends direction `0xFFFFFFFF` for modes without a direction, and OpenRGB 1.0 rejects those packets silently. FANZi sends mode changes itself (`OpenRgbModeWriter`, SDK protocol 4) with direction `0`, and verifies every switch by reading the device back.
+- **Server settings:** FANZi starts OpenRGB with a private config (`%LOCALAPPDATA%\FANZI\OpenRGB\config`) that enables `Server → legacy_workaround`. It also turns that flag on in `%APPDATA%\OpenRGB\OpenRGB.json`, keeping a `.fanzi-backup` copy. If a running server still refuses mode changes, FANZi restarts it once with these settings.
+
+**Other RGB software:** SignalRGB, iCUE, Armoury Crate / Aura, MSI Center, RGB Fusion, Razer Synapse, NZXT CAM, G HUB, L-Connect, ZOTAC FireStorm / Spectra and ASRock Polychrome compete for the same hardware. When one is running, the RGB tab names it and offers **Close them**. That button closes those apps and rescans.
+
+**Hardware check:** `$env:FANZI_HARDWARE_TESTS=1; dotnet test tests\Fanzi.FanControl.Tests --filter Category=Hardware` starts OpenRGB and sets every device to red, green and blue. An independent SDK client then confirms what OpenRGB applied, and the results are written to `%TEMP%\fanzi-rgb-live-report.txt`.
 
 **Logs:** FANZi writes a daily log to `%APPDATA%\FANZI\logs\fanzi-yyyyMMdd.log` (kept 7 days), including every OpenRGB download, install and connection attempt. Crash logs are in `%APPDATA%\FANZI\crash-logs`.
 

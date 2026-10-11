@@ -127,6 +127,37 @@
                             </WrapPanel>
                         </StackPanel>
                     </Border>
+                    <!-- Other RGB software holding the same hardware (SignalRGB, iCUE, Aura, …) -->
+                    <Border IsVisible="{Binding HasRgbConflicts}" Classes="banner warning">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="Other RGB software is running" FontSize="12" FontWeight="Bold" Foreground="#FB923C"/>
+                                <TextBlock Text="{Binding RgbConflictMessage}" FontSize="11" Foreground="#C08050" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Close them"
+                                    Command="{Binding CloseConflictingAppsCommand}"
+                                    Background="#9A3412" Foreground="#FFF" VerticalAlignment="Center"
+                                    CornerRadius="8" Padding="14,6" FontSize="12" FontWeight="Bold"
+                                    ToolTip.Tip="Close these apps so FANZI gets exclusive control of your RGB hardware"/>
+                        </Grid>
+                    </Border>
+                    <!-- PawnIO driver: needed for RGB RAM and motherboard lighting -->
+                    <Border IsVisible="{Binding ShowPawnIoPrompt}" Classes="banner warning">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="RAM and motherboard RGB need the PawnIO driver" FontSize="12" FontWeight="Bold" Foreground="#FB923C"/>
+                                <TextBlock Text="{Binding PawnIoStatus}" FontSize="11" Foreground="#C08050" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="{Binding PawnIoButtonText}"
+                                    Command="{Binding InstallPawnIoCommand}"
+                                    Background="#9A3412" Foreground="#FFF" VerticalAlignment="Center"
+                                    CornerRadius="8" Padding="14,6" FontSize="12" FontWeight="Bold"
+                                    ToolTip.Tip="Downloads the signed PawnIO driver from github.com/namazso and installs it"/>
+                            <Button Grid.Column="2" Content="About" Command="{Binding OpenPawnIoCommand}" Classes="ghost"
+                                    VerticalAlignment="Center" CornerRadius="8" Padding="12,6" FontSize="12"
+                                    ToolTip.Tip="https://pawnio.eu"/>
+                        </Grid>
+                    </Border>
                     <!-- Install progress -->
                     <TextBlock IsVisible="{Binding IsInstallingOpenRgb}"
                                Text="{Binding InstallProgress}" FontSize="11" Foreground="#FB923C" Margin="4,0"/>
@@ -394,8 +425,11 @@
                                                 <StackPanel Grid.Column="1">
                                                     <TextBlock Text="{Binding Name}" Foreground="#C4D8F4"
                                                                FontSize="13" FontWeight="SemiBold"/>
-                                                    <TextBlock Text="{Binding Type}" Foreground="#4E6E95"
-                                                               FontSize="11"/>
+                                                    <TextBlock Foreground="#4E6E95" FontSize="11">
+                                                        <Run Text="{Binding Type}"/>
+                                                        <Run Text="  ·  "/>
+                                                        <Run Text="{Binding ControlLabel}"/>
+                                                    </TextBlock>
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="2"
                                                            Text="{Binding LedCount, StringFormat='{}{0} LEDs'}"

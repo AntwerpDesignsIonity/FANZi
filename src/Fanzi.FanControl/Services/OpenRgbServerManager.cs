@@ -1,3 +1,4 @@
+using Fanzi.FanControl.Services.Rgb;
 using Fanzi.FanControl.Services.OpenRgb;
 using System;
 using System.Collections.Generic;
@@ -223,16 +224,20 @@ public sealed class OpenRgbServerManager : IDisposable
 
             try
             {
-                AppLog.Info($"OpenRGB: launching {DetectedPath} --server --server-port {port}");
+                // FANZi's private config turns on Server → legacy_workaround; without it OpenRGB 1.0
+                // drops every mode change from FANZi's protocol-4 client (GPU colours never apply).
+                string arguments = BuildServerArguments(port, PrepareConfigDirectory(port));
+
+                AppLog.Info($"OpenRGB: launching {DetectedPath} {arguments}");
                 _serverProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
                     {
                         // --server enables the SDK; we DON'T pass --noautoconnect so the
                         // server actually scans for devices on startup. WorkingDirectory
-                        // is set so OpenRGB finds its config files relative to the exe.
+                        // is set so OpenRGB finds its runtime files relative to the exe.
                         FileName = DetectedPath,
-                        Arguments = $"--server --server-port {port}",
+                        Arguments = arguments,
                         WorkingDirectory = Path.GetDirectoryName(DetectedPath) ?? "",
                         CreateNoWindow = true,
                         UseShellExecute = false,
@@ -287,21 +292,83 @@ public sealed class OpenRgbServerManager : IDisposable
 
     public void StopServer()
     {
-        if (_serverProcess is { HasExited: false })
-        {
-            try
-            {
-                _serverProcess.Kill(entireProcessTree: true);
-                _serverProcess.WaitForExit(3000);
-            }
-            catch (Exception ex)
-            {
-                AppLog.Warn("OpenRGB: failed to stop server process", ex);
-            }
+        // Snapshot: the Exited handler clears _serverProcess on another thread as soon as Kill lands.
+        var process = _serverProcess;
+        if (process is null) return;
 
-            _serverProcess = null;
-            Status = "Server stopped";
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(3000);
+            }
         }
+        catch (InvalidOperationException)
+        {
+            // Exited between the check and Kill — nothing left to stop.
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("OpenRGB: failed to stop server process", ex);
+        }
+
+        _serverProcess = null;
+        Status = "Server stopped";
+    }
+
+    /// <summary>Command line for FANZi's OpenRGB SDK server (config path quoted; omitted when null).</summary>
+    internal static string BuildServerArguments(int port, string? configDir) =>
+        configDir is null
+            ? $"--server --server-port {port}"
+            : $"--server --server-port {port} --config \"{configDir.TrimEnd('\\', '/')}\"";
+
+    /// <summary>
+    /// Writes FANZi's private OpenRGB config (legacy_workaround on) and also flips the flag in the
+    /// user's own OpenRGB config. Returns the private folder, or null if it could not be written
+    /// (OpenRGB then uses its default config).
+    /// </summary>
+    private static string? PrepareConfigDirectory(int port)
+    {
+        OpenRgbConfigWriter.TryPatchSharedConfig();
+        try
+        {
+            return OpenRgbConfigWriter.EnsurePrivateConfig(port);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("OpenRGB: could not write FANZi's private OpenRGB config", ex);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Restarts the SDK server so it picks up a FANZi-compatible config: used when the running
+    /// server refused mode changes (legacy_workaround off). Every OpenRGB process is stopped —
+    /// FANZi runs elevated, so this includes a user-started OpenRGB holding the SDK port.
+    /// </summary>
+    public async Task<bool> RestartForCompatibilityAsync(int port = 6742, CancellationToken ct = default)
+    {
+        AppLog.Info("OpenRGB: restarting the SDK server with FANZi's compatible config");
+        StopServer();
+        foreach (var p in SafeGetOpenRgbProcesses())
+        {
+            try { p.Kill(entireProcessTree: true); p.WaitForExit(3000); }
+            catch (Exception ex) { AppLog.Warn($"OpenRGB: could not stop PID {p.Id}", ex); }
+            finally { p.Dispose(); }
+        }
+
+        // Give Windows a moment to release the socket before relaunching.
+        for (int i = 0; i < 20 && IsPortListening(port); i++)
+            await Task.Delay(250, ct).ConfigureAwait(false);
+
+        return await StartServerAsync(port, ct).ConfigureAwait(false);
+    }
+
+    private static Process[] SafeGetOpenRgbProcesses()
+    {
+        try { return Process.GetProcessesByName("OpenRGB"); }
+        catch { return Array.Empty<Process>(); }
     }
 
     private static bool IsOpenRgbAlreadyRunning()

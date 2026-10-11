@@ -975,6 +975,13 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     private async Task<int> RefreshDevicesAsync()
     {
         var list = await _rgbService.GetDevicesAsync(_cts.Token);
+
+        // An OpenRGB 1.0 server without legacy_workaround drops FANZi's mode changes (single-colour
+        // devices such as GPUs never change). Restart it once with FANZi's config and re-read.
+        if (_rgbService.ModeChangesRejected && await RestartServerForCompatibilityAsync())
+            list = await _rgbService.GetDevicesAsync(_cts.Token);
+
+        RefreshHardwareAdvisories();
         string? queryError = _rgbService.LastDeviceQueryError;
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {

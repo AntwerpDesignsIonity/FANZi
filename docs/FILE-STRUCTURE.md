@@ -253,6 +253,11 @@ Business logic and hardware integration. All stateful services are disposed via 
 | `OpenRgb/OpenRgbReleaseResolver.cs` | Parses openrgb.org/releases.html for the stable Windows portable zip (HTTPS only) and appends verified pinned fallbacks. |
 | `OpenRgb/OpenRgbPackageInstaller.cs` | Downloads with timeouts, validates the zip (size + magic), extracts to staging and swaps into the target folder atomically. BCL-only; linked into Fanzi.Installer. |
 | `OpenRgb/OpenRgbInstallLocator.cs` | Finds existing OpenRGB installs (known folders, Uninstall/App Paths registry keys, PATH). Shared with Fanzi.Installer. |
+| `Rgb/RgbControlPlanner.cs` | Chooses each device's control path from its modes: per-LED (Direct > Custom > Static > any per-LED), single colour (a mode-specific Static mode, e.g. ZOTAC GPUs) or effects-only. Pure; unit-tested with modes probed from real hardware. |
+| `Rgb/OpenRgbModeWriter.cs` | Sends `RGBController::UpdateMode` packets (SDK protocol 4) on its own connection, with direction normalised to 0 for direction-less modes. OpenRGB 1.0 silently rejects OpenRGB.NET's own UpdateMode, which sends direction `0xFFFFFFFF`. |
+| `Rgb/OpenRgbConfigWriter.cs` | Writes FANZi's private OpenRGB config (`--config`) with `Server → legacy_workaround` on, and enables the same flag in the user's `%APPDATA%\OpenRGB\OpenRGB.json` after taking a backup. |
+| `Rgb/PawnIoInstaller.cs` | Detects the PawnIO driver and installs it. Downloads the latest `PawnIO_setup.exe` from `github.com/namazso/PawnIO.Setup`, verifies it with WinVerifyTrust (signer `namazso.eu`) and runs `-install -silent`. |
+| `Rgb/RgbConflictDetector.cs` | Finds RGB software that competes for the same hardware (SignalRGB, iCUE, Armoury Crate, MSI Center, …) and closes it on request. |
 | `DownloadThrottle.cs` | Limits automatic OpenRGB re-downloads to once per 10 minutes (injectable clock). |
 | `TemperatureColorScale.cs` | Pure colour scale: temperature (blue → cyan → green → amber → red), health and load colours. Shared by UI and the RGB thermal effect. |
 | `OverlayPlacement.cs` | Pure helper that clamps the saved mini-overlay position to the screen working area. |
