@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Fanzi.FanControl.Controls.ThermalGauge"
+             ClipToBounds="False"
+             HorizontalAlignment="Center"
+             VerticalAlignment="Center">
+    <!-- Sizes, strokes, brushes and texts are driven from code-behind (ThermalGauge.axaml.cs). -->
+    <Panel x:Name="PART_Root" Width="160" Height="160">
+
+        <!-- Radial glow behind the dial, tinted by TemperatureColorScale -->
+        <Ellipse x:Name="PART_Glow" Margin="-18" IsHitTestVisible="False">
+            <Ellipse.Transitions>
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.6"/>
+                </Transitions>
+            </Ellipse.Transitions>
+        </Ellipse>
+
+        <!-- Track: 270° from bottom-left, clockwise over the top, to bottom-right -->
+        <Arc x:Name="PART_Track"
+             StartAngle="135" SweepAngle="270"
+             Stroke="#142238" StrokeThickness="12"
+             StrokeLineCap="Round"/>
+
+        <!-- Value arc -->
+        <Arc x:Name="PART_Value"
+             StartAngle="135" SweepAngle="0"
+             StrokeThickness="12"
+             StrokeLineCap="Round">
+            <Arc.Transitions>
+                <Transitions>
+                    <DoubleTransition Property="SweepAngle" Duration="0:0:0.6" Easing="CubicEaseOut"/>
+                </Transitions>
+            </Arc.Transitions>
+        </Arc>
+
+        <!-- Centre readout -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock x:Name="PART_ValueText" Text="--" FontWeight="Black" VerticalAlignment="Bottom"/>
+                <TextBlock x:Name="PART_UnitText" FontWeight="Bold" Foreground="#6A8AAF"
+                           VerticalAlignment="Top" Margin="2,6,0,0"/>
+            </StackPanel>
+            <TextBlock x:Name="PART_LabelText" FontWeight="Bold" Foreground="#5A7FA8"
+                       LetterSpacing="2" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+    </Panel>
+</UserControl>

@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="using:Fanzi.Installer"
         mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="520"
         x:Class="Fanzi.Installer.InstallerWindow"
         Title="FANZI Installer"
@@ -71,7 +72,7 @@
                             <TextBlock Text="AI-Powered Fan Control &amp; RGB Lighting" FontSize="13" Foreground="#6A8AAF"/>
                         </StackPanel>
                     </StackPanel>
-                    <TextBlock Text="Version 2.1.0 — © 2018-2026 Ionity Global Pty Ltd" FontSize="11" Foreground="#2A4060" Margin="0,8,0,0"/>
+                    <TextBlock Text="{x:Static local:InstallerWindow.VersionBanner}" FontSize="11" Foreground="#2A4060" Margin="0,8,0,0"/>
                 </StackPanel>
             </Border>
 
@@ -120,9 +121,21 @@
                         <Border CornerRadius="50" Width="80" Height="80" Background="#0A1A10" HorizontalAlignment="Center">
                             <TextBlock Text="✓" FontSize="40" FontWeight="Black" Foreground="#34D399" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock Text="Installation Complete!" FontSize="22" FontWeight="Black" Foreground="#E8F0FF" HorizontalAlignment="Center"/>
-                        <TextBlock Text="FANZI has been installed successfully." FontSize="13" Foreground="#6A8AAF" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="CompleteTitle" Text="Installation Complete!" FontSize="22" FontWeight="Black" Foreground="#E8F0FF" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="CompleteSubtitle" Text="FANZI has been installed successfully." FontSize="13" Foreground="#6A8AAF" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
                         <TextBlock x:Name="InstallLocationLabel" FontSize="11" Foreground="#3A5A80" HorizontalAlignment="Center"/>
+
+                        <!-- Amber warning: optional components (OpenRGB, VC++ runtime) that failed.
+                             Filled once after all steps finish so nothing overwrites it. -->
+                        <Border x:Name="WarningPanel" IsVisible="False" MaxWidth="520"
+                                CornerRadius="10" Background="#1F1505" BorderBrush="#F59E0B" BorderThickness="1" Padding="14,12">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="⚠ Some components need attention" FontSize="13" FontWeight="Bold" Foreground="#FBBF24"/>
+                                <SelectableTextBlock x:Name="WarningText" FontSize="11" Foreground="#FCD34D" TextWrapping="Wrap"/>
+                                <Button x:Name="OpenRgbDownloadButton" IsVisible="False" Content="Open OpenRGB download page"
+                                        Classes="secondary" HorizontalAlignment="Left" FontSize="12" Padding="12,6"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                   </Panel>
                 </ScrollViewer>

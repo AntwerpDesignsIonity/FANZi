@@ -1,10 +1,9 @@
+using Fanzi.FanControl.Services.OpenRgb;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,28 +12,65 @@ namespace Fanzi.FanControl.Services;
 
 public sealed class OpenRgbServerManager : IDisposable
 {
-    private static readonly HttpClient Http = new();
+    /// <summary>How long to wait for the SDK port after launching OpenRGB (device scan can be slow).</summary>
+    private static readonly TimeSpan PortWaitTimeout = TimeSpan.FromSeconds(30);
+
     private Process? _serverProcess;
     private bool _disposed;
+    private string _status = "Server not started";
+
+    // Test seams: replace file-system/registry detection and the network install.
+    private readonly Func<string?>? _locateOverride;
+    private readonly Func<IProgress<string>?, CancellationToken, Task<OpenRgbInstallResult>>? _installOverride;
+
+    public OpenRgbServerManager()
+    {
+    }
+
+    /// <summary>Test constructor: <paramref name="locate"/> replaces folder/registry/PATH detection
+    /// and <paramref name="install"/> replaces the download.</summary>
+    internal OpenRgbServerManager(
+        Func<string?> locate,
+        Func<IProgress<string>?, CancellationToken, Task<OpenRgbInstallResult>> install)
+    {
+        _locateOverride = locate;
+        _installOverride = install;
+    }
 
     public bool IsRunning => _serverProcess is { HasExited: false };
-    public string Status { get; private set; } = "Server not started";
+
+    /// <summary>Latest human-readable state. Every change is written to the app log.</summary>
+    public string Status
+    {
+        get => _status;
+        private set
+        {
+            if (_status == value) return;
+            _status = value;
+            AppLog.Info($"OpenRGB: {value}");
+        }
+    }
+
     public int Port { get; private set; } = 6742;
     public bool IsInstalled => DetectedPath is not null;
 
-    private static readonly string InstallDir =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FANZI", "OpenRGB");
+    /// <summary>User-selected OpenRGB executable (persisted as AppSettings.OpenRgbPath).</summary>
+    public string? CustomPath { get; private set; }
+
+    /// <summary>Precise reason the last download/install failed (null after a successful install).</summary>
+    public string? LastInstallError { get; private set; }
+
+    private static string InstallDir => OpenRgbInstallLocator.ManagedInstallDirectory;
 
     /// <summary>Platform-specific OpenRGB executable name.</summary>
     private static string ExeName =>
         RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "OpenRGB.exe" : "OpenRGB";
 
     /// <summary>
-    /// All locations FANZI looks for an OpenRGB binary, in priority order. The first two
-    /// entries point next to the running FANZI executable — this is where our installer
-    /// drops the bundled OpenRGB (<installDir>\OpenRGB\), so a fresh install is found
-    /// instantly without any download. The rest cover standard system installs and our
-    /// fallback download directory.
+    /// File-system locations FANZI looks for an OpenRGB binary, in priority order. The first
+    /// entries point next to the running FANZI executable — this is where our installer drops
+    /// the bundled OpenRGB (&lt;installDir&gt;\OpenRGB\). Then our managed download folder and
+    /// the standard system install folders. The registry and PATH are checked afterwards.
     /// </summary>
     private static IEnumerable<string> SearchPaths
     {
@@ -52,10 +88,8 @@ public sealed class OpenRgbServerManager : IDisposable
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                yield return @"C:\Program Files\OpenRGB\OpenRGB.exe";
-                yield return @"C:\Program Files (x86)\OpenRGB\OpenRGB.exe";
-                yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenRGB", "OpenRGB.exe");
-                yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "OpenRGB", "OpenRGB.exe");
+                foreach (var path in OpenRgbInstallLocator.WellKnownExePaths())
+                    yield return path;
             }
             else
             {
@@ -69,29 +103,84 @@ public sealed class OpenRgbServerManager : IDisposable
 
     public string? DetectedPath { get; private set; }
 
-    public void DetectInstallation()
-    {
-        DetectedPath = SearchPaths.FirstOrDefault(File.Exists);
+    /// <summary>
+    /// True only for a file literally named OpenRGB.exe (case-insensitive; "OpenRGB" on Linux/macOS).
+    /// "OpenRGB_Setup.msi", "OpenRGB_1.0.zip", "OpenRGB.exe.lnk" or "OpenRGB-old.exe" are rejected.
+    /// </summary>
+    internal static bool IsOpenRgbExecutableName(string path) =>
+        string.Equals(Path.GetFileName(path), ExeName, StringComparison.OrdinalIgnoreCase);
 
-        if (DetectedPath is null)
+    /// <summary>
+    /// Uses <paramref name="exePath"/> as the OpenRGB executable (user picked it via
+    /// "Locate OpenRGB.exe…" or it was restored from settings). Returns false when the file
+    /// does not exist. Passing null/empty clears the custom path.
+    /// </summary>
+    public bool SetCustomPath(string? exePath)
+    {
+        if (string.IsNullOrWhiteSpace(exePath))
         {
-            var exe = ExeName;
-            var separator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
-            var envPath = Environment.GetEnvironmentVariable("PATH") ?? "";
-            foreach (var dir in envPath.Split(separator))
-            {
-                var candidate = Path.Combine(dir.Trim(), exe);
-                if (File.Exists(candidate))
-                {
-                    DetectedPath = candidate;
-                    break;
-                }
-            }
+            CustomPath = null;
+            DetectInstallation();
+            return true;
         }
 
-        Status = DetectedPath is not null
-            ? $"OpenRGB found: {Path.GetDirectoryName(DetectedPath)}"
-            : "OpenRGB not detected — install from openrgb.org";
+        string full;
+        try { full = Path.GetFullPath(exePath.Trim().Trim('"')); }
+        catch (Exception ex)
+        {
+            Status = $"Invalid OpenRGB path: {ex.Message}";
+            return false;
+        }
+
+        if (!File.Exists(full))
+        {
+            Status = $"OpenRGB not found at {full}";
+            return false;
+        }
+
+        if (!IsOpenRgbExecutableName(full))
+        {
+            Status = $"{Path.GetFileName(full)} is not OpenRGB — select the program file named {ExeName} (not an installer, archive or shortcut)";
+            return false;
+        }
+
+        CustomPath = full;
+        DetectedPath = full;
+        Status = $"Using OpenRGB: {full}";
+        return true;
+    }
+
+    public void DetectInstallation()
+    {
+        string? previous = DetectedPath;
+        string? found = null;
+
+        if (CustomPath is not null && File.Exists(CustomPath))
+            found = CustomPath;
+
+        if (_locateOverride is not null)
+        {
+            found ??= _locateOverride();
+        }
+        else
+        {
+            found ??= SearchPaths.FirstOrDefault(File.Exists);
+
+            if (found is null && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                found = OpenRgbInstallLocator.FindInRegistry();
+
+            found ??= OpenRgbInstallLocator.FindOnPath(ExeName);
+        }
+
+        DetectedPath = found;
+
+        // Only report (and log) when the result changes — the watchdog calls this repeatedly.
+        if (previous != found || Status == "Server not started")
+        {
+            Status = found is not null
+                ? $"OpenRGB found: {Path.GetDirectoryName(found)}"
+                : "OpenRGB not detected — install from openrgb.org";
+        }
     }
 
     public Task<bool> StartServerAsync(int port = 6742, CancellationToken ct = default)
@@ -134,6 +223,7 @@ public sealed class OpenRgbServerManager : IDisposable
 
             try
             {
+                AppLog.Info($"OpenRGB: launching {DetectedPath} --server --server-port {port}");
                 _serverProcess = new Process
                 {
                     StartInfo = new ProcessStartInfo
@@ -151,19 +241,21 @@ public sealed class OpenRgbServerManager : IDisposable
                     EnableRaisingEvents = true,
                 };
 
-                _serverProcess.Exited += (_, _) =>
+                _serverProcess.Exited += (sender, _) =>
                 {
-                    Status = "Server stopped";
+                    int? exitCode = null;
+                    try { exitCode = (sender as Process)?.ExitCode; } catch { }
+                    Status = exitCode is int code ? $"Server stopped (exit code {code})" : "Server stopped";
                     _serverProcess = null;
                 };
 
                 _serverProcess.Start();
 
-                // Wait for the SDK port to actually become reachable (up to 15s).
-                // OpenRGB needs time to scan devices before binding the SDK socket.
-                if (WaitForPortOpen("127.0.0.1", port, TimeSpan.FromSeconds(15)))
+                // Wait for the SDK port to actually become reachable. OpenRGB needs time to
+                // scan devices (SMBus/PawnIO probing can be slow) before binding the socket.
+                if (WaitForPortOpen("127.0.0.1", port, PortWaitTimeout))
                 {
-                    Status = $"Server running on port {port} (PID {_serverProcess.Id})";
+                    Status = $"Server running on port {port} (PID {_serverProcess?.Id})";
                     return true;
                 }
 
@@ -178,12 +270,16 @@ public sealed class OpenRgbServerManager : IDisposable
                 // invocation just forwarded to it and quit without enabling the SDK server.
                 Status = IsOpenRgbAlreadyRunning()
                     ? "OpenRGB is already open without its SDK server — close it so FANZI can launch it in server mode (or enable Settings → SDK Server)"
-                    : "Server process exited before port opened";
+                    : $"OpenRGB exited before opening SDK port {port} ({DetectedPath})";
                 return false;
             }
             catch (Exception ex)
             {
-                Status = $"Start failed: {ex.Message}";
+                // A Process that never started throws from HasExited — don't keep it around.
+                try { _serverProcess?.Dispose(); } catch { }
+                _serverProcess = null;
+                Status = $"Start failed: {ex.GetType().Name}: {ex.Message}";
+                AppLog.Warn("OpenRGB: server start failed", ex);
                 return false;
             }
         }, ct);
@@ -198,7 +294,10 @@ public sealed class OpenRgbServerManager : IDisposable
                 _serverProcess.Kill(entireProcessTree: true);
                 _serverProcess.WaitForExit(3000);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                AppLog.Warn("OpenRGB: failed to stop server process", ex);
+            }
 
             _serverProcess = null;
             Status = "Server stopped";
@@ -273,125 +372,77 @@ public sealed class OpenRgbServerManager : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// Downloads the current OpenRGB Windows portable package (releases page + pinned
+    /// fallbacks), validates it and installs it to %LOCALAPPDATA%\FANZI\OpenRGB.
+    /// On failure <see cref="Status"/> and <see cref="LastInstallError"/> carry the precise
+    /// per-source reason (e.g. "All 3 sources failed: openrgb.org/…: HTTP 404 …").
+    /// </summary>
     public async Task<bool> InstallOpenRgbAsync(IProgress<string>? progress = null, CancellationToken ct = default)
     {
-        // Try mirrors in order — gitlab CI artifacts (always-latest) first, then known release tags.
-        string[] candidates =
-        {
-            "https://gitlab.com/CalcProgrammer1/OpenRGB/-/jobs/artifacts/master/raw/OpenRGB_Windows_64.zip?job=Windows+64",
-            "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_b5f46e3.zip",
-            "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_6b1df76.zip",
-            "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_2bcc167.zip",
-            "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_b5f46e3_x86.zip",
-        };
+        // A running OpenRGB from our folder would lock its files mid-copy.
+        StopServer();
+
+        Status = "Downloading OpenRGB...";
+        AppLog.Info($"OpenRGB: installing to {InstallDir}");
 
         try
         {
-            progress?.Report("Downloading OpenRGB...");
-            Status = "Downloading OpenRGB...";
+            var result = _installOverride is not null
+                ? await _installOverride(progress, ct).ConfigureAwait(false)
+                : await OpenRgbPackageInstaller.InstallLatestAsync(
+                    InstallDir, progress, msg => AppLog.Info(msg), ct).ConfigureAwait(false);
 
-            Directory.CreateDirectory(InstallDir);
-            var zipPath = Path.Combine(InstallDir, "OpenRGB.zip");
-
-            Exception? lastError = null;
-            bool downloaded = false;
-            foreach (var downloadUrl in candidates)
+            if (result.Success && result.ExePath is not null && File.Exists(result.ExePath))
             {
-                try
-                {
-                    progress?.Report($"Trying mirror: {new Uri(downloadUrl).Host}…");
-                    using var response = await Http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
-                    response.EnsureSuccessStatusCode();
-                    await using var stream = await response.Content.ReadAsStreamAsync(ct);
-                    await using var fileStream = File.Create(zipPath);
-                    await stream.CopyToAsync(fileStream, ct);
-
-                    // Sanity check the downloaded file is a real zip (>1 MB, valid header)
-                    if (new FileInfo(zipPath).Length > 1_000_000)
-                    {
-                        downloaded = true;
-                        break;
-                    }
-                    File.Delete(zipPath);
-                }
-                catch (Exception ex)
-                {
-                    lastError = ex;
-                    progress?.Report($"Mirror failed, trying next...");
-                }
-            }
-
-            if (!downloaded)
-            {
-                Status = $"Download failed: {lastError?.Message ?? "all mirrors unreachable"}";
-                progress?.Report("Could not download OpenRGB — check your internet connection.");
-                return false;
-            }
-
-            progress?.Report("Extracting...");
-            Status = "Extracting OpenRGB...";
-
-            if (Directory.GetFiles(InstallDir, "*.exe").Length > 0)
-            {
-                foreach (var f in Directory.GetFiles(InstallDir).Where(f => !f.EndsWith(".zip")))
-                    File.Delete(f);
-                foreach (var d in Directory.GetDirectories(InstallDir))
-                    Directory.Delete(d, true);
-            }
-
-            System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, InstallDir, overwriteFiles: true);
-            File.Delete(zipPath);
-
-            var exeInSubfolder = Directory.GetFiles(InstallDir, "OpenRGB.exe", SearchOption.AllDirectories).FirstOrDefault();
-            if (exeInSubfolder is not null && Path.GetDirectoryName(exeInSubfolder) != InstallDir)
-            {
-                var subDir = Path.GetDirectoryName(exeInSubfolder)!;
-                foreach (var file in Directory.GetFiles(subDir))
-                    File.Move(file, Path.Combine(InstallDir, Path.GetFileName(file)), overwrite: true);
-                foreach (var dir in Directory.GetDirectories(subDir))
-                {
-                    var dest = Path.Combine(InstallDir, Path.GetFileName(dir));
-                    if (Directory.Exists(dest)) Directory.Delete(dest, true);
-                    Directory.Move(dir, dest);
-                }
-                if (Directory.Exists(subDir) && subDir != InstallDir)
-                    Directory.Delete(subDir, true);
-            }
-
-            DetectedPath = Path.Combine(InstallDir, "OpenRGB.exe");
-            if (!File.Exists(DetectedPath))
-            {
-                DetectedPath = Directory.GetFiles(InstallDir, "OpenRGB.exe", SearchOption.AllDirectories).FirstOrDefault();
-            }
-
-            if (DetectedPath is not null && File.Exists(DetectedPath))
-            {
-                Status = $"OpenRGB installed: {InstallDir}";
+                DetectedPath = result.ExePath;
+                LastInstallError = null;
+                Status = $"OpenRGB installed: {Path.GetDirectoryName(result.ExePath)}";
                 progress?.Report("OpenRGB installed successfully!");
                 return true;
             }
 
-            Status = "Install failed: OpenRGB.exe not found after extraction";
-            progress?.Report("Install failed");
+            LastInstallError = result.Error ?? "OpenRGB install failed for an unknown reason";
+            Status = LastInstallError;
+            AppLog.Warn($"OpenRGB: install failed: {LastInstallError}");
+            progress?.Report(LastInstallError);
+            return false;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            LastInstallError = "OpenRGB install cancelled";
+            Status = LastInstallError;
             return false;
         }
         catch (Exception ex)
         {
-            Status = $"Install failed: {ex.Message}";
-            progress?.Report($"Install failed: {ex.Message}");
+            LastInstallError = $"Install failed: {ex.GetType().Name}: {ex.Message}";
+            Status = LastInstallError;
+            AppLog.Error("OpenRGB: install crashed", ex);
+            progress?.Report(LastInstallError);
             return false;
         }
     }
 
     /// <summary>
-    /// One-shot bootstrap called by FANZI on startup:
+    /// One-shot bootstrap called by FANZI on startup and by the watchdog:
     /// 1. Detect existing install
-    /// 2. If not installed, download & extract
+    /// 2. If not installed and <paramref name="allowInstall"/> permits it, download &amp; extract
     /// 3. If not running, launch the server
+    /// <paramref name="allowInstall"/> is only evaluated when a download is actually needed
+    /// (null = always allowed).
     /// </summary>
-    public async Task<bool> EnsureRunningAsync(int port = 6742, IProgress<string>? progress = null, CancellationToken ct = default)
+    public async Task<bool> EnsureRunningAsync(
+        int port = 6742,
+        IProgress<string>? progress = null,
+        CancellationToken ct = default,
+        Func<bool>? allowInstall = null)
     {
         Port = port;
+
+        // Once per app run: clear backups/staging folders an interrupted install left next to our
+        // managed OpenRGB folder (restoring a backup first if the install itself is missing).
+        await CleanupStaleInstallsOnceAsync();
 
         // Fast path: the SDK server is already reachable (ours from a prior launch, or an
         // external OpenRGB with the SDK server enabled). Nothing to do — just connect.
@@ -406,6 +457,14 @@ public sealed class OpenRgbServerManager : IDisposable
 
         if (!IsInstalled)
         {
+            if (allowInstall is not null && !allowInstall())
+            {
+                Status = LastInstallError is not null
+                    ? $"OpenRGB not installed — last download failed: {LastInstallError}"
+                    : "OpenRGB not installed — automatic download skipped (recently attempted)";
+                return false;
+            }
+
             progress?.Report("OpenRGB not found — downloading...");
             bool installed = await InstallOpenRgbAsync(progress, ct);
             if (!installed) return false;
@@ -415,6 +474,33 @@ public sealed class OpenRgbServerManager : IDisposable
         // StartServerAsync rather than the mere presence of an OpenRGB process, so a GUI
         // instance without the SDK server can't fool us into a broken "connected" state.
         return await StartServerAsync(port, ct);
+    }
+
+    private int _staleCleanupStarted;
+
+    /// <summary>
+    /// Runs <see cref="OpenRgbPackageInstaller.CleanupStaleInstallFolders"/> on the managed install
+    /// folder the first time it is called. Skipped for test instances (fake install seam) so tests
+    /// never touch the user's %LOCALAPPDATA%.
+    /// </summary>
+    private Task CleanupStaleInstallsOnceAsync()
+    {
+        if (_installOverride is not null || Interlocked.Exchange(ref _staleCleanupStarted, 1) != 0)
+            return Task.CompletedTask;
+
+        return Task.Run(() =>
+        {
+            try
+            {
+                int removed = OpenRgbPackageInstaller.CleanupStaleInstallFolders(InstallDir, msg => AppLog.Info(msg));
+                if (removed > 0)
+                    AppLog.Info($"OpenRGB: removed {removed} stale install folder(s) next to {InstallDir}");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("OpenRGB: stale install folder cleanup failed", ex);
+            }
+        });
     }
 
     public void Dispose()

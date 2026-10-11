@@ -13,9 +13,13 @@ $ProjectPath = "$PSScriptRoot\src\Fanzi.FanControl\Fanzi.FanControl.csproj"
 $InstallerProject = "$PSScriptRoot\src\Fanzi.Installer\Fanzi.Installer.csproj"
 $PublishBase = "$PSScriptRoot\publish"
 
+# Single source of truth for the version: <Version> in Fanzi.FanControl.csproj.
+$AppVersion = (Select-Xml -Path $ProjectPath -XPath "//Version" | Select-Object -First 1).Node.InnerText
+if (-not $AppVersion) { $AppVersion = "0.0.0" }
+
 Write-Host ""
 Write-Host "  ╔══════════════════════════════════════════╗" -ForegroundColor Blue
-Write-Host "  ║      FANZI v2.1 — Build System           ║" -ForegroundColor Blue
+Write-Host ("  ║      FANZI v{0} — Build System" -f $AppVersion).PadRight(44) "║" -ForegroundColor Blue
 Write-Host "  ║    Ionity Global Pty Ltd                 ║" -ForegroundColor DarkGray
 Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor Blue
 Write-Host ""

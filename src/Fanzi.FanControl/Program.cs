@@ -2,6 +2,7 @@ using Avalonia;
 using Fanzi.FanControl.Services;
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
 
@@ -10,50 +11,149 @@ namespace Fanzi.FanControl;
 [SupportedOSPlatform("windows")]
 sealed class Program
 {
+    private const string SingleInstanceMutexName = "Global\\FANZI_IONITY_SingleInstance_v3";
+
+    /// <summary>A second instance sets this event so the running instance shows its window.</summary>
+    internal const string ShowWindowEventName = "FANZI_IONITY_ShowWindow";
+
+    private static readonly TimeSpan RecoveredMutexWait = TimeSpan.FromSeconds(10);
+
     private static Mutex? _singleInstanceMutex;
+    private static EventWaitHandle? _showWindowEvent;
 
     [STAThread]
     public static void Main(string[] args)
     {
-        CrashGuardService.Initialize();
+        bool recovered = CrashGuardService.IsRecoveredStart(args);
+        int restartCount = CrashGuardService.ParseRestartCount(args);
+        bool startMinimized = args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
 
-        _singleInstanceMutex = new Mutex(true, "Global\\FANZI_IONITY_SingleInstance_v3", out bool createdNew);
-        if (!createdNew)
+        CrashGuardService.Initialize(restartCount, startMinimized);
+
+        AppLog.Info($"FANZi IO-nity v{AppVersion.Display} starting (pid {Environment.ProcessId}, args: {string.Join(' ', args)}, " +
+                    $"OS: {RuntimeInformation.OSDescription}, {RuntimeInformation.OSArchitecture}, {RuntimeInformation.FrameworkDescription})");
+
+        bool ownsMutex = AcquireSingleInstance(recovered);
+        if (!ownsMutex)
         {
-            // Another instance is already running — bring it to foreground if possible
-            try
-            {
-                var procs = System.Diagnostics.Process.GetProcessesByName("Fanzi.FanControl");
-                foreach (var p in procs)
-                {
-                    if (p.Id != System.Diagnostics.Process.GetCurrentProcess().Id)
-                    {
-                        // Signal the other instance (it will show its window)
-                        break;
-                    }
-                }
-            }
-            catch { }
+            AppLog.Info("Another FANZi instance is already running — asking it to show its window, then exiting.");
+            SignalRunningInstance();
+            _singleInstanceMutex?.Dispose();
             return;
         }
 
         try
         {
-            bool startMinimized = args.Contains("--minimized", StringComparer.OrdinalIgnoreCase);
+            _showWindowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowEventName);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Could not create the show-window event; a second launch won't restore this window.", ex);
+        }
+
+        try
+        {
             App.StartMinimizedFromArgs = startMinimized;
 
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
         {
+            AppLog.Error("Fatal exception in Main", ex);
             CrashGuardService.WriteCrashLog(ex, "Main", isTerminating: true);
             throw;
         }
         finally
         {
-            _singleInstanceMutex.ReleaseMutex();
-            _singleInstanceMutex.Dispose();
+            AppLog.Info("FANZi IO-nity exiting.");
+            try { _singleInstanceMutex?.ReleaseMutex(); } catch { }
+            _singleInstanceMutex?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Takes the single-instance mutex. A CrashGuard restart (<c>--recovered</c>) starts while the
+    /// crashed process may still hold it, so it waits up to 10 s instead of giving up immediately.
+    /// </summary>
+    private static bool AcquireSingleInstance(bool recovered)
+    {
+        try
+        {
+            _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out bool createdNew);
+            if (createdNew)
+                return true;
+
+            if (!recovered)
+                return false;
+
+            AppLog.Info("Recovered start: waiting for the previous instance to release the single-instance lock...");
+            try
+            {
+                return _singleInstanceMutex.WaitOne(RecoveredMutexWait);
+            }
+            catch (AbandonedMutexException)
+            {
+                // The crashed process died holding it — ownership passes to us.
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            // If the mutex itself is unusable, run rather than refuse to start.
+            AppLog.Warn("Single-instance mutex unavailable — continuing without it.", ex);
+            _singleInstanceMutex?.Dispose();
+            _singleInstanceMutex = null;
+            return true;
+        }
+    }
+
+    private static void SignalRunningInstance()
+    {
+        try
+        {
+            if (EventWaitHandle.TryOpenExisting(ShowWindowEventName, out EventWaitHandle? showEvent))
+            {
+                using (showEvent)
+                    showEvent.Set();
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Could not signal the running FANZi instance.", ex);
+        }
+    }
+
+    /// <summary>Waits on a background thread for second-instance launches and runs <paramref name="onSignal"/>.</summary>
+    internal static void StartShowWindowListener(Action onSignal)
+    {
+        EventWaitHandle? handle = _showWindowEvent;
+        if (handle is null)
+            return;
+
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                while (handle.WaitOne())
+                {
+                    AppLog.Info("Second launch detected — showing the main window.");
+                    try { onSignal(); }
+                    catch (Exception ex) { AppLog.Warn("Show-window request failed", ex); }
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("Show-window listener stopped", ex);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "FANZI show-window listener",
+        };
+        thread.Start();
     }
 
     public static AppBuilder BuildAvaloniaApp()

@@ -11,6 +11,10 @@ public sealed class SmartFanCurveEngine
     private readonly AnomalyDetector _anomalyDetector = new();
     private readonly AcousticIntelligence _acoustic = new();
     private readonly DeltaTController _deltaT = new();
+
+    // GPU dies run far hotter than case air, so GPU heat-load uses its own scale:
+    // nothing below 60 °C, ramping to max at 85 °C (ambient 22 °C).
+    private readonly DeltaTController _gpuHeat = new() { LowTargetDeltaT = 38, HighTargetDeltaT = 63 };
     private double _lastSuggestedPercent = 50;
     private DateTime _lastTick = DateTime.UtcNow;
 
@@ -26,6 +30,9 @@ public sealed class SmartFanCurveEngine
 
     /// <summary>True if Delta-T airflow control affects case fan suggestions.</summary>
     public bool DeltaTFusionEnabled { get; set; } = true;
+
+    /// <summary>Most the case/GPU heat-load signal may add on top of the curve result (percentage points).</summary>
+    public double MaxHeatLoadBoostPercent { get; set; } = 25;
 
     public double ComputeOptimalFanSpeed(
         double currentTempC,
@@ -66,12 +73,9 @@ public sealed class SmartFanCurveEngine
 
         // Delta-T fusion: if GPU/case sensors are providing significant heat-load,
         // bump the suggestion to ensure case airflow keeps up with GPU heat dump.
+        // The CPU is deliberately not fed in again — the curve/predictor already covers it.
         if (DeltaTFusionEnabled && (gpuTempC.HasValue || caseTempC.HasValue))
-        {
-            var deltaT = _deltaT.Compute(caseTempC, currentTempC, gpuTempC);
-            // Take the MAX of the curve-based result and ΔT recommendation
-            result = Math.Max(result, deltaT.SuggestedFanPercent);
-        }
+            result = ApplyHeatLoadBoost(result, gpuTempC, caseTempC);
 
         if (AcousticFirstEnabled)
         {
@@ -216,26 +220,42 @@ public sealed class SmartFanCurveEngine
         ("Linear",        "Simple proportional 30→100%",                  GenerateLinearCurve()),
     };
 
-    private static double InterpolateCurve(List<FanCurvePoint> curve, double tempC)
+    /// <summary>
+    /// Raises the curve result when the case or GPU is heat-loaded. Each source only counts once it
+    /// is above its own low setpoint (so an idle GPU changes nothing), and the boost is capped at
+    /// <see cref="MaxHeatLoadBoostPercent"/> above the curve so a busy GPU alone can't pin the CPU fan.
+    /// </summary>
+    private double ApplyHeatLoadBoost(double curveResult, double? gpuTempC, double? caseTempC)
     {
-        var sorted = curve.OrderBy(p => p.TemperatureC).ToList();
+        double heatLoad = 0;
 
-        if (tempC <= sorted[0].TemperatureC)
-            return sorted[0].FanPercent;
-        if (tempC >= sorted[^1].TemperatureC)
-            return sorted[^1].FanPercent;
-
-        for (int i = 0; i < sorted.Count - 1; i++)
+        if (caseTempC.HasValue)
         {
-            if (tempC >= sorted[i].TemperatureC && tempC <= sorted[i + 1].TemperatureC)
-            {
-                double range = sorted[i + 1].TemperatureC - sorted[i].TemperatureC;
-                double t = (tempC - sorted[i].TemperatureC) / range;
-                return sorted[i].FanPercent + t * (sorted[i + 1].FanPercent - sorted[i].FanPercent);
-            }
+            var c = _deltaT.Compute(caseTempC, null, null);
+            if (c.DeltaT > _deltaT.LowTargetDeltaT) heatLoad = Math.Max(heatLoad, c.SuggestedFanPercent);
         }
 
-        return 50;
+        if (gpuTempC.HasValue)
+        {
+            var g = _gpuHeat.Compute(null, null, gpuTempC);
+            if (g.DeltaT > _gpuHeat.LowTargetDeltaT) heatLoad = Math.Max(heatLoad, g.SuggestedFanPercent);
+        }
+
+        if (heatLoad <= curveResult) return curveResult;
+        return Math.Min(Math.Min(100, heatLoad), curveResult + MaxHeatLoadBoostPercent);
+    }
+
+    /// <summary>Same interpolation the Fans-tab curve editor draws (<see cref="FanCurveMath.Interpolate"/>).</summary>
+    private static double InterpolateCurve(List<FanCurvePoint> curve, double tempC)
+    {
+        var sorted = curve
+            .Where(p => p is not null)
+            .OrderBy(p => p.TemperatureC)
+            .Select(p => new CurvePoint(p.TemperatureC, p.FanPercent))
+            .ToList();
+
+        double result = FanCurveMath.Interpolate(sorted, tempC);
+        return double.IsFinite(result) ? result : 50;
     }
 
     public void Reset()

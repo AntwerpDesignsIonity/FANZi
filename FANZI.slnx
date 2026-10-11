@@ -3,4 +3,8 @@
     <Project Path="src/Fanzi.FanControl/Fanzi.FanControl.csproj" />
     <Project Path="src/Fanzi.Installer/Fanzi.Installer.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Fanzi.FanControl.Tests/Fanzi.FanControl.Tests.csproj" />
+    <Project Path="tests/Fanzi.FanControl.RenderTests/Fanzi.FanControl.RenderTests.csproj" />
+  </Folder>
 </Solution>

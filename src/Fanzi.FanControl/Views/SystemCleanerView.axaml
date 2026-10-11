@@ -3,16 +3,16 @@
              xmlns:vm="using:Fanzi.FanControl.ViewModels"
              x:Class="Fanzi.FanControl.Views.SystemCleanerView"
              x:DataType="vm:SystemCleanerViewModel">
-    <ScrollViewer>
-    <Border CornerRadius="20" Background="#0C1828" BorderBrush="#1E3254" BorderThickness="1" Padding="24">
+    <ScrollViewer Classes="tab-scroll">
+    <Border Classes="panel">
         <StackPanel Spacing="16">
 
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="System Cleaner &amp; Optimiser" FontSize="22" FontWeight="Black" Foreground="#E8F0FF"/>
+                    <TextBlock Text="System Cleaner &amp; Optimiser" Classes="h1" FontSize="22"/>
                     <TextBlock Text="Cache cleaning, RAM trim, browser caches, prefetch, Windows update cache, and more" Foreground="#5A7899" FontSize="11"/>
                 </StackPanel>
-                <Border Grid.Column="1" Background="#0A1A10" CornerRadius="10" Padding="14,8" BorderBrush="#166534" BorderThickness="1">
+                <Border Grid.Column="1" Classes="tile" Background="#0A1A10" BorderBrush="#166534" Padding="14,8">
                     <StackPanel>
                         <TextBlock Text="{Binding TotalSelectedSize}" FontSize="16" FontWeight="Bold" Foreground="#22C55E"/>
                         <TextBlock Text="will be freed" Foreground="#4A6A8F" FontSize="10"/>
@@ -21,21 +21,21 @@
             </Grid>
 
             <!-- Quick actions row -->
-            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+            <Border Classes="tile" Padding="14,12">
                 <StackPanel Spacing="10">
-                    <TextBlock Text="QUICK ACTIONS" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2"/>
+                    <TextBlock Text="QUICK ACTIONS" Classes="label-caps" FontSize="11"/>
                     <ItemsControl>
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <WrapPanel/>
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
-                        <Button Content="🧠 Trim RAM" Command="{Binding TrimRamCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
-                        <Button Content="🗑 Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
-                        <Button Content="🌐 Flush DNS Cache" Command="{Binding FlushDnsCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
-                        <Button Content="🧹 Windows Cleanup" Command="{Binding WindowsCleanupCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
-                        <Button Content="💾 Optimise C: (TRIM)" Command="{Binding OptimiseDriveCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
-                        <Button Content="♻ Reset SysMain/Superfetch" Command="{Binding ResetSysMainCommand}" Margin="0,0,8,8" Padding="14,8" Background="#1E3A60" Foreground="#FFF" CornerRadius="8" FontWeight="Bold"/>
+                        <Button Content="🧠 Trim RAM" Command="{Binding TrimRamCommand}" Classes="ghost" Margin="0,0,8,8" Padding="14,8" FontWeight="Bold"/>
+                        <Button Content="🗑 Empty Recycle Bin" Command="{Binding EmptyRecycleBinCommand}" Classes="ghost" Margin="0,0,8,8" Padding="14,8" FontWeight="Bold"/>
+                        <Button Content="🌐 Flush DNS Cache" Command="{Binding FlushDnsCommand}" Classes="ghost" Margin="0,0,8,8" Padding="14,8" FontWeight="Bold"/>
+                        <Button Content="🧹 Windows Cleanup" Command="{Binding WindowsCleanupCommand}" Classes="ghost" Margin="0,0,8,8" Padding="14,8" FontWeight="Bold"/>
+                        <Button Content="💾 Optimise C: (TRIM)" Command="{Binding OptimiseDriveCommand}" Classes="ghost" Margin="0,0,8,8" Padding="14,8" FontWeight="Bold"/>
+                        <Button Content="♻ Reset SysMain/Superfetch" Command="{Binding ResetSysMainCommand}" Classes="ghost" Margin="0,0,8,8" Padding="14,8" FontWeight="Bold"/>
                     </ItemsControl>
                     <TextBlock Text="{Binding RamStatus}" Foreground="#22C55E" FontSize="11"/>
                     <TextBlock Text="{Binding LastResult}" Foreground="#FB923C" FontSize="11"/>
@@ -43,17 +43,17 @@
             </Border>
 
             <!-- Scan + clean -->
-            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+            <Border Classes="tile" Padding="14,12">
                 <StackPanel Spacing="12">
                     <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                        <TextBlock Grid.Column="0" Text="DEEP SCAN" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="DEEP SCAN" Classes="label-caps" FontSize="11" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Content="Scan System" Command="{Binding ScanCommand}" Classes="primary" Padding="14,6" FontWeight="Bold"/>
-                        <Button Grid.Column="2" Content="Select All" Command="{Binding SelectAllCommand}" Padding="10,5"/>
-                        <Button Grid.Column="3" Content="None" Command="{Binding SelectNoneCommand}" Padding="10,5"/>
+                        <Button Grid.Column="2" Content="Select All" Command="{Binding SelectAllCommand}" Classes="ghost" Padding="10,5"/>
+                        <Button Grid.Column="3" Content="None" Command="{Binding SelectNoneCommand}" Classes="ghost" Padding="10,5"/>
                     </Grid>
                     <TextBlock Text="{Binding ScanStatus}" Foreground="#7090B0" FontSize="11"/>
 
-                    <Border Background="#061018" CornerRadius="10" MaxHeight="380">
+                    <Border Classes="tile" Background="#061018" Padding="0" CornerRadius="10" MaxHeight="380">
                         <DataGrid ItemsSource="{Binding Targets}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                                   Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
                             <DataGrid.Columns>
@@ -69,24 +69,27 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                         <TextBlock Grid.Column="0" Text="Tick what you want gone, then Clean Selected. Files go straight to deletion (not Recycle Bin)."
                                    Foreground="#5A7899" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                        <Button Grid.Column="1" Content="🗑 Clean Selected" Command="{Binding CleanSelectedCommand}" Background="#7C2D12" Foreground="#FFF" Padding="16,8" FontWeight="Bold" CornerRadius="10"/>
+                        <Button Grid.Column="1" Content="🗑 Clean Selected" Command="{Binding CleanSelectedCommand}" Classes="danger" Padding="16,8" FontWeight="Bold"/>
                     </Grid>
 
                     <!-- Confirmation dialog -->
-                    <Border IsVisible="{Binding ShowCleanConfirmation}" Background="#1A0505" BorderBrush="#DC2626" BorderThickness="2" CornerRadius="12" Padding="16,12">
+                    <Border IsVisible="{Binding ShowCleanConfirmation}" Classes="banner danger" Padding="16,12">
                         <StackPanel Spacing="8">
                             <TextBlock Text="⚠️ ARE YOU SURE?" FontSize="16" FontWeight="Black" Foreground="#FCA5A5"/>
-                            <TextBlock Text="This will PERMANENTLY DELETE selected files. This cannot be undone." FontSize="12" Foreground="#FECACA" TextWrapping="Wrap"/>
-                            <TextBlock Foreground="#FBBF24" FontSize="12" FontWeight="Bold">
+                            <TextBlock Text="This will PERMANENTLY DELETE the selected files. They do not go to the Recycle Bin and cannot be recovered." FontSize="12" Foreground="#FECACA" TextWrapping="Wrap"/>
+                            <TextBlock Foreground="#FBBF24" FontSize="12" FontWeight="Bold" TextWrapping="Wrap">
                                 <Run Text="Type"/>
                                 <Run Text=" CLEAN " FontWeight="Black" Foreground="#FFF"/>
-                                <Run Text="below and click Confirm to proceed:"/>
+                                <Run Text="below, then click"/>
+                                <Run Text=" Delete permanently " FontWeight="Black" Foreground="#FFF"/>
+                                <Run Text="to proceed:"/>
                             </TextBlock>
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                                 <TextBox Grid.Column="0" Text="{Binding CleanConfirmInput, Mode=TwoWay}" Watermark="Type CLEAN here..."
                                          Background="#0A0202" Foreground="#FFF" BorderBrush="#DC2626" CornerRadius="8" Padding="10,6" FontSize="13" FontWeight="Bold"/>
-                                <Button Grid.Column="1" Content="✅ Confirm" Command="{Binding ConfirmCleanCommand}" Background="#DC2626" Foreground="#FFF" Padding="14,6" FontWeight="Black" CornerRadius="8"/>
-                                <Button Grid.Column="2" Content="Cancel" Command="{Binding CancelCleanCommand}" Background="#1E3A60" Foreground="#FFF" Padding="14,6" FontWeight="Bold" CornerRadius="8"/>
+                                <Button Grid.Column="1" Content="🗑 Delete permanently" Command="{Binding ConfirmCleanCommand}" Classes="danger strong" Padding="16,7"
+                                        ToolTip.Tip="Irreversible: permanently deletes every selected item"/>
+                                <Button Grid.Column="2" Content="Cancel" Command="{Binding CancelCleanCommand}" Classes="ghost" Padding="14,6" FontWeight="Bold"/>
                             </Grid>
                             <TextBlock Text="{Binding CleanConfirmError}" Foreground="#EF4444" FontSize="11" FontWeight="Bold"/>
                         </StackPanel>
@@ -94,21 +97,21 @@
                 </StackPanel>
             </Border>
 
-            <Border Background="#1C0D00" BorderBrush="#B45309" BorderThickness="1" CornerRadius="10" Padding="14,10">
+            <Border Classes="tile" Background="#1C0D00" BorderBrush="#B45309">
                 <TextBlock Text="⚠ Cleaning is irreversible — files are NOT moved to Recycle Bin. Close browsers/apps before cleaning their caches to avoid 'file in use' errors."
                            Foreground="#FDE68A" FontSize="11" TextWrapping="Wrap"/>
             </Border>
 
             <!-- ═════ INSTALLED PROGRAMS UNINSTALLER ════════════ -->
-            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+            <Border Classes="tile" Padding="14,12">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                        <TextBlock Grid.Column="0" Text="INSTALLED PROGRAMS — UNINSTALLER" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="INSTALLED PROGRAMS — UNINSTALLER" Classes="label-caps" FontSize="11" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Content="Scan Installed Programs" Command="{Binding ScanInstalledProgramsCommand}" Classes="primary" Padding="14,6" FontWeight="Bold"/>
-                        <Button Grid.Column="2" Content="Uninstall Selected" Command="{Binding UninstallSelectedProgramCommand}" Background="#7C2D12" Foreground="#FFF" Padding="14,6" FontWeight="Bold" CornerRadius="8"/>
+                        <Button Grid.Column="2" Content="Uninstall Selected" Command="{Binding UninstallSelectedProgramCommand}" Classes="danger" Padding="14,6" FontWeight="Bold"/>
                     </Grid>
                     <TextBlock Text="{Binding InstalledProgramsStatus}" Foreground="#7090B0" FontSize="11"/>
-                    <Border Background="#061018" CornerRadius="10" MaxHeight="280">
+                    <Border Classes="tile" Background="#061018" Padding="0" CornerRadius="10" MaxHeight="280">
                         <DataGrid ItemsSource="{Binding InstalledPrograms}" SelectedItem="{Binding SelectedProgram, Mode=TwoWay}"
                                   GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                                   Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
@@ -126,16 +129,16 @@
             </Border>
 
             <!-- ═════ STARTUP MANAGER ════════════ -->
-            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+            <Border Classes="tile" Padding="14,12">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
-                        <TextBlock Grid.Column="0" Text="STARTUP PROGRAMS" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="STARTUP PROGRAMS" Classes="label-caps" FontSize="11" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Content="Scan Startup" Command="{Binding ScanStartupCommand}" Classes="primary" Padding="14,6" FontWeight="Bold"/>
-                        <Button Grid.Column="2" Content="Disable Selected" Command="{Binding DisableSelectedStartupCommand}" Padding="12,6"/>
-                        <Button Grid.Column="3" Content="Delete Selected" Command="{Binding DeleteSelectedStartupCommand}" Background="#7C2D12" Foreground="#FFF" Padding="12,6" CornerRadius="8"/>
+                        <Button Grid.Column="2" Content="Disable Selected" Command="{Binding DisableSelectedStartupCommand}" Classes="ghost" Padding="12,6"/>
+                        <Button Grid.Column="3" Content="Delete Selected" Command="{Binding DeleteSelectedStartupCommand}" Classes="danger" Padding="12,6"/>
                     </Grid>
                     <TextBlock Text="{Binding StartupStatus}" Foreground="#7090B0" FontSize="11"/>
-                    <Border Background="#061018" CornerRadius="10" MaxHeight="240">
+                    <Border Classes="tile" Background="#061018" Padding="0" CornerRadius="10" MaxHeight="240">
                         <DataGrid ItemsSource="{Binding StartupEntries}" SelectedItem="{Binding SelectedStartup, Mode=TwoWay}"
                                   GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                                   Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
@@ -151,15 +154,15 @@
             </Border>
 
             <!-- ═════ REGISTRY SCAN ════════════ -->
-            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+            <Border Classes="tile" Padding="14,12">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                        <TextBlock Grid.Column="0" Text="REGISTRY ISSUES" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="REGISTRY ISSUES" Classes="label-caps" FontSize="11" VerticalAlignment="Center"/>
                         <Button Grid.Column="1" Content="Scan Registry" Command="{Binding ScanRegistryCommand}" Classes="primary" Padding="14,6" FontWeight="Bold"/>
-                        <Button Grid.Column="2" Content="Fix All Issues" Command="{Binding FixRegistryIssuesCommand}" Background="#7C2D12" Foreground="#FFF" Padding="14,6" FontWeight="Bold" CornerRadius="8"/>
+                        <Button Grid.Column="2" Content="Fix All Issues" Command="{Binding FixRegistryIssuesCommand}" Classes="danger" Padding="14,6" FontWeight="Bold"/>
                     </Grid>
                     <TextBlock Text="{Binding RegistryStatus}" Foreground="#7090B0" FontSize="11"/>
-                    <Border Background="#061018" CornerRadius="10" MaxHeight="220">
+                    <Border Classes="tile" Background="#061018" Padding="0" CornerRadius="10" MaxHeight="220">
                         <DataGrid ItemsSource="{Binding RegistryIssues}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                                   Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
                             <DataGrid.Columns>
@@ -173,28 +176,28 @@
             </Border>
 
             <!-- ═════ PRIVACY WIPE ════════════ -->
-            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+            <Border Classes="tile" Padding="14,12">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <StackPanel Grid.Column="0">
-                            <TextBlock Text="PRIVACY WIPE" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2"/>
+                            <TextBlock Text="PRIVACY WIPE" Classes="label-caps" FontSize="11"/>
                             <TextBlock Text="{Binding PrivacyStatus}" Foreground="#7090B0" FontSize="11"/>
                         </StackPanel>
-                        <Button Grid.Column="1" Content="🛡 Wipe Privacy Traces" Command="{Binding WipePrivacyCommand}" Background="#7C2D12" Foreground="#FFF" Padding="16,8" FontWeight="Bold" CornerRadius="8"/>
+                        <Button Grid.Column="1" Content="🛡 Wipe Privacy Traces" Command="{Binding WipePrivacyCommand}" Classes="danger" Padding="16,8" FontWeight="Bold"/>
                     </Grid>
                 </StackPanel>
             </Border>
 
             <!-- ═════ DISK ANALYZER ════════════ -->
-            <Border Background="#0A1422" CornerRadius="12" Padding="14,12">
+            <Border Classes="tile" Padding="14,12">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                        <TextBlock Grid.Column="0" Text="DISK ANALYZER — top space consumers" FontSize="11" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="0" Text="DISK ANALYZER — top space consumers" Classes="label-caps" FontSize="11" VerticalAlignment="Center"/>
                         <TextBox Grid.Column="1" Text="{Binding DiskAnalyzerRoot, Mode=TwoWay}" Width="180" Background="#081320" Foreground="#C4D8F4" BorderBrush="#1E3A60" CornerRadius="8" Padding="8,4" FontSize="11"/>
                         <Button Grid.Column="2" Content="Analyze" Command="{Binding AnalyzeDiskCommand}" Classes="primary" Padding="14,6" FontWeight="Bold"/>
                     </Grid>
                     <TextBlock Text="{Binding DiskAnalyzerStatus}" Foreground="#7090B0" FontSize="11"/>
-                    <Border Background="#061018" CornerRadius="10" MaxHeight="280">
+                    <Border Classes="tile" Background="#061018" Padding="0" CornerRadius="10" MaxHeight="280">
                         <DataGrid ItemsSource="{Binding DiskHogs}" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                                   Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
                             <DataGrid.Columns>

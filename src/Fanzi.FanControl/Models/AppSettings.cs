@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Fanzi.FanControl.Models;
 
@@ -19,6 +21,9 @@ public sealed class AppSettings
     public int ReducedPollingIntervalSeconds { get; set; } = 10;
     public string? LastExportPath { get; set; }
 
+    /// <summary>User-selected OpenRGB.exe ("Locate OpenRGB.exe…"); null = auto-detect.</summary>
+    public string? OpenRgbPath { get; set; }
+
     // Modular tab visibility — let the user disable sections they don't need
     public bool ShowTaskManagerTab { get; set; } = true;
     public bool ShowNetworkManagerTab { get; set; } = true;
@@ -28,21 +33,60 @@ public sealed class AppSettings
     // Overlay
     public bool OverlayTransparent { get; set; } = false;
     public double OverlayOpacity { get; set; } = 0.90;
+    public bool OverlayTopmost { get; set; } = false;
+
+    /// <summary>CPU temperature sparkline under the overlay's CPU gauge. Missing in older files → default on.</summary>
+    public bool OverlayShowCpuHistory { get; set; } = true;
+
+    /// <summary>Last overlay position in screen pixels; null = default (top-right of the primary screen).</summary>
+    public int? OverlayX { get; set; }
+    public int? OverlayY { get; set; }
+
+    /// <summary>In-app toast notifications (temperature, anomaly, OpenRGB, profile alerts); added in v4, default on.</summary>
+    public bool ToastNotificationsEnabled { get; set; } = true;
+
+    /// <summary>"Reduce motion": no gauge sweeps, number counts or looping loader animations; added in v5, default off.</summary>
+    public bool ReduceMotion { get; set; }
+
+    /// <summary>Overlay layout: compact = header + gauges only, expanded = gauges + bars + sparkline; added in v5, default expanded.</summary>
+    public bool OverlayCompact { get; set; }
+
+    /// <summary>Settings schema version written by this build.</summary>
+    public const int CurrentVersion = 5;
 
     /// <summary>
-    /// Applies one-time migrations for settings created before v2.1.
-    /// Old installs had OverlayTransparent=true (buggy AcrylicBlur on Win11).
+    /// Applies one-time migrations for settings created by older builds.
+    /// v1 → v2: old installs had OverlayTransparent=true (buggy AcrylicBlur on Win11).
+    /// v2 → v3: adds OverlayTopmost / OverlayX / OverlayY — the new fields keep their defaults
+    /// and every existing user value is left untouched.
+    /// v3 → v4: adds ToastNotificationsEnabled — switched on for upgraded installs (the field did not
+    /// exist before, so no user choice is overwritten); everything else is left untouched.
+    /// v4 → v5: adds ReduceMotion (off) and OverlayCompact (off = expanded, the only layout before v5);
+    /// both keep their defaults, so upgraded installs look and move exactly as before.
     /// </summary>
     public void Migrate()
     {
-        const int CurrentVersion = 2;
-
         if (SettingsVersion < 2)
         {
             OverlayTransparent = false;
             OverlayOpacity = 0.90;
         }
 
-        SettingsVersion = CurrentVersion;
+        if (SettingsVersion < 4)
+            ToastNotificationsEnabled = true;
+
+        SettingsVersion = Math.Max(SettingsVersion, CurrentVersion);
+    }
+
+    /// <summary>
+    /// Repairs values a hand-edited or damaged settings file can contain: polling intervals are
+    /// clamped (a 0 or negative interval would spin the refresh loop) and null profiles are dropped.
+    /// Call after <see cref="Migrate"/>.
+    /// </summary>
+    public void Normalize()
+    {
+        PollingIntervalSeconds = Math.Clamp(PollingIntervalSeconds, 1, 60);
+        ReducedPollingIntervalSeconds = Math.Clamp(ReducedPollingIntervalSeconds, 2, 120);
+        Profiles = (Profiles ?? new List<FanProfile>()).Where(profile => profile is not null).ToList();
     }
 }

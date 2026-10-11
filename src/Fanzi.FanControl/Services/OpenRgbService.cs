@@ -18,8 +18,12 @@ public sealed class OpenRgbService : IRgbService
 {
     private OpenRgbClient?      _client;
     private OpenRGB.NET.Device[]? _deviceCache;
-    private bool                _disposed;
+    private volatile bool       _disposed;
+    private bool                _writeFailureLogged;
     private readonly object     _lock = new();
+
+    /// <summary>How long Dispose waits for an in-flight SDK call before closing the socket anyway.</summary>
+    private static readonly TimeSpan DisposeLockTimeout = TimeSpan.FromSeconds(2);
 
     public bool   IsConnected   { get; private set; }
     public string ServerVersion { get; private set; } = "Not connected";
@@ -29,6 +33,9 @@ public sealed class OpenRgbService : IRgbService
     /// which devices were switched to Direct mode and which (if any) failed.
     /// </summary>
     public string ModeSwitchStatus { get; private set; } = "";
+
+    /// <summary>Error from the last GetAllControllerData call; null when it succeeded.</summary>
+    public string? LastDeviceQueryError { get; private set; }
 
     // ── Connection ────────────────────────────────────────────────────────────
 
@@ -42,14 +49,19 @@ public sealed class OpenRgbService : IRgbService
             cancellationToken.ThrowIfCancellationRequested();
             lock (_lock)
             {
+                // A connect queued before shutdown must not create a client nobody will dispose.
+                if (_disposed) return false;
+
                 try
                 {
                     _client?.Dispose();
                     _client = null;
                     _deviceCache = null;
+                    _writeFailureLogged = false;
                     IsConnected   = false;
                     ServerVersion = "Not connected";
                     ModeSwitchStatus = "";
+                    LastDeviceQueryError = null;
 
                     // Force IPv4 — OpenRGB server only binds 0.0.0.0, and
                     // "localhost" resolves to ::1 (IPv6) on Windows which fails.
@@ -108,6 +120,7 @@ public sealed class OpenRgbService : IRgbService
                 {
                     var devices = _client.GetAllControllerData();
                     _deviceCache = devices;
+                    LastDeviceQueryError = null;
 
                     // Auto-switch every device to Direct/Custom mode so per-LED
                     // colour updates actually reach the hardware.  Without this,
@@ -141,6 +154,9 @@ public sealed class OpenRgbService : IRgbService
                 }
                 catch (Exception ex)
                 {
+                    // Usually a protocol mismatch: the controller data could not be parsed.
+                    LastDeviceQueryError = $"{ex.GetType().Name}: {ex.Message.Split('\n')[0]}";
+                    AppLog.Warn("OpenRGB: GetAllControllerData failed", ex);
                     ServerVersion = $"Error: {ex.Message.Split('\n')[0]}";
                     IsConnected = false;
                     return Array.Empty<RgbDeviceInfo>();
@@ -236,14 +252,14 @@ public sealed class OpenRgbService : IRgbService
                 try
                 {
                     // Use cached device layout — avoids a full SDK round-trip every frame.
-                    var devices = _deviceCache ?? _client.GetAllControllerData();
+                    var devices = GetDevicesCached();
                     if (deviceIndex < 0 || deviceIndex >= devices.Length) return;
 
                     int count  = devices[deviceIndex].Leds.Length;
                     var colors = Enumerable.Repeat(ToOpenRgb(color), count).ToArray();
                     _client.UpdateLeds(deviceIndex, colors);
                 }
-                catch { IsConnected = false; }
+                catch (Exception ex) { HandleWriteFailure(ex); }
             }
         }, cancellationToken);
     }
@@ -261,10 +277,15 @@ public sealed class OpenRgbService : IRgbService
                 if (_client is null || !IsConnected) return;
                 try
                 {
-                    var openRgbColors = colors.Select(ToOpenRgb).ToArray();
+                    var devices = GetDevicesCached();
+                    if (deviceIndex < 0 || deviceIndex >= devices.Length) return;
+
+                    // UpdateLeds needs exactly one colour per LED: a stale or short frame from an
+                    // effect would otherwise be rejected and wrongly drop the whole connection.
+                    var openRgbColors = FitToLedCount(colors, devices[deviceIndex].Leds.Length);
                     _client.UpdateLeds(deviceIndex, openRgbColors);
                 }
-                catch { IsConnected = false; }
+                catch (Exception ex) { HandleWriteFailure(ex); }
             }
         }, cancellationToken);
     }
@@ -282,7 +303,7 @@ public sealed class OpenRgbService : IRgbService
                 try
                 {
                     // Use cached device layout — critical for performance.
-                    var devices = _deviceCache ?? _client.GetAllControllerData();
+                    var devices = GetDevicesCached();
                     var openColor = ToOpenRgb(color);
                     for (int i = 0; i < devices.Length; i++)
                     {
@@ -292,7 +313,7 @@ public sealed class OpenRgbService : IRgbService
                         _client.UpdateLeds(i, colors);
                     }
                 }
-                catch { IsConnected = false; }
+                catch (Exception ex) { HandleWriteFailure(ex); }
             }
         }, cancellationToken);
     }
@@ -310,7 +331,7 @@ public sealed class OpenRgbService : IRgbService
                 if (_client is null || !IsConnected) return;
                 try
                 {
-                    var devices = _deviceCache ?? _client.GetAllControllerData();
+                    var devices = GetDevicesCached();
                     if (deviceIndex < 0 || deviceIndex >= devices.Length) return;
 
                     var dev = devices[deviceIndex];
@@ -331,7 +352,7 @@ public sealed class OpenRgbService : IRgbService
 
                     _client.UpdateLeds(deviceIndex, leds);
                 }
-                catch { IsConnected = false; }
+                catch (Exception ex) { HandleWriteFailure(ex); }
             }
         }, cancellationToken);
     }
@@ -341,13 +362,65 @@ public sealed class OpenRgbService : IRgbService
     private static OpenRGB.NET.Color ToOpenRgb(RgbColor c) =>
         new(c.R, c.G, c.B);
 
+    /// <summary>Device layout from cache, refreshing (and caching) it once when empty. Caller holds _lock.</summary>
+    private OpenRGB.NET.Device[] GetDevicesCached() =>
+        _deviceCache ??= _client!.GetAllControllerData();
+
+    /// <summary>
+    /// Returns exactly <paramref name="ledCount"/> colours: extra entries are dropped, missing ones
+    /// repeat the last supplied colour (black when none were supplied).
+    /// </summary>
+    internal static OpenRGB.NET.Color[] FitToLedCount(IReadOnlyList<RgbColor> colors, int ledCount)
+    {
+        if (ledCount <= 0) return Array.Empty<OpenRGB.NET.Color>();
+
+        var result = new OpenRGB.NET.Color[ledCount];
+        var fill = colors.Count > 0 ? ToOpenRgb(colors[^1]) : ToOpenRgb(RgbColor.Black);
+        for (int i = 0; i < ledCount; i++)
+            result[i] = i < colors.Count ? ToOpenRgb(colors[i]) : fill;
+        return result;
+    }
+
+    /// <summary>
+    /// A failed LED write means the SDK socket is gone (OpenRGB closed, crashed or restarted).
+    /// Mark the link offline with a visible reason so the RGB watchdog reconnects, and log the
+    /// first failure per connection instead of silently swallowing it every frame. Caller holds _lock.
+    /// </summary>
+    private void HandleWriteFailure(Exception ex)
+    {
+        IsConnected  = false;
+        _deviceCache = null;
+        ServerVersion = $"Connection lost — {ex.Message.Split('\n')[0]}";
+
+        if (!_writeFailureLogged)
+        {
+            _writeFailureLogged = true;
+            AppLog.Warn("OpenRGB: LED write failed; marking connection offline for reconnect", ex);
+        }
+    }
+
     // ── IDisposable ───────────────────────────────────────────────────────────
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        _client?.Dispose();
-        _client = null;
+
+        // Wait briefly for an in-flight SDK call so its socket isn't closed underneath it;
+        // never block shutdown on a hung OpenRGB server.
+        bool locked = false;
+        try
+        {
+            Monitor.TryEnter(_lock, DisposeLockTimeout, ref locked);
+            try { _client?.Dispose(); }
+            catch (Exception ex) { AppLog.Warn("OpenRGB: client dispose failed", ex); }
+            _client      = null;
+            _deviceCache = null;
+            IsConnected  = false;
+        }
+        finally
+        {
+            if (locked) Monitor.Exit(_lock);
+        }
     }
 }

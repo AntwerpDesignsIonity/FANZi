@@ -23,9 +23,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private readonly EmailNotificationService _emailService = new();
     private readonly SmartFanCurveEngine _aiEngine = new();
-    private readonly ProcessWatcher _processWatcher = new();
     private readonly ThermalCoach _thermalCoach = new();
-    private readonly GameModeDetector _gameModeDetector = new();
+    private readonly GameModeDetector _gameModeDetector;
     private readonly SystemHealthScorer _healthScorer = new();
     private readonly AediKnowledgeEngine _aediEngine = new();
     private readonly GoogleProfileService _googleProfile = new();
@@ -39,6 +38,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private bool _isWindowVisible = true;
     private DateTimeOffset _lastAlertEmailSent = DateTimeOffset.MinValue;
     private static readonly TimeSpan AlertEmailCooldown = TimeSpan.FromMinutes(10);
+
+    // While the user drags the CPU fan slider, hardware readings must not snap it back.
+    private DateTime _lastUserSliderChangeUtc = DateTime.MinValue;
+    private static readonly TimeSpan SliderSyncHoldOff = TimeSpan.FromSeconds(5);
+
+    // AI auto-fan only writes to the hardware when its target moves by at least 1 %.
+    private double? _lastAiAppliedPercent;
+    private string? _lastAiAppliedChannelId;
+
+    // Per-poll errors are logged once per distinct error per minute, not every poll.
+    private string _lastPollErrorSignature = string.Empty;
+    private DateTime _lastPollErrorLoggedUtc = DateTime.MinValue;
+    private static readonly TimeSpan PollErrorLogCooldown = TimeSpan.FromMinutes(1);
+
+    /// <summary>Raised on the UI thread once settings are loaded and applied (App applies StartMinimized).</summary>
+    public event EventHandler? SettingsLoaded;
 
     public RgbControlViewModel RgbControl { get; }
     public TaskManagerViewModel TaskManagerVm { get; } = new();
@@ -68,6 +83,24 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _gpuLoad = "--";
     [ObservableProperty] private string _gpuClock = "--";
     [ObservableProperty] private string _gpuPower = "--";
+
+    // Numeric twins of the strings above — drive gauges and temperature-reactive colours.
+    [ObservableProperty] private double? _cpuPackageTempValue;
+    [ObservableProperty] private double? _cpuAverageTempValue;
+    [ObservableProperty] private double? _cpuHotspotTempValue;
+    [ObservableProperty] private double? _gpuCoreTempValue;
+    [ObservableProperty] private double? _gpuHotspotTempValue;
+    [ObservableProperty] private double? _hottestTempValue;
+    /// <summary>Hero/overlay CPU gauge value: package → hotspot → average core (null shows "--").</summary>
+    [ObservableProperty] private double? _cpuGaugeTempValue;
+    [ObservableProperty] private double _cpuLoadValue;
+    [ObservableProperty] private double _gpuLoadValue;
+    [ObservableProperty] private double _healthScoreValue = 100;
+    [ObservableProperty] private double _cpuFanRpmValue;
+
+    /// <summary>Tray icon tooltip, refreshed every poll (see <see cref="TrayTooltipFormatter"/>).</summary>
+    [ObservableProperty] private string _trayTooltip = TrayTooltipFormatter.Default;
+
     [ObservableProperty] private string _cpuName = string.Empty;
     [ObservableProperty] private string _gpuName = string.Empty;
     [ObservableProperty] private string _gpuVram = string.Empty;
@@ -105,6 +138,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _aiStatus = "AEDi: Learning...";
     [ObservableProperty] private string _aiTrend = "Stable";
     [ObservableProperty] private string _aiPrediction = "--";
+    [ObservableProperty] private string _aiForecast = "--";
     [ObservableProperty] private string _aiSuggestedFan = "--";
     [ObservableProperty] private bool _hasAnomaly;
     [ObservableProperty] private string _anomalyMessage = string.Empty;
@@ -116,12 +150,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _healthEmoji = "🟢";
     [ObservableProperty] private string _healthSummary = "System Health: 100/100 (A+)";
     [ObservableProperty] private string _healthInsights = "";
-    [ObservableProperty] private bool _isGameMode;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(GameModeTitle))] private bool _isGameMode;
+    /// <summary>Hero tile title: short and static so it never trims; details go to <see cref="GameModeDetail"/>.</summary>
+    public string GameModeTitle => IsGameMode ? "🎮 Game Mode" : "Desktop mode";
     [ObservableProperty] private string _gameModeStatus = "Desktop mode";
     [ObservableProperty] private string _detectedGame = "";
+    [ObservableProperty] private string _gameModeDetail = "";
     [ObservableProperty] private string _coachRecommendations = "";
     [ObservableProperty] private bool _hasCoachRecommendations;
-    [ObservableProperty] private string _ionityVersion = "IO-nity v2.1";
+    [ObservableProperty] private string _ionityVersion = $"IO-nity {AppVersion.ShortLabel}";
 
     // ── Google Profile ────────────────────────────────────────────────────
 
@@ -140,11 +177,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private int _aediNavigateTab = -1;
 
     [ObservableProperty] private bool _startWithWindows;
+    [ObservableProperty] private string _startupStatus = string.Empty;
     [ObservableProperty] private bool _startMinimized;
     [ObservableProperty] private bool _minimizeToTray = true;
     [ObservableProperty] private bool _closeToTray = true;
     [ObservableProperty] private bool _overlayTransparent = false;
     [ObservableProperty] private double _overlayOpacity = 0.90;
+    [ObservableProperty] private bool _overlayTopmost;
+
+    /// <summary>Index of the RGB tab in the main TabControl (Dashboard, Fans, Sensors, RGB, …).</summary>
+    internal const int RgbTabIndex = 3;
 
     // ── Collections ─────────���─────────────────────────────────────────────────
 
@@ -172,6 +214,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public IRelayCommand<ProfileFileInfo> LoadProfileFromDiskCommand { get; }
     public IRelayCommand<ProfileFileInfo> DeleteProfileFromDiskCommand { get; }
     public IRelayCommand ToggleMiniOverlayCommand { get; }
+    public IRelayCommand OpenRgbTabCommand { get; }
     public IRelayCommand ExportHardwareReportCommand { get; }
     public IAsyncRelayCommand GoogleLoginCommand { get; }
     public IRelayCommand GoogleLogoutCommand { get; }
@@ -195,19 +238,31 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     // ── Constructor ────────────────────────────────────��──────────────────────
 
     public MainWindowViewModel(IHardwareMonitorService hardwareMonitorService, IRgbService rgbService, ISettingsService settingsService)
+        : this(hardwareMonitorService, settingsService, new RgbControlViewModel(rgbService))
     {
+        StartUpdateChecks();
+    }
+
+    /// <param name="rgbControl">RGB tab view model; tests/render harness pass one without background
+    /// work so no OpenRGB detection, download or server start happens.</param>
+    /// <param name="gameModeDetector">Optional detector with a faked process scan (render harness);
+    /// defaults to the live process-list detector.</param>
+    internal MainWindowViewModel(IHardwareMonitorService hardwareMonitorService, ISettingsService settingsService, RgbControlViewModel rgbControl,
+        GameModeDetector? gameModeDetector = null)
+    {
+        _gameModeDetector = gameModeDetector ?? new GameModeDetector();
         _hardwareMonitorService = hardwareMonitorService;
         _settingsService = settingsService;
         FanChannels = new ObservableCollection<FanChannelViewModel>();
         CpuReadings = new ObservableCollection<CpuReadingSnapshot>();
         GpuReadings = new ObservableCollection<GpuReadingSnapshot>();
         Profiles = new ObservableCollection<ProfileTabViewModel>();
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync);
-        ApplyCpuFanCommand = new AsyncRelayCommand(ApplyCpuFanAsync);
-        AutoCpuFanCommand = new AsyncRelayCommand(AutoCpuFanAsync);
+        RefreshCommand = new AsyncRelayCommand(() => SafeExecuteAsync(RefreshAsync, "Refresh"));
+        ApplyCpuFanCommand = new AsyncRelayCommand(() => SafeExecuteAsync(ApplyCpuFanAsync, "Apply CPU fan"));
+        AutoCpuFanCommand = new AsyncRelayCommand(() => SafeExecuteAsync(AutoCpuFanAsync, "CPU fan auto mode"));
         ToggleHelpCommand = new RelayCommand(() => ShowHelp = !ShowHelp);
         AddProfileCommand = new RelayCommand(AddProfile);
-        SendTestEmailCommand = new AsyncRelayCommand(SendTestEmailAsync);
+        SendTestEmailCommand = new AsyncRelayCommand(() => SafeExecuteAsync(SendTestEmailAsync, "Test email"));
         ShowWindowCommand = new RelayCommand(ShowWindow);
         ExitApplicationCommand = new RelayCommand(ExitApplication);
 
@@ -215,23 +270,49 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         PinToStartCommand = new RelayCommand(PinToStart);
         CreateDesktopShortcutCommand = new RelayCommand(CreateDesktopShortcut);
         OpenProfilesFolderCommand = new RelayCommand(() => _profileMgr.OpenProfilesFolder());
-        SaveCurrentProfileCommand = new AsyncRelayCommand(SaveCurrentProfileToDiskAsync);
-        RefreshProfileListCommand = new AsyncRelayCommand(RefreshDiskProfilesAsync);
+        SaveCurrentProfileCommand = new AsyncRelayCommand(() => SafeExecuteAsync(SaveCurrentProfileToDiskAsync, "Save profile"));
+        RefreshProfileListCommand = new AsyncRelayCommand(() => SafeExecuteAsync(RefreshDiskProfilesAsync, "Refresh profile list"));
         LoadProfileFromDiskCommand = new RelayCommand<ProfileFileInfo>(LoadProfileFromDisk);
         DeleteProfileFromDiskCommand = new RelayCommand<ProfileFileInfo>(DeleteProfileFromDisk);
         ToggleMiniOverlayCommand = new RelayCommand(ToggleMiniOverlay);
+        OpenRgbTabCommand = new RelayCommand(() => SelectedTabIndex = RgbTabIndex);
         ExportHardwareReportCommand = new RelayCommand(ExportHardwareReport);
-        GoogleLoginCommand = new AsyncRelayCommand(GoogleLoginAsync);
+        GoogleLoginCommand = new AsyncRelayCommand(() => SafeExecuteAsync(GoogleLoginAsync, "Google sign-in"));
         GoogleLogoutCommand = new RelayCommand(GoogleLogout);
-        GoogleSyncUpCommand = new AsyncRelayCommand(GoogleSyncUpAsync);
-        GoogleSyncDownCommand = new AsyncRelayCommand(GoogleSyncDownAsync);
+        GoogleSyncUpCommand = new AsyncRelayCommand(() => SafeExecuteAsync(GoogleSyncUpAsync, "Google sync up"));
+        GoogleSyncDownCommand = new AsyncRelayCommand(() => SafeExecuteAsync(GoogleSyncDownAsync, "Google sync down"));
         AediSearchCommand = new RelayCommand(AediSearch);
         AediNavigateCommand = new RelayCommand<object>(AediNavigate);
 
-        RgbControl = new RgbControlViewModel(rgbService);
-        _ = RefreshDiskProfilesAsync();
+        RgbControl = rgbControl;
+        WireAlerts();
+        _ = SafeExecuteAsync(RefreshDiskProfilesAsync, "Refresh profile list");
 
         _ = RunStartupAsync();
+    }
+
+    /// <summary>
+    /// Runs an async action so that a failure is logged and shown in the status bar instead of
+    /// escaping to the dispatcher (which would crash the app). Cancellation during shutdown is silent.
+    /// </summary>
+    internal async Task SafeExecuteAsync(Func<Task> action, string context)
+    {
+        try
+        {
+            await action();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException) when (_disposed)
+        {
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error($"{context} failed", ex);
+            if (!_disposed)
+                StatusMessage = $"{context} failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     // ── Lifecycle ────────────────────────────���────────────────────────────────
@@ -239,15 +320,29 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public void SetWindowVisibility(bool visible)
     {
         _isWindowVisible = visible;
+        // Back on screen: the tray alert has been seen (or is stale), drop it from the tooltip.
+        if (visible) ClearTrayAlert();
     }
 
     private void ShowWindow()
     {
-        if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+        if (Avalonia.Application.Current?.ApplicationLifetime is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+
+        var window = desktop.MainWindow;
+        if (window is null)
+            return;
+
+        try
         {
-            desktop.MainWindow?.Show();
-            desktop.MainWindow!.WindowState = Avalonia.Controls.WindowState.Normal;
-            desktop.MainWindow.Activate();
+            window.Show();
+            window.WindowState = Avalonia.Controls.WindowState.Normal;
+            window.Activate();
+        }
+        catch (InvalidOperationException ex)
+        {
+            // e.g. the window was already closed during shutdown.
+            AppLog.Warn("Show window ignored", ex);
         }
     }
 
@@ -309,6 +404,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             string path = await _profileMgr.SaveAsync(active, _disposeTokenSource.Token);
             ProfileSaveStatus = $"Saved → {path}";
+            RaiseAlert(AppAlertKind.ProfileSaved, AppAlertLevel.Success, "profile:saved:" + active.Name, "Profile saved",
+                $"'{active.Name}' was saved to the profile library.");
             await RefreshDiskProfilesAsync();
         }
         catch (Exception ex)
@@ -320,7 +417,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void LoadProfileFromDisk(ProfileFileInfo? info)
     {
         if (info is null) return;
-        _ = LoadProfileFromDiskAsync(info);
+        _ = SafeExecuteAsync(() => LoadProfileFromDiskAsync(info), "Load profile");
     }
 
     private async Task LoadProfileFromDiskAsync(ProfileFileInfo info)
@@ -339,6 +436,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Profiles.Add(tab);
             ActivateProfileTab(tab, applyToVm: true);
             ProfileSaveStatus = $"Loaded '{loaded.Name}' from disk";
+            RaiseAlert(AppAlertKind.ProfileLoaded, AppAlertLevel.Information, "profile:loaded:" + loaded.Name, "Profile loaded",
+                $"'{loaded.Name}' is now the active profile.");
         });
     }
 
@@ -366,9 +465,29 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            if (_miniOverlay.IsVisible) { _miniOverlay.Hide(); MiniOverlayVisible = false; }
+            if (_miniOverlay.IsVisible) HideMiniOverlay();
             else { _miniOverlay.Show(); MiniOverlayVisible = true; }
         }
+    }
+
+    /// <summary>Hides the overlay (✕ button, context menu, tray toggle) and keeps MiniOverlayVisible in sync.</summary>
+    public void HideMiniOverlay()
+    {
+        _miniOverlay?.Hide();
+        MiniOverlayVisible = false;
+    }
+
+    /// <summary>Saved overlay position in screen pixels, or null when never moved.</summary>
+    public int? OverlayX => _appSettings.OverlayX;
+    public int? OverlayY => _appSettings.OverlayY;
+
+    /// <summary>Persists the overlay position (called debounced by the overlay window).</summary>
+    public void SaveOverlayPosition(int x, int y)
+    {
+        if (_disposed || (_appSettings.OverlayX == x && _appSettings.OverlayY == y)) return;
+        _appSettings.OverlayX = x;
+        _appSettings.OverlayY = y;
+        _ = SaveSettingsAsync();
     }
 
     // ── Hardware report export ───────────────────────────────────────────────
@@ -522,8 +641,21 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (_disposed) return;
         _disposed = true;
         _disposeTokenSource.Cancel();
-        _refreshLock.Dispose();
-        _disposeTokenSource.Dispose();
+
+        // Only release the lock/token source when no refresh is in flight; a running refresh
+        // still touches both and would throw ObjectDisposedException. (Neither holds unmanaged
+        // resources here, so leaving them to the GC is safe.)
+        if (_refreshLock.Wait(0))
+        {
+            _refreshLock.Dispose();
+            _disposeTokenSource.Dispose();
+        }
+
+        try { _miniOverlay?.Close(); }
+        catch (Exception ex) { AppLog.Warn("Closing the mini overlay failed", ex); }
+        _miniOverlay = null;
+
+        UnwireAlerts();
         RgbControl.Dispose();
         TaskManagerVm.Dispose();
         NetworkManagerVm.Dispose();
@@ -537,14 +669,81 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private async Task RunStartupAsync()
     {
-        Task<AppSettings> loadTask = _settingsService.LoadAsync(_disposeTokenSource.Token);
-        await Task.Delay(TimeSpan.FromMilliseconds(800));
-        _appSettings = await loadTask;
-        _appSettings.Migrate();
-        ApplySettingsToVm();
-        InitialiseProfiles();
-        IsLoading = false;
-        await RunRefreshLoopAsync();
+        try
+        {
+            if (_hardwareMonitorService.InitializationError is { } initError)
+                StatusMessage = initError;
+
+            Task<AppSettings> loadTask = _settingsService.LoadAsync(_disposeTokenSource.Token);
+            Task delayTask = Task.Delay(TimeSpan.FromMilliseconds(800), _disposeTokenSource.Token);
+            // The file is usually read long before the splash delay ends: honour "Reduce motion" for the loader too.
+            if (await Task.WhenAny(loadTask, delayTask) == loadTask && loadTask.IsCompletedSuccessfully)
+                ApplyEarlyMotionPreference(loadTask.Result);
+            await delayTask;
+            try
+            {
+                _appSettings = await loadTask;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                AppLog.Error("Loading settings failed — using defaults", ex);
+                _appSettings = new AppSettings();
+            }
+            _appSettings.Migrate();
+            _appSettings.Normalize();
+            ApplySettingsToVm();
+            RgbControl.ApplyOpenRgbSettings(_appSettings.OpenRgbPath, path =>
+            {
+                _appSettings.OpenRgbPath = path;
+                _ = SaveSettingsAsync();
+            });
+            InitialiseProfiles();
+            EnsureStartupTaskMatchesSettings();
+
+            try { SettingsLoaded?.Invoke(this, EventArgs.Empty); }
+            catch (Exception ex) { AppLog.Warn("SettingsLoaded handler failed", ex); }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Startup failed", ex);
+            StatusMessage = $"Startup error: {ex.GetType().Name}: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+
+        try
+        {
+            await RunRefreshLoopAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("Refresh loop stopped", ex);
+            if (!_disposed)
+                StatusMessage = $"Hardware polling stopped: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Users upgrading from builds that wrote the (ignored) HKCU Run value get the scheduled task
+    /// created on first launch, so "Start with Windows" actually works.
+    /// </summary>
+    private void EnsureStartupTaskMatchesSettings()
+    {
+        if (!_appSettings.StartWithWindows)
+            return;
+
+        _ = SafeExecuteAsync(async () =>
+        {
+            bool ok = await Task.Run(() => StartupService.IsRegistered || StartupService.SetStartup(true));
+            if (!ok)
+                StartupStatus = "Start with Windows could not be registered — see the log for details.";
+        }, "Start with Windows");
     }
 
     private void ApplySettingsToVm()
@@ -564,6 +763,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ShowSystemCleanerTab = _appSettings.ShowSystemCleanerTab;
             OverlayTransparent = _appSettings.OverlayTransparent;
             OverlayOpacity = _appSettings.OverlayOpacity;
+            OverlayTopmost = _appSettings.OverlayTopmost;
+            OverlayShowCpuHistory = _appSettings.OverlayShowCpuHistory;
+            ToastNotificationsEnabled = _appSettings.ToastNotificationsEnabled;
+            ReduceMotion = _appSettings.ReduceMotion;
+            OverlayCompact = _appSettings.OverlayCompact;
         }
         finally
         {
@@ -577,8 +781,19 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_suppressProfileSync) return;
         _appSettings.StartWithWindows = value;
-        StartupService.SetStartup(value);
         _ = SaveSettingsAsync();
+        StartupStatus = value ? "Registering startup task..." : "Removing startup task...";
+        _ = SafeExecuteAsync(async () =>
+        {
+            bool ok = await Task.Run(() => StartupService.SetStartup(value));
+            StartupStatus = (value, ok) switch
+            {
+                (true, true) => "FANZi will start (elevated, minimized) when you sign in.",
+                (true, false) => "Could not create the startup task — see the log for details.",
+                (false, true) => "Start with Windows disabled.",
+                (false, false) => "Could not remove the startup task — see the log for details.",
+            };
+        }, "Start with Windows");
     }
 
     partial void OnStartMinimizedChanged(bool value)
@@ -632,9 +847,25 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     partial void OnAiAutoFanEnabledChanged(bool value)
     {
+        OnPropertyChanged(nameof(FanCurveStatus));
         if (_suppressProfileSync) return;
         _appSettings.AiAutoFanEnabled = value;
-        if (!value) _aiEngine.Reset();
+        if (!value)
+        {
+            _aiEngine.Reset();
+            _lastAiAppliedPercent = null;
+            _lastAiAppliedChannelId = null;
+
+            // The AI left the CPU fan at a manual duty — hand it back to the BIOS.
+            if (CpuFanCanControl && _cpuFanChannelId is { Length: > 0 } channelId)
+            {
+                _ = SafeExecuteAsync(async () =>
+                {
+                    var result = await _hardwareMonitorService.RestoreAutomaticControlAsync(channelId, _disposeTokenSource.Token);
+                    CpuFanCapability = result.Message;
+                }, "Restore automatic CPU fan control");
+            }
+        }
         _ = SaveSettingsAsync();
     }
 
@@ -656,6 +887,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_suppressProfileSync) return;
         _appSettings.OverlayOpacity = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnOverlayTopmostChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.OverlayTopmost = value;
         _ = SaveSettingsAsync();
     }
 
@@ -689,6 +927,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (applyToVm)
             ApplyProfileToVm(tab.Profile);
+        else
+            LoadFanCurveFromProfile(tab.Profile);
 
         _ = SaveSettingsAsync();
     }
@@ -706,6 +946,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             _suppressProfileSync = false;
         }
+        LoadFanCurveFromProfile(profile);
     }
 
     private void UpdateActiveProfileFromVm()
@@ -769,7 +1010,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private async Task SaveSettingsAsync()
     {
         try { await _settingsService.SaveAsync(_appSettings, _disposeTokenSource.Token); }
-        catch { }
+        catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) when (_disposed) { }
+        catch (Exception ex) { AppLog.Error("Saving settings failed", ex); }
     }
 
     // ── Refresh loop with adaptive polling ────────────────────────────────────
@@ -795,6 +1038,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private async Task RefreshAsync()
     {
         if (_disposed) return;
+
+        // All bound properties/collections must be touched on the UI thread. Callers normally
+        // are on it already (continuations resume on Avalonia's context); hop over if not.
+        if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(RefreshAsync);
+            return;
+        }
+
         if (!await _refreshLock.WaitAsync(0)) return;
 
         try
@@ -814,6 +1066,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             GpuLoad = FormatPercent(snapshot.GpuLoadPercent);
             GpuClock = FormatClock(snapshot.GpuCoreClockMhz);
             GpuPower = FormatPower(snapshot.GpuPowerWatts);
+            CpuPackageTempValue = snapshot.CpuPackageTemperature;
+            CpuAverageTempValue = snapshot.CpuAverageTemperature;
+            CpuHotspotTempValue = snapshot.CpuHotspotTemperature;
+            CpuGaugeTempValue = CpuTemperatureFallback.Select(
+                snapshot.CpuPackageTemperature, snapshot.CpuHotspotTemperature, snapshot.CpuAverageTemperature);
+            GpuCoreTempValue = snapshot.GpuCoreTemperature;
+            GpuHotspotTempValue = snapshot.GpuHotspotTemperature;
+            CpuLoadValue = snapshot.CpuTotalLoadPercent ?? 0;
+            GpuLoadValue = snapshot.GpuLoadPercent ?? 0;
             CpuName = snapshot.CpuName ?? string.Empty;
             GpuName = snapshot.GpuName ?? string.Empty;
             GpuVram = FormatVram(snapshot.GpuMemoryUsedMb, snapshot.GpuMemoryTotalMb);
@@ -837,38 +1098,83 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             CpuFanSpeed = snapshot.CpuFan?.SpeedRpm is double rpm
                 ? $"{rpm:F0} RPM"
                 : "No CPU fan/pump exposed on this motherboard";
+            CpuFanRpmValue = snapshot.CpuFan?.SpeedRpm ?? 0;
             CpuFanControl = snapshot.CpuFan?.CurrentControlPercent is double control ? $"{control:F0}%" : "Auto/BIOS";
             CpuFanCapability = snapshot.CpuFan?.CapabilityMessage ?? "No dedicated CPU fan header was detected.";
             CpuFanCanControl = snapshot.CpuFan?.CanControl == true;
             _cpuFanChannelId = snapshot.CpuFan?.Id;
 
-            if (snapshot.CpuFan?.CurrentControlPercent is double cpuFanPercent)
+            // Don't fight the user: only follow the hardware value once the slider has been idle for 5 s.
+            if (snapshot.CpuFan?.CurrentControlPercent is double cpuFanPercent
+                && DateTime.UtcNow - _lastUserSliderChangeUtc >= SliderSyncHoldOff)
                 SetCpuFanDesiredPercent(cpuFanPercent);
 
             FanCountLabel = snapshot.Fans.Count == 1 ? "1 channel" : $"{snapshot.Fans.Count} channels";
             LastUpdated = $"Updated {snapshot.Timestamp.LocalDateTime:HH:mm:ss}";
             StatusMessage = snapshot.StatusMessage;
 
+            // Each consumer is isolated: one failing (e.g. a duplicate channel) must not stop the
+            // others — in particular the RGB hardware-reactive feed — on every poll.
+            RunPollStep("CPU readings", () => SyncCpuReadings(snapshot.CpuReadings));
+            RunPollStep("GPU readings", () => SyncGpuReadings(snapshot.GpuReadings));
+            RunPollStep("Sensor heatmap", () => UpdateHeatmap(snapshot.CpuReadings, snapshot.GpuReadings));
+            RunPollStep("Fan channels", () => SynchronizeFans(snapshot.Fans));
+            // Detect liquid cooling: CPU cooler reported as a Pump/AIO, or any pump in the fan list.
+            var pump = snapshot.CpuFan is { DeviceKind: FanDeviceKind.Pump or FanDeviceKind.AioCooler }
+                ? snapshot.CpuFan
+                : snapshot.Fans.FirstOrDefault(f => f.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler);
+
+            RunPollStep("RGB hardware feed", () =>
+            {
+                RgbControl.UpdateHardwareData(
+                    cpuTempC: snapshot.CpuPackageTemperature ?? snapshot.CpuAverageTemperature,
+                    gpuTempC: snapshot.GpuCoreTemperature,
+                    cpuLoadPct: snapshot.CpuTotalLoadPercent,
+                    pumpRpm: pump?.SpeedRpm,
+                    isLiquidCooled: pump is not null);
+            });
+            RunPollStep("Thermal history", () => RecordHistory(
+                snapshot.Timestamp.UtcDateTime,
+                cpuTempC: CpuGaugeTempValue,
+                gpuTempC: snapshot.GpuCoreTemperature,
+                cpuLoadPct: snapshot.CpuTotalLoadPercent,
+                gpuLoadPct: snapshot.GpuLoadPercent,
+                coolerRpm: snapshot.CpuFan?.SpeedRpm ?? pump?.SpeedRpm));
+
             // ── AI Engine update ──────────────────────────────────────
             double? hottest = snapshot.CpuHotspotTemperature ?? snapshot.CpuPackageTemperature ?? snapshot.CpuAverageTemperature;
             double cpuLoad = snapshot.CpuTotalLoadPercent ?? 0;
+            HottestTempValue = hottest;
 
             if (hottest.HasValue)
             {
                 double suggested = _aiEngine.ComputeOptimalFanSpeed(
                     hottest.Value, cpuLoad, snapshot.CpuFan?.SpeedRpm,
-                    _activeProfileTab?.Profile.FanCurve);
+                    _activeProfileTab?.Profile.FanCurve,
+                    gpuTempC: snapshot.GpuCoreTemperature);
 
                 AiSuggestedFan = $"{suggested:F0}%";
                 AiTrend = _aiEngine.Predictor.Trend.ToString();
                 AiPrediction = _aiEngine.Predictor.PredictedTempIn30s.HasValue
                     ? $"{_aiEngine.Predictor.PredictedTempIn30s.Value:F1}C in 30s"
                     : "Learning...";
+                // Coach "30s FORECAST" slot: the bare value, "--" while learning (its status pill says so).
+                AiForecast = _aiEngine.Predictor.PredictedTempIn30s is double forecast ? $"{forecast:F1}°C" : "--";
                 AiStatus = _aiEngine.IsLearning ? "AEDi: Active" : "AEDi: Learning...";
 
                 if (AiAutoFanEnabled && CpuFanCanControl && !string.IsNullOrEmpty(_cpuFanChannelId))
                 {
-                    await _hardwareMonitorService.SetFanControlAsync(_cpuFanChannelId, suggested, _disposeTokenSource.Token);
+                    // Only touch the hardware when the target actually moved (≥ 1 %) or the channel changed.
+                    bool channelChanged = !string.Equals(_lastAiAppliedChannelId, _cpuFanChannelId, StringComparison.OrdinalIgnoreCase);
+                    if (channelChanged || _lastAiAppliedPercent is not double last || Math.Abs(suggested - last) >= 1.0)
+                    {
+                        var aiResult = await _hardwareMonitorService.SetFanControlAsync(_cpuFanChannelId, suggested, _disposeTokenSource.Token);
+                        if (aiResult.Success)
+                        {
+                            _lastAiAppliedPercent = suggested;
+                            _lastAiAppliedChannelId = _cpuFanChannelId;
+                        }
+                    }
                 }
 
                 // Anomaly detection
@@ -880,6 +1186,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                         HasAnomaly = true;
                         AnomalySeverity = report.Severity.ToString();
                         AnomalyMessage = string.Join(" | ", report.Anomalies);
+                        RaiseAnomalyAlert(report);
                     }
                     else
                     {
@@ -890,9 +1197,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             }
 
             // ── IO-nity AI: Thermal Coach ─────────────────────────────
-            if (hottest.HasValue && snapshot.CpuFan?.SpeedRpm is double fanRpm)
+            // Pump-only / RPM-less systems are coached too: fall back to the pump RPM, else skip RPM rules.
+            if (hottest.HasValue)
             {
-                _thermalCoach.Record(hottest.Value, cpuLoad, fanRpm);
+                _thermalCoach.Record(hottest.Value, cpuLoad, snapshot.CpuFan?.SpeedRpm ?? pump?.SpeedRpm);
                 var coachRecs = _thermalCoach.GetRecommendations();
                 if (coachRecs.Count > 0)
                 {
@@ -915,6 +1223,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             IsGameMode = _gameModeDetector.IsGameModeActive;
             GameModeStatus = _gameModeDetector.StatusMessage;
             DetectedGame = _gameModeDetector.DetectedGame;
+            GameModeDetail = _gameModeDetector.DetailMessage;
 
             // ── IO-nity AI: System Health Score ───────────────────────
             _healthScorer.Update(
@@ -925,21 +1234,29 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 fanRpm: snapshot.CpuFan?.SpeedRpm,
                 fanPercent: snapshot.CpuFan?.CurrentControlPercent);
             HealthScore = $"{_healthScorer.CurrentScore:F0}";
+            HealthScoreValue = _healthScorer.CurrentScore;
             HealthGrade = _healthScorer.Grade;
             HealthEmoji = _healthScorer.GradeEmoji;
             HealthSummary = _healthScorer.Summary;
             HealthInsights = string.Join(" • ", _healthScorer.Insights);
+            _trayBaseTooltip = TrayTooltipFormatter.Format(
+                snapshot.CpuPackageTemperature ?? snapshot.CpuAverageTemperature,
+                snapshot.GpuCoreTemperature,
+                _healthScorer.CurrentScore);
+            RefreshTrayTooltip();
 
             // ── Temperature warning check ─────────────────────────────
             if (hottest.HasValue && hottest.Value >= CpuWarningThresholdDegrees)
             {
                 HasCpuTempWarning = true;
                 CpuTempWarningMessage = $"CPU temperature {hottest.Value:F0}C exceeds {CpuWarningThresholdDegrees:F0}C threshold.";
+                RaiseTemperatureAlert(hottest.Value, CpuWarningThresholdDegrees);
 
                 if (SmtpConfigured && DateTimeOffset.UtcNow - _lastAlertEmailSent > AlertEmailCooldown)
                 {
                     _lastAlertEmailSent = DateTimeOffset.UtcNow;
-                    _ = SendAlertEmailAsync(hottest.Value);
+                    double alertTemp = hottest.Value;
+                    _ = SafeExecuteAsync(() => SendAlertEmailAsync(alertTemp), "Temperature alert email");
                 }
             }
             else
@@ -947,50 +1264,77 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 HasCpuTempWarning = false;
                 CpuTempWarningMessage = string.Empty;
             }
-
-            SyncCpuReadings(snapshot.CpuReadings);
-            SyncGpuReadings(snapshot.GpuReadings);
-            SynchronizeFans(snapshot.Fans);
-
-            // Detect liquid cooling: CPU cooler reported as a Pump/AIO, or any pump in the fan list.
-            var pump = snapshot.CpuFan is { DeviceKind: FanDeviceKind.Pump or FanDeviceKind.AioCooler }
-                ? snapshot.CpuFan
-                : snapshot.Fans.FirstOrDefault(f => f.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler);
-
-            RgbControl.UpdateHardwareData(
-                cpuTempC: snapshot.CpuPackageTemperature ?? snapshot.CpuAverageTemperature,
-                gpuTempC: snapshot.GpuCoreTemperature,
-                cpuLoadPct: snapshot.CpuTotalLoadPercent,
-                pumpRpm: pump?.SpeedRpm,
-                isLiquidCooled: pump is not null);
         }
         catch (OperationCanceledException) { }
-        catch (UnauthorizedAccessException)
+        catch (ObjectDisposedException) when (_disposed) { }
+        catch (UnauthorizedAccessException ex)
         {
+            LogPollError("Hardware poll", ex);
             StatusMessage = "Hardware poll failed: access denied. Run as Administrator.";
         }
-        catch
+        catch (Exception ex)
         {
-            StatusMessage = "Hardware poll encountered an error.";
+            LogPollError("Hardware poll", ex);
+            StatusMessage = $"Hardware poll error: {ex.GetType().Name}: {ex.Message}";
         }
         finally
         {
             IsRefreshing = false;
-            _refreshLock.Release();
+            try { _refreshLock.Release(); }
+            catch (ObjectDisposedException) { }
         }
+    }
+
+    /// <summary>Runs one consumer of a poll; a failure is logged (rate-limited) and doesn't stop the rest.</summary>
+    private void RunPollStep(string context, Action step)
+    {
+        try
+        {
+            step();
+        }
+        catch (Exception ex)
+        {
+            LogPollError(context, ex);
+        }
+    }
+
+    private void LogPollError(string context, Exception ex)
+    {
+        string signature = $"{context}|{ex.GetType().FullName}|{ex.Message}";
+        DateTime now = DateTime.UtcNow;
+        if (signature == _lastPollErrorSignature && now - _lastPollErrorLoggedUtc < PollErrorLogCooldown)
+            return;
+
+        _lastPollErrorSignature = signature;
+        _lastPollErrorLoggedUtc = now;
+        AppLog.Error($"{context} failed", ex);
     }
 
     // ── Fan synchronization ───────────────────────────────────────────────────
 
     private void SynchronizeFans(IReadOnlyList<FanChannelSnapshot> fans)
     {
-        var existing = FanChannels.ToDictionary(c => c.Id, StringComparer.OrdinalIgnoreCase);
+        // Tolerate duplicate IDs on either side (first wins) instead of throwing every poll.
+        var existing = new Dictionary<string, FanChannelViewModel>(StringComparer.OrdinalIgnoreCase);
+        var stale = new List<FanChannelViewModel>();
+        foreach (var channel in FanChannels)
+        {
+            if (!existing.TryAdd(channel.Id, channel))
+                stale.Add(channel);
+        }
 
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var snapshot in fans)
         {
+            if (!seen.Add(snapshot.Id))
+                continue;
+
             if (!existing.TryGetValue(snapshot.Id, out var vm))
             {
-                vm = new FanChannelViewModel(snapshot, ApplyFanControlAsync, RestoreAutomaticControlAsync);
+                vm = new FanChannelViewModel(
+                    snapshot,
+                    channel => SafeExecuteAsync(() => ApplyFanControlAsync(channel), $"Apply fan '{channel.Name}'"),
+                    channel => SafeExecuteAsync(() => RestoreAutomaticControlAsync(channel), $"Auto mode for fan '{channel.Name}'"));
                 if (_activeProfileTab?.Profile.FanChannelPercents.TryGetValue(snapshot.Id, out double stored) == true)
                     vm.DesiredPercent = stored;
                 FanChannels.Add(vm);
@@ -1000,23 +1344,39 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             existing.Remove(snapshot.Id);
         }
 
-        foreach (var (_, vm) in existing)
+        stale.AddRange(existing.Values);
+        foreach (var vm in stale)
         {
             vm.Dispose();
             FanChannels.Remove(vm);
         }
     }
 
+    // Repeated names get their kind appended ("GPU Core · Load"); rows are replaced in place so an
+    // unchanged list doesn't re-create every row container each poll.
     private void SyncCpuReadings(IReadOnlyList<CpuReadingSnapshot> readings)
     {
-        CpuReadings.Clear();
-        foreach (var r in readings) CpuReadings.Add(r);
+        var labels = SensorListLabels.Build(readings.Select(r => (r.Name, r.Kind)).ToList());
+        SyncInPlace(CpuReadings, readings.Select((r, i) => r with { Name = labels[i] }).ToList());
     }
 
     private void SyncGpuReadings(IReadOnlyList<GpuReadingSnapshot> readings)
     {
-        GpuReadings.Clear();
-        foreach (var r in readings) GpuReadings.Add(r);
+        var labels = SensorListLabels.Build(readings.Select(r => (r.Name, r.Kind)).ToList());
+        SyncInPlace(GpuReadings, readings.Select((r, i) => r with { Name = labels[i] }).ToList());
+    }
+
+    private static void SyncInPlace<T>(ObservableCollection<T> target, IReadOnlyList<T> source)
+    {
+        for (int i = 0; i < source.Count; i++)
+        {
+            if (i < target.Count)
+            {
+                if (!EqualityComparer<T>.Default.Equals(target[i], source[i])) target[i] = source[i];
+            }
+            else target.Add(source[i]);
+        }
+        while (target.Count > source.Count) target.RemoveAt(target.Count - 1);
     }
 
     // ── Fan control commands ──────────────────────────────────────────────────
@@ -1041,6 +1401,41 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         await RefreshAsync();
     }
 
+    /// <summary>
+    /// Called on application exit before disposal: hands every controllable channel back to
+    /// automatic/BIOS control so no fan is left pinned at a manual duty after FANZi closes.
+    /// Bounded to a few seconds so a hung driver can't block exit.
+    /// </summary>
+    public void RestoreAutomaticControlOnExit()
+    {
+        var channelIds = FanChannels
+            .Where(channel => channel.CanControl)
+            .Select(channel => channel.Id)
+            .ToList();
+        if (CpuFanCanControl && !string.IsNullOrEmpty(_cpuFanChannelId))
+            channelIds.Add(_cpuFanChannelId);
+
+        channelIds = channelIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (channelIds.Count == 0)
+            return;
+
+        // The service runs each call on the thread pool, so waiting here can't deadlock the UI thread.
+        var tasks = channelIds
+            .Select(id => _hardwareMonitorService.RestoreAutomaticControlAsync(id, CancellationToken.None))
+            .ToArray();
+        try
+        {
+            if (!Task.WaitAll(tasks, TimeSpan.FromSeconds(3)))
+                AppLog.Warn("Restoring automatic fan control on exit timed out.");
+            else
+                AppLog.Info($"Automatic fan control restored on {channelIds.Count} channel(s).");
+        }
+        catch (AggregateException ex)
+        {
+            AppLog.Warn("Restoring automatic fan control on exit partly failed", ex.Flatten());
+        }
+    }
+
     private async Task ApplyCpuFanAsync()
     {
         if (!CpuFanCanControl || string.IsNullOrWhiteSpace(_cpuFanChannelId))
@@ -1054,6 +1449,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             var result = await _hardwareMonitorService.SetFanControlAsync(_cpuFanChannelId, CpuFanDesiredPercent, _disposeTokenSource.Token);
             CpuFanCapability = result.Message;
+            _lastAiAppliedPercent = null; // hardware no longer holds the AI's last value
 
             if (_activeProfileTab != null)
             {
@@ -1081,6 +1477,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             var result = await _hardwareMonitorService.RestoreAutomaticControlAsync(_cpuFanChannelId, _disposeTokenSource.Token);
             CpuFanCapability = result.Message;
+            _lastAiAppliedPercent = null;
             await RefreshAsync();
         }
         finally
@@ -1096,6 +1493,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         CpuFanDesiredLabel = $"{value:F0}%";
         if (!_suppressProfileSync && !_suppressCpuFanDesiredUpdate)
         {
+            // A user change (slider drag / binding) — hold off hardware sync for a few seconds.
+            _lastUserSliderChangeUtc = DateTime.UtcNow;
             UpdateActiveProfileFromVm();
             _ = SaveSettingsAsync();
         }
@@ -1181,7 +1580,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     // ── Formatters ───────────────────────────────────────���────────────────────
 
-    private static string FormatTemperature(double? t) => t.HasValue ? $"{t.Value:F1} C" : "--";
+    private static string FormatTemperature(double? t) => t.HasValue ? $"{t.Value:F1}°C" : "--";
     private static string FormatPercent(double? v) => v.HasValue ? $"{v.Value:F0}%" : "--";
     private static string FormatClock(double? v) => v.HasValue ? $"{v.Value:F0} MHz" : "--";
     private static string FormatPower(double? v) => v.HasValue ? $"{v.Value:F1} W" : "--";

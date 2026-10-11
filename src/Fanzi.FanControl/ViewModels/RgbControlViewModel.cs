@@ -60,11 +60,45 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     [NotifyPropertyChangedFor(nameof(ConnectionBadgeBorderBrush))]
     [NotifyPropertyChangedFor(nameof(ConnectionStatusLabel))]
     [NotifyPropertyChangedFor(nameof(ConnectionStatusLabelColor))]
+    [NotifyPropertyChangedFor(nameof(ConnectionDotColor))]
     private bool _isConnected;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConnectButtonText))]
+    [NotifyPropertyChangedFor(nameof(ConnectionDotColor))]
     private bool _isConnecting;
+
+    /// <summary>Dashboard RGB chip dot: green connected, amber connecting/starting, red offline.</summary>
+    public string ConnectionDotColor => DotColorFor(IsConnected, IsConnecting || _autoStartInProgress);
+
+    internal static string DotColorFor(bool connected, bool connecting)
+        => connected ? "#22C55E" : connecting ? "#FBBF24" : "#EF4444";
+
+    // Auto-start reports progress through ConnectionStatus, so refresh the dot alongside it.
+    partial void OnConnectionStatusChanged(string value)
+    {
+        OnPropertyChanged(nameof(ConnectionDotColor));
+        OnPropertyChanged(nameof(ConnectionChipText));
+    }
+
+    partial void OnIsConnectedChanged(bool value) => OnPropertyChanged(nameof(ConnectionChipText));
+    partial void OnIsConnectingChanged(bool value) => OnPropertyChanged(nameof(ConnectionChipText));
+    partial void OnDeviceSummaryChanged(string value) => OnPropertyChanged(nameof(ConnectionChipText));
+
+    /// <summary>Short dashboard chip label ("Connected · 3 devices"); the full <see cref="ConnectionStatus"/> is its tooltip.</summary>
+    public string ConnectionChipText => ChipTextFor(IsConnected, IsConnecting || _autoStartInProgress, Devices.Count);
+
+    internal static string ChipTextFor(bool connected, bool connecting, int deviceCount)
+    {
+        if (connected)
+            return deviceCount switch
+            {
+                <= 0 => "Connected · no devices",
+                1 => "Connected · 1 device",
+                _ => $"Connected · {deviceCount} devices",
+            };
+        return connecting ? "Connecting…" : "Offline";
+    }
 
     // Computed UI properties – avoids BoolConverters.IsTrue in compiled bindings
     public string ConnectionBadgeBackground  => IsConnected ? "#0D291A" : "#1C0C0C";
@@ -206,7 +240,48 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
     // ── Server management ────────────────────────────────────────────────────
 
-    private readonly OpenRgbServerManager _serverManager = new();
+    private readonly OpenRgbServerManager _serverManager;
+
+    internal const string OpenRgbDownloadPageUrl = "https://openrgb.org/releases.html";
+    internal const string PawnIoUrl = "https://pawnio.eu";
+    internal const string NoDevicesStatus =
+        "Connected to OpenRGB but no devices found — RAM/motherboard RGB on OpenRGB 1.0 requires the PawnIO driver (pawnio.eu) and Administrator.";
+    internal const string ProtocolErrorStatus = "OpenRGB protocol error — try updating OpenRGB/FANZI";
+
+    /// <summary>Automatic (startup / watchdog) OpenRGB downloads happen at most once per this interval.</summary>
+    internal static readonly TimeSpan AutoDownloadInterval = TimeSpan.FromMinutes(10);
+
+    private readonly DownloadThrottle _downloadThrottle;
+
+    /// <summary>Completed once MainWindowViewModel has applied the saved OpenRGB path.</summary>
+    private readonly TaskCompletionSource _openRgbSettingsApplied =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private Action<string?>? _persistOpenRgbPath;
+
+    /// <summary>
+    /// File picker supplied by the view (TopLevel.StorageProvider); returns the chosen
+    /// OpenRGB.exe path or null when cancelled.
+    /// </summary>
+    public Func<Task<string?>>? PickOpenRgbExecutable { get; set; }
+
+    /// <summary>Last OpenRGB problem shown in the banner (install, start, connect or protocol failure).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOpenRgbError))]
+    [NotifyPropertyChangedFor(nameof(ShowOpenRgbBanner))]
+    [NotifyPropertyChangedFor(nameof(OpenRgbBannerMessage))]
+    private string? _lastOpenRgbError;
+
+    public bool HasOpenRgbError => !string.IsNullOrEmpty(LastOpenRgbError);
+
+    /// <summary>Banner stays visible whenever OpenRGB is missing or something failed.</summary>
+    public bool ShowOpenRgbBanner => !IsInstallingOpenRgb && (!IsOpenRgbInstalled || HasOpenRgbError);
+
+    public string OpenRgbBannerTitle => IsOpenRgbInstalled ? "OpenRGB Needs Attention" : "OpenRGB Not Installed";
+
+    public string OpenRgbBannerMessage => HasOpenRgbError
+        ? LastOpenRgbError!
+        : "OpenRGB is required for RGB control. Click Install to download and set up automatically.";
 
     [ObservableProperty]
     private string _serverStatus = "Detecting OpenRGB...";
@@ -219,6 +294,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowInstallButton))]
+    [NotifyPropertyChangedFor(nameof(ShowOpenRgbBanner))]
     private bool _isInstallingOpenRgb;
 
     [ObservableProperty]
@@ -247,12 +323,31 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     public IAsyncRelayCommand RescanDevicesCommand { get; }
     public IAsyncRelayCommand RestartServerCommand { get; }
     public IAsyncRelayCommand TestRgbCommand       { get; }
+    public IRelayCommand      OpenOpenRgbDownloadPageCommand { get; }
+    public IAsyncRelayCommand LocateOpenRgbCommand { get; }
+    public IAsyncRelayCommand RetryOpenRgbCommand  { get; }
+    public IRelayCommand      OpenPawnIoCommand    { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    public RgbControlViewModel(IRgbService rgbService)
+    /// <param name="rgbService">RGB bus (OpenRGB SDK client).</param>
+    /// <param name="utcClock">Clock for the auto-download throttle (tests); defaults to UTC now.</param>
+    public RgbControlViewModel(IRgbService rgbService, Func<DateTime>? utcClock = null)
+        : this(rgbService, new OpenRgbServerManager(), utcClock, startBackgroundWork: true)
+    {
+    }
+
+    /// <param name="serverManager">OpenRGB process/install manager (tests pass one with fake detection).</param>
+    /// <param name="startBackgroundWork">False (tests) skips the frame timer and the OpenRGB auto-start.</param>
+    internal RgbControlViewModel(
+        IRgbService rgbService,
+        OpenRgbServerManager serverManager,
+        Func<DateTime>? utcClock,
+        bool startBackgroundWork)
     {
         _rgbService = rgbService;
+        _serverManager = serverManager;
+        _downloadThrottle = new DownloadThrottle(AutoDownloadInterval, utcClock);
 
         ConnectCommand    = new AsyncRelayCommand(ConnectAsync);
         DisconnectCommand = new RelayCommand(DisconnectFromServer);
@@ -263,11 +358,14 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         RescanDevicesCommand = new AsyncRelayCommand(RescanDevicesAsync);
         RestartServerCommand = new AsyncRelayCommand(RestartServerAsync);
         TestRgbCommand = new AsyncRelayCommand(TestRgbAsync);
+        OpenOpenRgbDownloadPageCommand = new RelayCommand(() => OpenUrl(OpenRgbDownloadPageUrl));
+        LocateOpenRgbCommand = new AsyncRelayCommand(LocateOpenRgbAsync);
+        RetryOpenRgbCommand = new AsyncRelayCommand(RetryOpenRgbAsync);
+        OpenPawnIoCommand = new RelayCommand(() => OpenUrl(PawnIoUrl));
 
         _serverManager.DetectInstallation();
         ServerStatus = _serverManager.Status;
-        OnPropertyChanged(nameof(IsOpenRgbInstalled));
-        OnPropertyChanged(nameof(ShowInstallButton));
+        NotifyInstallStateChanged();
 
         // Sync slider sets from initial color constants.
         SyncPrimarySliders();
@@ -277,6 +375,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         _timer = new System.Timers.Timer(FrameIntervalMs);
         _timer.Elapsed += OnTimerTick;
         _timer.AutoReset = true;
+        if (!startBackgroundWork) return;
         _timer.Start();
 
         // Auto-start OpenRGB server in the background and auto-connect.
@@ -284,10 +383,17 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         _ = AutoStartOpenRgbAsync();
     }
 
-    private async Task AutoStartOpenRgbAsync()
+    /// <summary>
+    /// Detects / installs / starts OpenRGB and connects. Always ends by starting the
+    /// connection watchdog — also on failure — so OpenRGB is picked up once it becomes
+    /// available. Automatic downloads are throttled to one per <see cref="AutoDownloadInterval"/>;
+    /// <paramref name="userInitiated"/> (Retry / Locate) bypasses the throttle.
+    /// </summary>
+    private async Task AutoStartOpenRgbAsync(bool userInitiated = false)
     {
         if (!await _autoStartLock.WaitAsync(0, _cts.Token)) return;
         _autoStartInProgress = true;
+        CancellationToken watchdogToken = default;
 
         try
         {
@@ -295,6 +401,12 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             _watchdogCts?.Cancel();
             _watchdogCts?.Dispose();
             _watchdogCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+            watchdogToken = _watchdogCts.Token;
+
+            // Give MainWindowViewModel a moment to hand over the saved OpenRGB path so we
+            // don't download a copy the user already pointed us at.
+            await Task.WhenAny(_openRgbSettingsApplied.Task, Task.Delay(TimeSpan.FromSeconds(5), _cts.Token));
+            _cts.Token.ThrowIfCancellationRequested();
 
             var progress = new Progress<string>(msg =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -303,24 +415,26 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 }));
 
             ConnectionStatus = "AEDi: Starting OpenRGB server...";
-            bool serverOk = await _serverManager.EnsureRunningAsync(OpenRgbPort, progress, _cts.Token);
+            bool serverOk = await _serverManager.EnsureRunningAsync(
+                OpenRgbPort, progress, _cts.Token, allowInstall: () => AllowDownload(userInitiated));
 
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 IsServerRunning = serverOk;
                 ServerStatus = _serverManager.Status;
-                OnPropertyChanged(nameof(IsOpenRgbInstalled));
-                OnPropertyChanged(nameof(ShowInstallButton));
+                NotifyInstallStateChanged();
                 OnPropertyChanged(nameof(StartServerButtonText));
             });
 
             if (!serverOk)
             {
+                LastOpenRgbError = DescribeServerFailure();
                 ConnectionStatus = "AEDi: OpenRGB not available — RGB effects run in preview mode only";
                 return;
             }
 
             ConnectionStatus = "AEDi: Server running — connecting to RGB devices...";
+            bool connectedWithoutDevices = false;
             for (int attempt = 1; attempt <= 12 && !_cts.Token.IsCancellationRequested; attempt++)
             {
                 if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
@@ -334,15 +448,16 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 if (IsConnected)
                 {
                     await Task.Delay(1000, _cts.Token);
-                    await RefreshDevicesAsync();
+                    int count = await RefreshDevicesAsync();
 
-                    if (Devices.Count > 0)
+                    if (count > 0)
                     {
-                        ConnectionStatus = $"AEDi: Connected — {Devices.Count} device(s) live";
+                        ConnectionStatus = $"AEDi: Connected — {count} device(s) live";
                         break;
                     }
-                    else
+                    else if (_rgbService.LastDeviceQueryError is null)
                     {
+                        connectedWithoutDevices = true;
                         ConnectionStatus = $"AEDi: Connected but no devices yet — scanning hardware... ({attempt}/12)";
                         IsConnected = false;
                     }
@@ -357,21 +472,217 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
             if (!IsConnected)
             {
-                ConnectionStatus = "AEDi: Could not connect — ensure OpenRGB SDK Server is enabled in Settings";
+                if (_rgbService.LastDeviceQueryError is not null)
+                {
+                    ConnectionStatus = ProtocolErrorStatus;
+                }
+                else if (connectedWithoutDevices && _rgbService.IsConnected)
+                {
+                    // The SDK connection is fine — OpenRGB just doesn't see any hardware.
+                    IsConnected = true;
+                    ApplyNoDevicesStatus();
+                }
+                else
+                {
+                    ConnectionStatus = "AEDi: Could not connect — ensure OpenRGB SDK Server is enabled in Settings";
+                    LastOpenRgbError =
+                        $"Could not connect to the OpenRGB SDK server on {OpenRgbHost}:{OpenRgbPort} ({_rgbService.ServerVersion}).";
+                }
             }
-
-            _ = ConnectionWatchdogAsync(_watchdogCts.Token);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
+            AppLog.Error("OpenRGB: auto-start failed", ex);
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                ConnectionStatus = $"AEDi: Auto-start error: {ex.Message}");
+            {
+                ConnectionStatus = $"AEDi: Auto-start error: {ex.Message}";
+                LastOpenRgbError = $"OpenRGB auto-start error: {ex.GetType().Name}: {ex.Message}";
+            });
         }
         finally
         {
             _autoStartInProgress = false;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                OnPropertyChanged(nameof(ConnectionDotColor));
+                OnPropertyChanged(nameof(ConnectionChipText));
+            });
             _autoStartLock.Release();
+
+            // Keep watching even after a failure so a later install/start is picked up.
+            if (RgbEnabled && !watchdogToken.IsCancellationRequested && watchdogToken.CanBeCanceled)
+                _ = ConnectionWatchdogAsync(watchdogToken);
+        }
+    }
+
+    // True once a throttled (skipped) automatic download has been logged for the current window.
+    private bool _throttleSkipLogged;
+
+    /// <summary>Throttle gate for automatic downloads; user actions always pass (and reset the window).</summary>
+    internal bool AllowDownload(bool userInitiated)
+    {
+        if (userInitiated)
+        {
+            _downloadThrottle.RecordAttempt();
+            _throttleSkipLogged = false;
+            return true;
+        }
+
+        bool allowed = _downloadThrottle.TryAcquire();
+        if (allowed)
+        {
+            _throttleSkipLogged = false;
+        }
+        else if (!_throttleSkipLogged)
+        {
+            // The watchdog asks every 15 s — log the skip once per window, not every tick.
+            _throttleSkipLogged = true;
+            AppLog.Info($"OpenRGB: automatic download skipped (next allowed in {_downloadThrottle.Remaining:mm\\:ss})");
+        }
+        return allowed;
+    }
+
+    /// <summary>Separates the install error from the changing "automatic retry in N min" countdown.</summary>
+    internal const string RetryCountdownMarker = " — automatic retry in ";
+
+    /// <summary>Precise reason the server isn't available, for the banner.</summary>
+    private string DescribeServerFailure()
+    {
+        if (!_serverManager.IsInstalled && _serverManager.LastInstallError is { } installError)
+        {
+            TimeSpan wait = _downloadThrottle.Remaining;
+            return wait > TimeSpan.Zero
+                ? $"{installError}{RetryCountdownMarker}{Math.Max(1, (int)Math.Ceiling(wait.TotalMinutes))} min, or use Retry / Locate OpenRGB.exe… / Open download page."
+                : installError;
+        }
+        return _serverManager.Status;
+    }
+
+    /// <summary>
+    /// The part of a banner message that identifies the underlying problem — the retry
+    /// countdown is stripped so the log only records real changes, not the ticking minutes.
+    /// </summary>
+    internal static string? OpenRgbErrorLogKey(string? message)
+    {
+        if (string.IsNullOrEmpty(message)) return null;
+        int marker = message.IndexOf(RetryCountdownMarker, StringComparison.Ordinal);
+        return marker >= 0 ? message.Substring(0, marker) : message;
+    }
+
+    /// <summary>
+    /// Banner text after a device query on a live connection: the protocol-error message when
+    /// controller data could not be parsed, the PawnIO hint when OpenRGB reports no devices,
+    /// and null (clear the banner) when devices were found.
+    /// </summary>
+    internal static string? DeviceQueryBannerError(int deviceCount, string? queryError) =>
+        queryError is not null ? $"{ProtocolErrorStatus} ({queryError})"
+        : deviceCount == 0 ? NoDevicesStatus
+        : null;
+
+    private void ApplyNoDevicesStatus()
+    {
+        ConnectionStatus = NoDevicesStatus;
+        LastOpenRgbError = DeviceQueryBannerError(0, null);
+    }
+
+    private void NotifyInstallStateChanged()
+    {
+        OnPropertyChanged(nameof(IsOpenRgbInstalled));
+        OnPropertyChanged(nameof(ShowInstallButton));
+        OnPropertyChanged(nameof(ShowOpenRgbBanner));
+        OnPropertyChanged(nameof(OpenRgbBannerTitle));
+    }
+
+    private string? _lastLoggedOpenRgbError;
+
+    partial void OnLastOpenRgbErrorChanged(string? value)
+    {
+        string? key = OpenRgbErrorLogKey(value);
+        if (key is not null && key != _lastLoggedOpenRgbError)
+            AppLog.Warn($"OpenRGB banner: {value}");
+        _lastLoggedOpenRgbError = key;
+    }
+
+    /// <summary>
+    /// Called by <see cref="MainWindowViewModel"/> once settings are loaded: applies the saved
+    /// OpenRGB.exe path and provides the callback that persists a newly located path.
+    /// </summary>
+    public void ApplyOpenRgbSettings(string? savedPath, Action<string?> persistPath)
+    {
+        _persistOpenRgbPath = persistPath;
+        if (!string.IsNullOrWhiteSpace(savedPath))
+        {
+            if (_serverManager.SetCustomPath(savedPath))
+            {
+                ServerStatus = _serverManager.Status;
+                NotifyInstallStateChanged();
+            }
+            else
+            {
+                AppLog.Warn($"OpenRGB: saved path is no longer valid ({savedPath}) — falling back to auto-detect");
+            }
+        }
+        _openRgbSettingsApplied.TrySetResult();
+    }
+
+    private async Task RetryOpenRgbAsync()
+    {
+        if (!RgbEnabled)
+        {
+            RgbEnabled = true; // OnRgbEnabledChanged starts the auto-start cycle
+            return;
+        }
+
+        LastOpenRgbError = null;
+        ConnectionStatus = "AEDi: Retrying OpenRGB...";
+        await AutoStartOpenRgbAsync(userInitiated: true);
+    }
+
+    private async Task LocateOpenRgbAsync()
+    {
+        if (PickOpenRgbExecutable is null) return;
+
+        string? path;
+        try
+        {
+            path = await PickOpenRgbExecutable();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("OpenRGB: file picker failed", ex);
+            LastOpenRgbError = $"Could not open the file picker: {ex.Message}";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        if (!_serverManager.SetCustomPath(path))
+        {
+            LastOpenRgbError = _serverManager.Status;
+            return;
+        }
+
+        _persistOpenRgbPath?.Invoke(_serverManager.CustomPath);
+        ServerStatus = _serverManager.Status;
+        NotifyInstallStateChanged();
+
+        // Restart with the chosen executable.
+        DisconnectFromServer();
+        _serverManager.StopServer();
+        IsServerRunning = false;
+        await RetryOpenRgbAsync();
+    }
+
+    private void OpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn($"Could not open {url}", ex);
+            ServerStatus = $"Could not open browser — visit {url}";
         }
     }
 
@@ -401,8 +712,18 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 }
                 else if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
                 {
-                    await _serverManager.EnsureRunningAsync(OpenRgbPort, null, token);
-                    if (OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                    bool ok = await _serverManager.EnsureRunningAsync(
+                        OpenRgbPort, null, token, allowInstall: () => AllowDownload(userInitiated: false));
+                    IsServerRunning = ok;
+                    ServerStatus = _serverManager.Status;
+                    NotifyInstallStateChanged();
+                    OnPropertyChanged(nameof(StartServerButtonText));
+
+                    if (!ok)
+                    {
+                        LastOpenRgbError = DescribeServerFailure();
+                    }
+                    else if (OpenRgbServerManager.IsPortListening(OpenRgbPort))
                     {
                         ConnectionStatus = "AEDi: Server restarted — reconnecting...";
                         await ConnectAsync();
@@ -410,11 +731,17 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 }
                 else if (_rgbService.IsConnected && Devices.Count == 0)
                 {
-                    await RefreshDevicesAsync();
+                    int count = await RefreshDevicesAsync();
+                    if (count == 0 && _rgbService.LastDeviceQueryError is null)
+                        ApplyNoDevicesStatus();
                 }
             }
             catch (OperationCanceledException) { return; }
-            catch { /* keep watchdog alive */ }
+            catch (Exception ex)
+            {
+                // Keep the watchdog alive, but leave a trace.
+                AppLog.Warn("OpenRGB watchdog iteration failed", ex);
+            }
         }
     }
 
@@ -423,7 +750,8 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     {
         if (value)
         {
-            _ = AutoStartOpenRgbAsync();
+            // Explicit user action — allowed to download even inside the throttle window.
+            _ = AutoStartOpenRgbAsync(userInitiated: true);
         }
         else
         {
@@ -643,11 +971,25 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         DeviceSummary    = "No devices detected";
     }
 
-    private async Task RefreshDevicesAsync()
+    /// <summary>Re-reads the device list; returns the number of devices OpenRGB reported.</summary>
+    private async Task<int> RefreshDevicesAsync()
     {
         var list = await _rgbService.GetDevicesAsync(_cts.Token);
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        string? queryError = _rgbService.LastDeviceQueryError;
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
+            if (queryError is not null)
+            {
+                // GetAllControllerData could not be parsed — almost always a protocol mismatch.
+                IsConnected = false;
+                ConnectionStatus = ProtocolErrorStatus;
+                LastOpenRgbError = DeviceQueryBannerError(list.Count, queryError);
+            }
+            else if (list.Count > 0)
+            {
+                LastOpenRgbError = DeviceQueryBannerError(list.Count, null); // null — clears the banner
+            }
+
             Devices.Clear();
             foreach (var d in list) Devices.Add(d);
             _deviceCount  = Math.Max(1, Devices.Count);
@@ -670,6 +1012,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 HasZones = _zoneSendList.Length > 0;
             }
         });
+        return list.Count;
     }
 
     private void ApplyTheme(RgbThemePreset? preset)
@@ -797,8 +1140,10 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             return;
         }
         ServerStatus = "Rescanning OpenRGB devices...";
-        await RefreshDevicesAsync();
-        ServerStatus = $"Rescan complete — {Devices.Count} device(s) detected";
+        int count = await RefreshDevicesAsync();
+        ServerStatus = $"Rescan complete — {count} device(s) detected";
+        if (count == 0 && _rgbService.LastDeviceQueryError is null)
+            ApplyNoDevicesStatus();
     }
 
     private async Task RestartServerAsync()
@@ -822,18 +1167,25 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             Avalonia.Threading.Dispatcher.UIThread.Post(() => InstallProgress = msg);
         });
 
+        _downloadThrottle.RecordAttempt();
         bool ok = await _serverManager.InstallOpenRgbAsync(progress, _cts.Token);
 
         IsInstallingOpenRgb = false;
         ServerStatus = _serverManager.Status;
-        OnPropertyChanged(nameof(IsOpenRgbInstalled));
-        OnPropertyChanged(nameof(ShowInstallButton));
+        NotifyInstallStateChanged();
         InstallProgress = ok ? "Installed! Ready to start." : "Install failed.";
 
         if (ok)
         {
+            LastOpenRgbError = null;
             await Task.Delay(500, _cts.Token);
             await StartServerAsync();
+            if (!IsServerRunning)
+                LastOpenRgbError = _serverManager.Status;
+        }
+        else
+        {
+            LastOpenRgbError = _serverManager.LastInstallError ?? _serverManager.Status;
         }
     }
 

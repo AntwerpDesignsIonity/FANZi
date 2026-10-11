@@ -56,6 +56,18 @@ public sealed class GameModeDetector
     private bool _isGameModeActive;
     private string _detectedGame = "";
     private DateTime _gameModeActivated = DateTime.MinValue;
+    private readonly Func<(bool IsGameRunning, string GameName)>? _processScanOverride;
+
+    public GameModeDetector()
+    {
+    }
+
+    /// <param name="processScan">Replaces the live process-list scan (tests/render harness), so
+    /// detection does not depend on what happens to run on the machine.</param>
+    internal GameModeDetector(Func<(bool IsGameRunning, string GameName)> processScan)
+    {
+        _processScanOverride = processScan;
+    }
 
     public bool IsGameModeActive => _isGameModeActive;
     public string DetectedGame => _detectedGame;
@@ -65,9 +77,17 @@ public sealed class GameModeDetector
     public string StatusMessage => _isGameModeActive
         ? $"🎮 Game Mode: {_detectedGame} ({GameModeDuration.TotalMinutes:F0}m)"
         : "Desktop mode";
+    /// <summary>Game name and session length for the dashboard tile's detail line
+    /// (the tile title stays a short static "🎮 Game Mode" so it never trims).</summary>
+    public string DetailMessage => _isGameModeActive
+        ? $"{(string.IsNullOrEmpty(_detectedGame) ? "Sustained GPU load" : _detectedGame)} · {GameModeDuration.TotalMinutes:F0} min"
+        : "";
 
     public async Task<(bool IsGameRunning, string GameName)> DetectAsync(CancellationToken ct = default)
     {
+        if (_processScanOverride is not null)
+            return _processScanOverride();
+
         return await Task.Run(() =>
         {
             try

@@ -19,11 +19,14 @@ public sealed class ThermalCoach
     private DateTime _lastDustWarning = DateTime.MinValue;
     private DateTime _lastThrottleWarning = DateTime.MinValue;
 
-    public void Record(double cpuTempC, double cpuLoadPct, double fanRpm)
+    /// <param name="fanRpm">CPU fan or pump RPM; null when no tachometer is exposed — the
+    /// temperature/load rules still run, the RPM-based rules are skipped.</param>
+    public void Record(double cpuTempC, double cpuLoadPct, double? fanRpm)
     {
         Enqueue(_tempHistory, cpuTempC);
         Enqueue(_loadHistory, cpuLoadPct);
-        Enqueue(_rpmHistory, fanRpm);
+        if (fanRpm is double rpm && !double.IsNaN(rpm))
+            Enqueue(_rpmHistory, rpm);
     }
 
     private static void Enqueue(Queue<double> q, double v)

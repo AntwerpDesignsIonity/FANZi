@@ -3,14 +3,14 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Fanzi.FanControl.Services.OpenRgb;
 using Microsoft.Win32;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Net.Http;
 using System.Runtime.Versioning;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Fanzi.Installer;
@@ -22,18 +22,27 @@ public partial class InstallerWindow : Window
 
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(5) };
 
-    // ── OpenRGB download mirrors (same fallback chain as OpenRgbServerManager) ─
-    private static readonly string[] OpenRgbDownloadUrls =
-    [
-        // GitLab CI (OpenRGB official build server)
-        "https://gitlab.com/CalcProgrammer1/OpenRGB/-/jobs/artifacts/master/download?job=Windows+64",
-        // Release 0.9 static build
-        "https://openrgb.org/releases/release_0.9/OpenRGB_0.9_Windows_64_6b1df76.zip",
-    ];
+    /// <summary>Installer/app version from the csproj &lt;Version&gt; (e.g. "2.2.0").</summary>
+    public static string AppVersion { get; } =
+        typeof(InstallerWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+    public static string VersionBanner { get; } = $"Version {AppVersion} — © 2018-2026 Ionity Global Pty Ltd";
+
+    private const string OpenRgbDownloadPageUrl = "https://openrgb.org/releases.html";
 
     // ── Microsoft VC++ Redistributable (required by LibreHardwareMonitor kernel driver) ─
     private const string VcRedistUrl =
         "https://aka.ms/vs/17/release/vc_redist.x64.exe";
+
+    /// <summary>Result of the OpenRGB step (null = not attempted / skipped).</summary>
+    private OpenRgbInstallResult? _openRgbResult;
+
+    /// <summary>Non-fatal problems shown as an amber warning on the completion page.</summary>
+    private readonly List<string> _warnings = new();
+
+    /// <summary>Install log, written to &lt;installPath&gt;\install.log at the end.</summary>
+    private readonly List<string> _log = new();
+    private readonly object _logLock = new();
 
     public InstallerWindow()
     {
@@ -43,6 +52,7 @@ public partial class InstallerWindow : Window
         InstallButton.Click += OnInstallClicked;
         CancelButton.Click += (_, _) => Close();
         BrowseButton.Click += OnBrowseClicked;
+        OpenRgbDownloadButton.Click += (_, _) => OpenUrl(OpenRgbDownloadPageUrl);
 
         if (this.FindControl<Border>("TitleBar") is { } titleBar)
         {
@@ -96,6 +106,7 @@ public partial class InstallerWindow : Window
             ProgressPanel.IsVisible = false;
             CompletePanel.IsVisible = true;
             InstallLocationLabel.Text = installPath;
+            ShowCompletionWarnings(installPath);
             InstallButton.Content = "Close";
             InstallButton.IsEnabled = true;
             InstallButton.Click -= OnInstallClicked;
@@ -122,23 +133,93 @@ public partial class InstallerWindow : Window
         }
         catch (Exception ex)
         {
+            Log($"Installation failed: {ex}");
             ProgressTitle.Text = "Installation Failed";
-            ProgressStatus.Text = ex.Message;
+            string[] warnings;
+            lock (_logLock) warnings = _warnings.ToArray();
+            ProgressStatus.Text = warnings.Length == 0
+                ? ex.Message
+                : ex.Message + Environment.NewLine + Environment.NewLine
+                  + "Also: " + string.Join(Environment.NewLine + Environment.NewLine, warnings);
+            ProgressStatus.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
             CancelButton.IsEnabled = true;
             CancelButton.Content = "Close";
         }
+        finally
+        {
+            WriteInstallLog(installPath);
+        }
+    }
+
+    /// <summary>
+    /// Shows every recorded non-fatal problem (OpenRGB, VC++) as an amber warning on the
+    /// completion page, plus a download-page button when OpenRGB failed.
+    /// </summary>
+    private void ShowCompletionWarnings(string installPath)
+    {
+        bool openRgbFailed = _openRgbResult is { Success: false };
+        if (_warnings.Count == 0) return;
+
+        CompleteTitle.Text = "Installation Complete (with warnings)";
+        CompleteSubtitle.Text = "FANZI is installed, but some optional components need attention.";
+        WarningText.Text = string.Join(Environment.NewLine + Environment.NewLine, _warnings)
+            + Environment.NewLine + Environment.NewLine
+            + $"Details: {Path.Combine(installPath, "install.log")}";
+        OpenRgbDownloadButton.IsVisible = openRgbFailed;
+        WarningPanel.IsVisible = true;
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch { /* no browser — the URL is shown in the warning text */ }
+    }
+
+    private void Log(string message)
+    {
+        lock (_logLock)
+            _log.Add($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}");
+    }
+
+    private void WriteInstallLog(string installPath)
+    {
+        try
+        {
+            if (!Directory.Exists(installPath)) return;
+            string[] lines;
+            lock (_logLock) lines = _log.ToArray();
+            File.WriteAllLines(Path.Combine(installPath, "install.log"), lines);
+        }
+        catch
+        {
+            // Best effort only.
+        }
+    }
+
+    private void AddWarning(string warning)
+    {
+        lock (_logLock) _warnings.Add(warning);
+        Log($"WARNING: {warning}");
     }
 
     private async Task RunInstallationAsync(
         string installPath, bool desktopShortcut, bool startMenu,
         bool startup, bool installOpenRgb, bool installVcRedist)
     {
-        // ── Step 0: Pre-flight dependency checks ──────────────────────────────
+        Log($"FANZI installer {AppVersion} — target {installPath}; openRgb={installOpenRgb}, vcRedist={installVcRedist}, startup={startup}");
+
+        // ── Step 0: Pre-flight dependency checks — results decide which steps run ──
         UpdateProgress(2, "Checking system dependencies...");
-        await CheckDependenciesAsync();
+        bool vcRedistInstalled = IsVcRedistInstalled();
+        string? existingOpenRgb = IsOpenRgbAlreadyInstalled(installPath);
+        Log($"Pre-flight: VC++ runtime installed={vcRedistInstalled}; OpenRGB={existingOpenRgb ?? "not found"}");
 
         // ── Step 1: VC++ Redistributable ───────────────────────────────────────
-        if (installVcRedist)
+        if (installVcRedist && vcRedistInstalled)
+        {
+            UpdateProgress(10, "Visual C++ runtime already installed — skipping");
+        }
+        else if (installVcRedist)
         {
             await InstallVcRedistributableAsync();
         }
@@ -170,9 +251,13 @@ public partial class InstallerWindow : Window
         CreateRunIonityLauncher(installPath);
 
         // ── Step 4: OpenRGB ────────────────────────────────────────────────────
-        if (installOpenRgb)
+        if (installOpenRgb && existingOpenRgb is not null)
         {
-            await InstallOpenRgbWithFallbackAsync(installPath);
+            UpdateProgress(75, $"OpenRGB already installed ({Path.GetDirectoryName(existingOpenRgb)}) — skipping download");
+        }
+        else if (installOpenRgb)
+        {
+            await InstallOpenRgbAsync(installPath);
         }
 
         // ── Step 5: Register with Windows ──────────────────────────────────────
@@ -191,33 +276,6 @@ public partial class InstallerWindow : Window
 
     // ── Pre-flight dependency checks ──────────────────────────────────────────
 
-    private async Task CheckDependenciesAsync()
-    {
-        // Check if VC++ Redistributable is already installed
-        bool vcRedistInstalled = IsVcRedistInstalled();
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (vcRedistInstalled)
-            {
-                InstallVcRedistCheck.IsChecked = false;
-            }
-        });
-
-        // Check if OpenRGB is already installed somewhere
-        bool openRgbFound = IsOpenRgbAlreadyInstalled();
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (openRgbFound)
-            {
-                InstallOpenRgbCheck.IsChecked = false;
-            }
-        });
-
-        await Task.Delay(200); // Brief pause for UI update
-    }
-
     private static bool IsVcRedistInstalled()
     {
         if (!OperatingSystem.IsWindows()) return false;
@@ -232,50 +290,31 @@ public partial class InstallerWindow : Window
         catch { return false; }
     }
 
-    private static bool IsOpenRgbAlreadyInstalled()
+    /// <summary>
+    /// Returns the path of an existing OpenRGB.exe, or null. Checks &lt;installPath&gt;\OpenRGB,
+    /// %LOCALAPPDATA%\FANZI\OpenRGB (where the app downloads it), Program Files (x86/x64),
+    /// %LOCALAPPDATA%\Programs\OpenRGB, %LOCALAPPDATA%\OpenRGB, the Uninstall / App Paths
+    /// registry keys and PATH — the same locations FANZI itself searches.
+    /// </summary>
+    private static string? IsOpenRgbAlreadyInstalled(string installPath)
     {
-        // Check common locations
-        string[] searchPaths =
-        [
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "OpenRGB"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "OpenRGB"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenRGB"),
-        ];
-
-        foreach (var p in searchPaths)
-        {
-            if (File.Exists(Path.Combine(p, "OpenRGB.exe")))
-                return true;
-        }
-
-        // Also check PATH
         try
         {
-            string? path = Environment.GetEnvironmentVariable("PATH");
-            if (path is not null)
+            return OpenRgbInstallLocator.FindExisting(new[]
             {
-                foreach (var dir in path.Split(';'))
-                {
-                    if (!string.IsNullOrWhiteSpace(dir) && File.Exists(Path.Combine(dir, "OpenRGB.exe")))
-                        return true;
-                }
-            }
+                Path.Combine(installPath, "OpenRGB", OpenRgbInstallLocator.ExeName),
+            });
         }
-        catch { }
-
-        return false;
+        catch
+        {
+            return null;
+        }
     }
 
     // ── VC++ Redistributable ──────────────────────────────────────────────────
 
     private async Task InstallVcRedistributableAsync()
     {
-        if (IsVcRedistInstalled())
-        {
-            UpdateProgress(10, "Visual C++ runtime already installed — skipping");
-            return;
-        }
-
         UpdateProgress(8, "Downloading Visual C++ runtime...");
 
         string tempPath = Path.Combine(Path.GetTempPath(), "vc_redist.x64.exe");
@@ -289,8 +328,9 @@ public partial class InstallerWindow : Window
         }
         catch (Exception ex)
         {
-            UpdateProgress(12, $"VC++ download failed ({ex.Message.Split('\n')[0]}) — continuing");
-            await Task.Delay(500);
+            string reason = ex.Message.Split('\n')[0];
+            UpdateProgress(12, $"VC++ download failed ({reason}) — continuing");
+            AddWarning($"Visual C++ runtime could not be downloaded ({reason}). Hardware sensors may not work — install it from {VcRedistUrl}.");
             return;
         }
 
@@ -305,20 +345,27 @@ public partial class InstallerWindow : Window
                 CreateNoWindow = true,
             };
             using var proc = Process.Start(psi);
-            if (proc is not null)
+            if (proc is null)
+            {
+                AddWarning($"Visual C++ runtime installer could not be started. Install it from {VcRedistUrl}.");
+            }
+            else
             {
                 await proc.WaitForExitAsync();
-                if (proc.ExitCode != 0 && proc.ExitCode != 3010) // 3010 = reboot required
+                Log($"VC++ installer exit code {proc.ExitCode}");
+                // 0 = OK, 3010 = reboot required, 1638 = newer version already installed
+                if (proc.ExitCode != 0 && proc.ExitCode != 3010 && proc.ExitCode != 1638)
                 {
                     UpdateProgress(13, $"VC++ installer exited with code {proc.ExitCode} — continuing");
-                    await Task.Delay(500);
+                    AddWarning($"Visual C++ runtime installer exited with code {proc.ExitCode}. Hardware sensors may not work — install it from {VcRedistUrl}.");
                 }
             }
         }
         catch (Exception ex)
         {
-            UpdateProgress(13, $"VC++ install failed ({ex.Message.Split('\n')[0]}) — continuing");
-            await Task.Delay(500);
+            string reason = ex.Message.Split('\n')[0];
+            UpdateProgress(13, $"VC++ install failed ({reason}) — continuing");
+            AddWarning($"Visual C++ runtime install failed ({reason}). Install it from {VcRedistUrl}.");
         }
         finally
         {
@@ -326,81 +373,44 @@ public partial class InstallerWindow : Window
         }
     }
 
-    // ── OpenRGB (with mirror fallback) ────────────────────────────────────────
+    // ── OpenRGB (shared resolver + validated package installer) ───────────────
 
-    private async Task InstallOpenRgbWithFallbackAsync(string installPath)
+    private async Task InstallOpenRgbAsync(string installPath)
     {
         string openRgbDir = Path.Combine(installPath, "OpenRGB");
-        Directory.CreateDirectory(openRgbDir);
+        UpdateProgress(55, "Looking up the latest OpenRGB release...");
 
-        string zipPath = Path.Combine(openRgbDir, "OpenRGB.zip");
-
-        // Check if already downloaded and extracted
-        if (File.Exists(Path.Combine(openRgbDir, "OpenRGB.exe")))
+        try
         {
-            UpdateProgress(55, "OpenRGB already installed in FANZI folder — skipping download");
-            await Task.Delay(300);
+            _openRgbResult = await OpenRgbPackageInstaller.InstallLatestAsync(
+                openRgbDir,
+                new InlineProgress(msg => UpdateProgress(62, msg)),
+                Log);
+        }
+        catch (Exception ex)
+        {
+            _openRgbResult = OpenRgbInstallResult.Fail($"{ex.GetType().Name}: {ex.Message}");
+        }
+
+        if (_openRgbResult.Success)
+        {
+            Log($"OpenRGB installed: {_openRgbResult.ExePath} from {_openRgbResult.SourceUrl}");
+            UpdateProgress(75, "OpenRGB installed");
             return;
         }
 
-        // Try each mirror until one succeeds
-        Exception? lastError = null;
-        foreach (var url in OpenRgbDownloadUrls)
-        {
-            try
-            {
-                UpdateProgress(55, $"Downloading OpenRGB from {new Uri(url).Host}...");
-
-                if (File.Exists(zipPath)) File.Delete(zipPath);
-
-                using var response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode();
-                await using var stream = await response.Content.ReadAsStreamAsync();
-                await using var fileStream = File.Create(zipPath);
-                await stream.CopyToAsync(fileStream);
-
-                // Success — extract
-                UpdateProgress(68, "Extracting OpenRGB...");
-                ZipFile.ExtractToDirectory(zipPath, openRgbDir, overwriteFiles: true);
-                File.Delete(zipPath);
-
-                // Flatten subdirectory if present
-                FlattenOpenRgbSubdir(openRgbDir);
-
-                UpdateProgress(75, "OpenRGB installed");
-                return;
-            }
-            catch (Exception ex)
-            {
-                lastError = ex;
-                UpdateProgress(60, $"Mirror failed, trying next...");
-                await Task.Delay(500);
-            }
-        }
-
-        // All mirrors failed — non-fatal, warn the user
-        UpdateProgress(75, $"OpenRGB download failed — RGB control requires manual install");
-        await Task.Delay(1000);
+        // Non-fatal: FANZI still works and will retry from its RGB tab.
+        UpdateProgress(75, "OpenRGB download failed — see the warning when installation finishes");
+        AddWarning(
+            $"OpenRGB could not be installed: {_openRgbResult.Error}" + Environment.NewLine +
+            $"RGB lighting needs OpenRGB. Download the Windows portable zip from {OpenRgbDownloadPageUrl} " +
+            "or use Retry / Locate OpenRGB.exe… on FANZI's RGB tab.");
     }
 
-    private static void FlattenOpenRgbSubdir(string openRgbDir)
+    /// <summary>IProgress that invokes the callback synchronously (keeps messages in order).</summary>
+    private sealed class InlineProgress(Action<string> report) : IProgress<string>
     {
-        var subdirs = Directory.GetDirectories(openRgbDir);
-        foreach (var sd in subdirs)
-        {
-            if (Path.GetFileName(sd).StartsWith("OpenRGB", StringComparison.OrdinalIgnoreCase))
-            {
-                foreach (var f in Directory.GetFiles(sd))
-                    File.Move(f, Path.Combine(openRgbDir, Path.GetFileName(f)), overwrite: true);
-                foreach (var d in Directory.GetDirectories(sd))
-                {
-                    var dest = Path.Combine(openRgbDir, Path.GetFileName(d));
-                    if (Directory.Exists(dest)) Directory.Delete(dest, true);
-                    Directory.Move(d, dest);
-                }
-                Directory.Delete(sd, true);
-            }
-        }
+        public void Report(string value) => report(value);
     }
 
     // ── Embedded FANZI extraction ─────────────────────────────────────────────
@@ -463,7 +473,7 @@ public partial class InstallerWindow : Window
         using var uninstallKey = Registry.LocalMachine.CreateSubKey(
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\FANZI");
         uninstallKey.SetValue("DisplayName", "FANZI — AI-Powered Fan Control");
-        uninstallKey.SetValue("DisplayVersion", "2.1.0");
+        uninstallKey.SetValue("DisplayVersion", AppVersion);
         uninstallKey.SetValue("Publisher", "Ionity Global Pty Ltd");
         uninstallKey.SetValue("InstallLocation", installPath);
         uninstallKey.SetValue("DisplayIcon", exePath);
@@ -608,11 +618,11 @@ public partial class InstallerWindow : Window
 
     private void UpdateProgress(int percent, string status)
     {
+        Log(status);
         Dispatcher.UIThread.Post(() =>
         {
             ProgressBar.Value = percent;
             ProgressStatus.Text = status;
         });
-        Thread.Sleep(120);
     }
 }

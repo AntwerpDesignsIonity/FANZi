@@ -15,7 +15,7 @@
     <Authors>Johan Wilhelm van Antwerp</Authors>
     <Copyright>© 2018-2026 Antwerp Designs. ALL Rights Reserved. POL986 AED License 990|900.</Copyright>
     <Description>FANZI Installer — AI-Powered Fan Control &amp; RGB Lighting</Description>
-    <Version>2.1.0</Version>
+    <Version>2.2.0</Version>
     <AssemblyName>FANZI-Installer</AssemblyName>
   </PropertyGroup>
 
@@ -29,6 +29,11 @@
 
   <ItemGroup>
     <AvaloniaResource Include="..\Fanzi.FanControl\Assets\**" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Shared OpenRGB release resolver / package installer / install locator (BCL only). -->
+  <ItemGroup>
+    <Compile Include="..\Fanzi.FanControl\Services\OpenRgb\*.cs" Link="Shared\OpenRgb\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- Bundle the published Fanzi.FanControl.exe inside the installer as an

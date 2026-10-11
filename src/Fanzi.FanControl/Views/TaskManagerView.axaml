@@ -4,47 +4,47 @@
              xmlns:svc="using:Fanzi.FanControl.Services"
              x:Class="Fanzi.FanControl.Views.TaskManagerView"
              x:DataType="vm:TaskManagerViewModel">
-    <Border CornerRadius="20" Background="#0C1828" BorderBrush="#1E3254" BorderThickness="1" Padding="24">
+    <Border Classes="panel">
         <Grid RowDefinitions="Auto,12,Auto,12,*" RowSpacing="0">
 
             <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="Task Manager" FontSize="20" FontWeight="Black" Foreground="#E8F0FF"/>
+                    <TextBlock Text="Task Manager" Classes="h1"/>
                     <TextBlock Text="{Binding LastUpdated}" Foreground="#4A6A8F" FontSize="11"/>
                 </StackPanel>
                 <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshNowCommand}" Padding="10,5" FontSize="11"/>
-                <Button Grid.Column="2" Content="Open taskmgr.exe" Command="{Binding OpenWindowsTaskMgrCommand}" Padding="10,5" FontSize="11"/>
-                <Button Grid.Column="3" Content="Resource Monitor" Command="{Binding OpenResourceMonitorCommand}" Padding="10,5" FontSize="11"/>
+                <Button Grid.Column="2" Content="Open taskmgr.exe" Command="{Binding OpenWindowsTaskMgrCommand}" Classes="ghost" Padding="10,5" FontSize="11"/>
+                <Button Grid.Column="3" Content="Resource Monitor" Command="{Binding OpenResourceMonitorCommand}" Classes="ghost" Padding="10,5" FontSize="11"/>
             </Grid>
 
             <Grid Grid.Row="2" ColumnDefinitions="*,*,*,Auto" ColumnSpacing="10">
-                <Border Grid.Column="0" Background="#0A1422" CornerRadius="10" Padding="12,8">
+                <Border Grid.Column="0" Classes="tile" Padding="12,8">
                     <StackPanel>
-                        <TextBlock Text="PROCESSES" Foreground="#4E6E95" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock Text="PROCESSES" Classes="label-caps" LetterSpacing="1"/>
                         <TextBlock Text="{Binding ProcessCount}" FontSize="22" FontWeight="Black" Foreground="#E8F0FF"/>
                     </StackPanel>
                 </Border>
-                <Border Grid.Column="1" Background="#0A1422" CornerRadius="10" Padding="12,8">
+                <Border Grid.Column="1" Classes="tile" Padding="12,8">
                     <StackPanel>
-                        <TextBlock Text="TOTAL CPU%" Foreground="#4E6E95" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock Text="TOTAL CPU%" Classes="label-caps" LetterSpacing="1"/>
                         <TextBlock Text="{Binding TotalCpuPercent, StringFormat={}{0}%}" FontSize="22" FontWeight="Black" Foreground="#22C55E"/>
                     </StackPanel>
                 </Border>
-                <Border Grid.Column="2" Background="#0A1422" CornerRadius="10" Padding="12,8">
+                <Border Grid.Column="2" Classes="tile" Padding="12,8">
                     <StackPanel>
-                        <TextBlock Text="TOTAL RAM" Foreground="#4E6E95" FontSize="10" FontWeight="Bold"/>
+                        <TextBlock Text="TOTAL RAM" Classes="label-caps" LetterSpacing="1"/>
                         <TextBlock Text="{Binding TotalMemoryGb, StringFormat={}{0} GB}" FontSize="22" FontWeight="Black" Foreground="#3B82F6"/>
                     </StackPanel>
                 </Border>
                 <TextBox Grid.Column="3" Watermark="Filter processes..." Text="{Binding Filter, Mode=TwoWay}" Width="180" FontSize="12" Background="#081320" Foreground="#C4D8F4" BorderBrush="#1E3A60" CornerRadius="8" Padding="8,4" VerticalAlignment="Center"/>
             </Grid>
 
-            <Border Grid.Row="4" Background="#061018" CornerRadius="12" Padding="0">
+            <Border Grid.Row="4" Classes="tile" Background="#061018" Padding="0" ClipToBounds="True">
                 <DockPanel>
                     <Border DockPanel.Dock="Bottom" Background="#08111C" Padding="12,8" BorderBrush="#1A2845" BorderThickness="0,1,0,0">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                             <TextBlock Grid.Column="0" Text="Select a process and click End Task to kill it." Foreground="#4A6A8F" FontSize="11" VerticalAlignment="Center"/>
-                            <Button Grid.Column="1" Content="End Task" Command="{Binding KillSelectedCommand}" Background="#7C2D12" Foreground="#FFF" Padding="14,6" FontSize="12" FontWeight="Bold"/>
+                            <Button Grid.Column="1" Content="End Task" Command="{Binding KillSelectedCommand}" Classes="danger" Padding="14,6" FontSize="12" FontWeight="Bold"/>
                         </Grid>
                     </Border>
                     <DataGrid ItemsSource="{Binding Processes}" SelectedItem="{Binding SelectedProcess, Mode=TwoWay}"

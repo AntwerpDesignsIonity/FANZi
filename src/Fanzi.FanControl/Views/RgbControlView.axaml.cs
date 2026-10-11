@@ -1,5 +1,7 @@
 using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 using Fanzi.FanControl.ViewModels;
+using System.Threading.Tasks;
 
 namespace Fanzi.FanControl.Views;
 
@@ -10,7 +12,38 @@ public partial class RgbControlView : UserControl
         InitializeComponent();
 
         // Wire up slider → ViewModel callbacks once the view is loaded.
-        this.AttachedToVisualTree += (_, _) => AttachSliderHandlers();
+        this.AttachedToVisualTree += (_, _) =>
+        {
+            AttachSliderHandlers();
+            AttachFilePicker();
+        };
+        DataContextChanged += (_, _) => AttachFilePicker();
+    }
+
+    /// <summary>Gives the ViewModel a file picker for "Locate OpenRGB.exe…".</summary>
+    private void AttachFilePicker()
+    {
+        if (DataContext is RgbControlViewModel vm)
+            vm.PickOpenRgbExecutable = PickOpenRgbExecutableAsync;
+    }
+
+    private async Task<string?> PickOpenRgbExecutableAsync()
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel is null) return null;
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Locate OpenRGB.exe",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                // Only OpenRGB.exe is accepted (OpenRgbServerManager.IsOpenRgbExecutableName).
+                new FilePickerFileType("OpenRGB executable (OpenRGB.exe)") { Patterns = new[] { "OpenRGB.exe" } },
+            },
+        });
+
+        return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
     private void AttachSliderHandlers()

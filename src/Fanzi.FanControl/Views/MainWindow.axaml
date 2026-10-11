@@ -3,6 +3,9 @@
         xmlns:vm="using:Fanzi.FanControl.ViewModels"
         xmlns:model="using:Fanzi.FanControl.Models"
         xmlns:views="using:Fanzi.FanControl.Views"
+        xmlns:conv="using:Fanzi.FanControl.Converters"
+        xmlns:controls="using:Fanzi.FanControl.Controls"
+        xmlns:services="using:Fanzi.FanControl.Services"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="960"
@@ -15,185 +18,10 @@
         Background="#050A12"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="38"
-        ExtendClientAreaChromeHints="NoChrome">
+        ExtendClientAreaChromeHints="NoChrome"
+        Classes.reduce-motion="{Binding ReduceMotion}">
 
-    <Window.Styles>
-        <!-- ═══ CARD STYLES ═══ -->
-        <Style Selector="Border.card">
-            <Setter Property="CornerRadius" Value="16"/>
-            <Setter Property="Padding" Value="20"/>
-            <Setter Property="Background" Value="#0C1524"/>
-            <Setter Property="BorderBrush" Value="#1A2845"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
-                    <ThicknessTransition Property="BorderThickness" Duration="0:0:0.2"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="Border.card:pointerover">
-            <Setter Property="BorderBrush" Value="#2A4875"/>
-        </Style>
-        <Style Selector="Border.card-glow">
-            <Setter Property="CornerRadius" Value="16"/>
-            <Setter Property="Padding" Value="20"/>
-            <Setter Property="Background" Value="#0A1220"/>
-            <Setter Property="BorderBrush" Value="#1E3A6E"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BoxShadow" Value="0 0 20 2 #102040"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="Border.card-glow:pointerover">
-            <Setter Property="BorderBrush" Value="#2E5A9E"/>
-            <Setter Property="BoxShadow" Value="0 0 28 4 #153060"/>
-        </Style>
-        <Style Selector="Border.card-accent">
-            <Setter Property="CornerRadius" Value="16"/>
-            <Setter Property="Padding" Value="20"/>
-            <Setter Property="Background" Value="#081018"/>
-            <Setter Property="BorderBrush" Value="#2563EB"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BoxShadow" Value="0 0 24 2 #0A2050"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="Border.card-accent:pointerover">
-            <Setter Property="BoxShadow" Value="0 0 32 4 #103070"/>
-        </Style>
-
-        <!-- ═══ TEXT STYLES ═══ -->
-        <Style Selector="TextBlock.section-title">
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="#5A7FA8"/>
-            <Setter Property="LetterSpacing" Value="1"/>
-        </Style>
-        <Style Selector="TextBlock.metric-value">
-            <Setter Property="FontSize" Value="32"/>
-            <Setter Property="FontWeight" Value="Black"/>
-            <Setter Property="Foreground" Value="#E8F0FF"/>
-        </Style>
-        <Style Selector="TextBlock.metric-caption">
-            <Setter Property="Foreground" Value="#4A6A8F"/>
-            <Setter Property="FontSize" Value="11"/>
-        </Style>
-        <Style Selector="TextBlock.ai-glow">
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="#34D399"/>
-        </Style>
-
-        <!-- ═══ BUTTON STYLES ═══ -->
-        <Style Selector="Button">
-            <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Background" Value="#141E30"/>
-            <Setter Property="Foreground" Value="#A0C0E0"/>
-            <Setter Property="Padding" Value="14,8"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <BrushTransition Property="Background" Duration="0:0:0.2"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="Button:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#1E3050"/>
-        </Style>
-        <Style Selector="Button:pressed /template/ ContentPresenter">
-            <Setter Property="Background" Value="#0E1825"/>
-        </Style>
-        <Style Selector="Button.primary">
-            <Setter Property="Background" Value="#2563EB"/>
-            <Setter Property="Foreground" Value="#FFFFFF"/>
-        </Style>
-        <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#3B82F6"/>
-        </Style>
-        <Style Selector="Button.primary:pressed /template/ ContentPresenter">
-            <Setter Property="Background" Value="#1D4ED8"/>
-        </Style>
-        <Style Selector="Button.danger">
-            <Setter Property="Background" Value="#7F1D1D"/>
-            <Setter Property="Foreground" Value="#FCA5A5"/>
-        </Style>
-        <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#991B1B"/>
-        </Style>
-        <Style Selector="Button.success">
-            <Setter Property="Background" Value="#064E3B"/>
-            <Setter Property="Foreground" Value="#6EE7B7"/>
-        </Style>
-        <Style Selector="Button.success:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="#065F46"/>
-        </Style>
-
-        <!-- ═══ SLIDER ═══ -->
-        <Style Selector="Slider">
-            <Setter Property="Foreground" Value="#2563EB"/>
-        </Style>
-
-        <!-- ═══ PROFILE TABS ═══ -->
-        <Style Selector="Border.profile-tab">
-            <Setter Property="Background" Value="#141E30"/>
-            <Setter Property="CornerRadius" Value="20"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <BrushTransition Property="Background" Duration="0:0:0.2"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="Border.profile-tab:pointerover">
-            <Setter Property="Background" Value="#1A2A42"/>
-        </Style>
-        <Style Selector="Border.profile-tab.active">
-            <Setter Property="Background" Value="#1D4ED8"/>
-            <Setter Property="BoxShadow" Value="0 0 12 1 #1D4ED8"/>
-        </Style>
-
-        <!-- ═══ TAB CONTROL ═══ -->
-        <Style Selector="TabControl">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding" Value="0"/>
-        </Style>
-        <Style Selector="TabItem">
-            <Setter Property="Background" Value="#080E18"/>
-            <Setter Property="Foreground" Value="#4A6A8F"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Padding" Value="20,10"/>
-            <Setter Property="Margin" Value="0,0,2,0"/>
-            <Setter Property="MinWidth" Value="120"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <BrushTransition Property="Background" Duration="0:0:0.2"/>
-                    <BrushTransition Property="Foreground" Duration="0:0:0.2"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="TabItem:selected">
-            <Setter Property="Background" Value="#0C1524"/>
-            <Setter Property="Foreground" Value="#E8F0FF"/>
-        </Style>
-        <Style Selector="TabItem:pointerover">
-            <Setter Property="Foreground" Value="#A0C0E0"/>
-            <Setter Property="Background" Value="#0A1220"/>
-        </Style>
-
-        <!-- ═══ TOGGLE SWITCH ═══ -->
-        <Style Selector="ToggleSwitch">
-            <Setter Property="OnContent" Value=""/>
-            <Setter Property="OffContent" Value=""/>
-        </Style>
-    </Window.Styles>
+    <!-- Card / button / tab styles live in Styles/FanziTheme.axaml (included by App.axaml). -->
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
@@ -204,29 +32,59 @@
         <Border x:Name="TitleBar" Height="38" VerticalAlignment="Top" ZIndex="200" Background="#050A12" IsHitTestVisible="True">
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="14,0" VerticalAlignment="Center">
-                    <Image Source="/Assets/ionity-logo.png" Width="20" Height="20" Opacity="0.8"/>
-                    <TextBlock Text="FANZi IO-nity" FontSize="12" FontWeight="Black" Foreground="#2563EB" VerticalAlignment="Center"/>
-                    <TextBlock Text="v2.1" FontSize="10" Foreground="#3A5070" VerticalAlignment="Center"/>
+                    <!-- Logo with a soft blurred radial glow behind it -->
+                    <Panel Width="22" Height="22" VerticalAlignment="Center">
+                        <Ellipse Width="30" Height="30" Margin="-4" Fill="{StaticResource LogoGlow}" Opacity="0.8"
+                                 IsHitTestVisible="False" Effect="blur(6)"/>
+                        <Image Source="/Assets/ionity-logo.png" Width="20" Height="20" Opacity="0.95"/>
+                    </Panel>
+                    <TextBlock Text="FANZi IO-nity" FontSize="12" FontWeight="Black" Foreground="{StaticResource AccentGradient}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{x:Static services:AppVersion.ShortLabel}" FontSize="10" Foreground="#3A5070" VerticalAlignment="Center"/>
+                    <!-- Shown only when a newer release is published; opens the release page -->
+                    <Button IsVisible="{Binding IsUpdateAvailable}" Command="{Binding OpenUpdatePageCommand}"
+                            ToolTip.Tip="{Binding UpdateTooltip}" Content="{Binding UpdateBadgeText}"
+                            Background="#3366FF" Foreground="#FFFFFF" FontSize="10" FontWeight="SemiBold"
+                            Padding="8,2" CornerRadius="9" VerticalAlignment="Center" Cursor="Hand"/>
                 </StackPanel>
                 <TextBlock Grid.Column="1" Text="AI Thermal Intelligence" FontSize="11" Foreground="#3A5070" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0" Margin="0,0,4,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding LastUpdated}" FontSize="10" Foreground="#2A4060" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <TextBlock Text="{Binding LastUpdated}" FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
                     <!-- Window Controls -->
-                    <Button x:Name="MinimizeButton" Content="─" Background="Transparent" Foreground="#5A7FA8" FontSize="14" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Minimize"/>
-                    <Button x:Name="MaximizeButton" Content="□" Background="Transparent" Foreground="#5A7FA8" FontSize="13" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Maximize"/>
-                    <Button x:Name="CloseButton" Content="✕" Background="Transparent" Foreground="#EF4444" FontSize="13" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Close"/>
+                    <Button x:Name="HelpButton" Content="?" Command="{Binding ToggleHelpCommand}" Background="Transparent" Foreground="#5A7FA8" FontSize="13" FontWeight="Black" Padding="12,6" CornerRadius="6"
+                            ToolTip.Tip="Help &amp; keyboard shortcuts (F1)" AutomationProperties.Name="Help and keyboard shortcuts"/>
+                    <Button x:Name="MinimizeButton" Content="─" Background="Transparent" Foreground="#5A7FA8" FontSize="14" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Minimize"
+                            AutomationProperties.Name="Minimize window"/>
+                    <Button x:Name="MaximizeButton" Content="□" Background="Transparent" Foreground="#5A7FA8" FontSize="13" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Maximize"
+                            AutomationProperties.Name="Maximize or restore window"/>
+                    <Button x:Name="CloseButton" Content="✕" Background="Transparent" Foreground="#EF4444" FontSize="13" FontWeight="Bold" Padding="12,6" CornerRadius="6" ToolTip.Tip="Close"
+                            AutomationProperties.Name="Close window"/>
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- ═══════════════ LOADER OVERLAY ═══════════════ -->
-        <Border IsVisible="{Binding IsLoading}" Background="#050A12" ZIndex="100">
+        <Border IsVisible="{Binding IsLoading}" Classes.loading="{Binding IsLoading}"
+                Background="{StaticResource LoaderBackground}" ZIndex="100">
             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="24">
-                <Image Source="/Assets/ionity-logo.png" Width="200" Opacity="0.9"/>
-                <TextBlock Text="FANZi IO-nity" FontSize="56" FontWeight="Black" Foreground="#2563EB" HorizontalAlignment="Center"/>
+                <!-- Pulsing glow behind the logo (animation in FanziTheme: Border.loading Ellipse.logo-pulse) -->
+                <Panel Width="200" HorizontalAlignment="Center">
+                    <Ellipse Classes="logo-pulse" Width="300" Height="300" Margin="-50" Fill="{StaticResource LogoGlow}"
+                             IsHitTestVisible="False" Effect="blur(24)"/>
+                    <Image Source="/Assets/ionity-logo.png" Width="200" Opacity="0.95"/>
+                </Panel>
+                <TextBlock Text="FANZi IO-nity" FontSize="56" FontWeight="Black" Foreground="{StaticResource AccentGradient}" HorizontalAlignment="Center"/>
                 <TextBlock Text="AI Thermal Intelligence &amp; RGB Control" FontSize="16" Foreground="#4A6A8F" HorizontalAlignment="Center"/>
-                <ProgressBar IsIndeterminate="True" Width="240" Height="3" Foreground="#2563EB" Margin="0,8,0,0"/>
-                <TextBlock Text="Initializing thermal intelligence..." FontSize="12" Foreground="#2A4060" HorizontalAlignment="Center"/>
+                <!-- Spinning conic-gradient ring (animation in FanziTheme: Border.loading Arc.spinner) -->
+                <Panel Width="44" Height="44" HorizontalAlignment="Center" Margin="0,8,0,0">
+                    <Ellipse Stroke="#142238" StrokeThickness="4"/>
+                    <Arc Classes="spinner" StartAngle="0" SweepAngle="300" StrokeThickness="4" StrokeLineCap="Round"
+                         Stroke="{StaticResource SpinnerGradient}" RenderTransformOrigin="50%,50%">
+                        <Arc.RenderTransform>
+                            <RotateTransform Angle="0"/>
+                        </Arc.RenderTransform>
+                    </Arc>
+                </Panel>
+                <TextBlock Text="Initializing thermal intelligence..." FontSize="12" Foreground="{StaticResource FanziTextMutedBrush}" HorizontalAlignment="Center"/>
                 <TextBlock Text="Ionity Global (Pty) Ltd" FontSize="11" Foreground="#1A3050" HorizontalAlignment="Center" Margin="0,20,0,0"/>
             </StackPanel>
         </Border>
@@ -239,11 +97,11 @@
                 <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*" RowSpacing="12">
 
                 <!-- ── PROFILES BAR ──────────────────────────────── -->
-                <Border Grid.Row="0" CornerRadius="12" Background="#080E18" BorderBrush="#1A2845" BorderThickness="1" Padding="12,8">
+                <Border Grid.Row="0" Classes="tile" Background="{StaticResource FanziBg1Brush}" Padding="12,8">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Border CornerRadius="6" Background="#0F1A2A" Padding="8,4">
-                                <TextBlock Text="PROFILES" FontSize="10" FontWeight="Black" Foreground="#5A7FA8" LetterSpacing="1"/>
+                            <Border Classes="pill" Padding="8,4">
+                                <TextBlock Text="PROFILES" Classes="label-caps" FontWeight="Black" Foreground="#5A7FA8" LetterSpacing="1"/>
                             </Border>
                         </StackPanel>
                         <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -266,9 +124,12 @@
                                                         <KeyBinding Gesture="Escape" Command="{Binding CommitRenameCommand}"/>
                                                     </TextBox.KeyBindings>
                                                 </TextBox>
-                                                <Button Content="✎" Command="{Binding BeginRenameCommand}" IsVisible="{Binding !IsRenaming}" Background="Transparent" Foreground="#5A7FA8" Padding="2,5" CornerRadius="0" FontSize="10"/>
-                                                <Button Content="✓" Command="{Binding CommitRenameCommand}" IsVisible="{Binding IsRenaming}" Background="Transparent" Foreground="#34D399" Padding="2,5" CornerRadius="0" FontSize="10"/>
-                                                <Button Content="×" Command="{Binding DeleteCommand}" Background="Transparent" Foreground="#6A8AAF" Padding="2,5,8,5" CornerRadius="0,20,20,0" FontSize="12"/>
+                                                <Button Content="✎" Command="{Binding BeginRenameCommand}" IsVisible="{Binding !IsRenaming}" Background="Transparent" Foreground="#5A7FA8" Padding="2,5" CornerRadius="0" FontSize="10"
+                                                        ToolTip.Tip="Rename" AutomationProperties.Name="{Binding Name, StringFormat='Rename profile {0}'}"/>
+                                                <Button Content="✓" Command="{Binding CommitRenameCommand}" IsVisible="{Binding IsRenaming}" Background="Transparent" Foreground="#34D399" Padding="2,5" CornerRadius="0" FontSize="10"
+                                                        ToolTip.Tip="Save name" AutomationProperties.Name="{Binding Name, StringFormat='Save the name of profile {0}'}"/>
+                                                <Button Content="×" Command="{Binding DeleteCommand}" Background="Transparent" Foreground="#6A8AAF" Padding="2,5,8,5" CornerRadius="0,20,20,0" FontSize="12"
+                                                        ToolTip.Tip="Delete" AutomationProperties.Name="{Binding Name, StringFormat='Delete profile {0}'}"/>
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
@@ -280,27 +141,46 @@
                 </Border>
 
                 <!-- ── AI STATUS BAR ──────────────────────────────── -->
-                <Border Grid.Row="1" CornerRadius="12" Background="#060D18" BorderBrush="#0F2040" BorderThickness="1" Padding="14,8">
+                <Border Grid.Row="1" Classes="tile" Background="#060D18" BorderBrush="{StaticResource CardBorderGradient}" Padding="14,8">
                     <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Border CornerRadius="10" Background="#0A1A10" BorderBrush="#166534" BorderThickness="1" Padding="8,3">
+                            <Border Classes="pill" Background="#0A1A10" BorderBrush="#166534" Padding="8,3">
                                 <TextBlock Text="{Binding AiStatus}" FontSize="10" FontWeight="Bold" Foreground="#34D399"/>
                             </Border>
+                            <!-- RGB status chip: dot follows the OpenRGB connection; click jumps to the RGB tab -->
+                            <!-- Short label ("Connected · 3 devices"); the full OpenRGB status is the tooltip -->
+                            <Button Classes="ghost" Command="{Binding OpenRgbTabCommand}" Padding="8,3" CornerRadius="14"
+                                    ToolTip.Tip="{Binding RgbControl.ConnectionStatus}"
+                                    AutomationProperties.Name="{Binding RgbControl.ConnectionChipText, StringFormat='RGB {0}. Open the RGB tab'}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Ellipse Width="7" Height="7" Fill="{Binding RgbControl.ConnectionDotColor}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="RGB" FontSize="10" FontWeight="Black" Foreground="#A0C0E0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="RgbChipText" Text="{Binding RgbControl.ConnectionChipText}" FontSize="10" Foreground="#6A8AAF"
+                                               MaxWidth="200" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Foreground="#4A6A8F" FontSize="11" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis"/>
+                        <!-- Status text takes the leftover width; when that is too narrow to read (MinWidth window),
+                             code-behind hides it instead of leaving a bare "…" — the full text stays in the tooltip. -->
+                        <Border x:Name="StatusMessageHost" Grid.Column="1" Background="Transparent" Margin="12,0"
+                                ToolTip.Tip="{Binding StatusMessage}">
+                            <TextBlock x:Name="StatusMessageText" Text="{Binding StatusMessage}" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </Border>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="8,0">
-                            <TextBlock Text="Trend:" FontSize="10" Foreground="#3A5A80" VerticalAlignment="Center"/>
+                            <TextBlock Text="Trend:" FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding AiTrend}" FontSize="10" FontWeight="Bold" Foreground="#60A5FA" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="8,0">
-                            <TextBlock Text="Predict:" FontSize="10" Foreground="#3A5A80" VerticalAlignment="Center"/>
+                            <TextBlock Text="Predict:" FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding AiPrediction}" FontSize="10" FontWeight="Bold" Foreground="#FBBF24" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="8,0">
-                            <TextBlock Text="AI Fan:" FontSize="10" Foreground="#3A5A80" VerticalAlignment="Center"/>
+                            <TextBlock Text="AI Fan:" FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" VerticalAlignment="Center"/>
                             <TextBlock Text="{Binding AiSuggestedFan}" FontSize="10" FontWeight="Bold" Foreground="#34D399" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <Button Grid.Column="5" Content="Refresh" Classes="primary" Command="{Binding RefreshCommand}" Padding="10,5" FontSize="10" Margin="8,0,0,0"/>
+                        <Button Grid.Column="5" Content="Refresh" Classes="primary" Command="{Binding RefreshCommand}" Padding="10,5" FontSize="10" Margin="8,0,0,0"
+                                ToolTip.Tip="Read all sensors now (F5)"/>
                     </Grid>
                 </Border>
 
@@ -310,7 +190,7 @@
                     <!-- ══ TAB: DASHBOARD ═══════════════════════════ -->
                     <TabItem Header="Dashboard">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Spacing="14" Margin="0,12,0,12">
+                            <StackPanel Spacing="14" Margin="0,12,12,12">
 
                                 <!-- Anomaly Alert -->
                                 <Border IsVisible="{Binding HasAnomaly}" CornerRadius="12" Background="#1C0808" BorderBrush="#991B1B" BorderThickness="1" Padding="16,10"
@@ -329,229 +209,352 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- IO-nity AI Health & Game Mode Panel — HERO -->
-                                <Border CornerRadius="20" BorderBrush="#1E3A6E" BorderThickness="2" Padding="24,20"
-                                        BoxShadow="0 0 50 4 #102050">
-                                    <Border.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.5">
-                                            <GradientStop Color="#060D1A" Offset="0"/>
-                                            <GradientStop Color="#0A1428" Offset="0.5"/>
-                                            <GradientStop Color="#081020" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Border.Background>
-                                    <Grid ColumnDefinitions="320,*" ColumnSpacing="24">
+                                <!-- IO-nity AI HERO: health gauge · CPU/GPU gauges · Game Mode + AI Coach -->
+                                <Border CornerRadius="20" BorderThickness="1.5"
+                                        BorderBrush="{StaticResource AccentGradientSoft}"
+                                        Background="{StaticResource HeroBackground}"
+                                        BoxShadow="0 0 48 4 #2E2563EB, inset 0 1 0 0 #1AFFFFFF">
+                                    <Panel>
+                                        <!-- Radial glow layers over the linear navy base -->
+                                        <Border CornerRadius="20" Background="{StaticResource HeroGlow}" IsHitTestVisible="False"/>
+                                        <Border CornerRadius="20" Background="{StaticResource HeroGlowSecondary}" IsHitTestVisible="False"/>
 
-                                        <!-- LEFT: Massive Health Score -->
-                                        <Border Grid.Column="0" CornerRadius="16" Padding="20,16" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                                BorderThickness="1" BorderBrush="#1E40AF">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                    <GradientStop Color="#0A1A30" Offset="0"/>
-                                                    <GradientStop Color="#0F2040" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
-                                                <TextBlock Text="IO-NITY HEALTH SCORE" FontSize="11" FontWeight="Black" Foreground="#4E6E95" LetterSpacing="3" HorizontalAlignment="Center"/>
+                                        <Grid ColumnDefinitions="1.1*,2*,1.3*" ColumnSpacing="20" Margin="24,20">
 
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
-                                                    <TextBlock Text="{Binding HealthEmoji}" FontSize="56" VerticalAlignment="Center"/>
-                                                    <StackPanel VerticalAlignment="Center">
-                                                        <TextBlock Text="{Binding HealthScore}" FontSize="72" FontWeight="Black" Foreground="#E8F0FF" LineHeight="72"/>
-                                                        <TextBlock Text="/ 100" FontSize="18" FontWeight="Bold" Foreground="#3A5A80" Margin="4,-8,0,0"/>
-                                                    </StackPanel>
+                                            <!-- LEFT: IO-nity health gauge (inverted scale: high = cool) -->
+                                            <StackPanel Grid.Column="0" Spacing="10" VerticalAlignment="Center">
+                                                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" ClipToBounds="False">
+                                                    <controls:ThermalGauge Value="{Binding HealthScoreValue}"
+                                                                           ValueText="{Binding HealthScore}"
+                                                                           Minimum="0" Maximum="100" IsInverted="True"
+                                                                           Size="172" Thickness="13"
+                                                                           Label="IO-NITY HEALTH" Unit="/100"/>
+                                                </Viewbox>
+                                                <Border Classes="pill" Background="{StaticResource AccentGradient}" BorderThickness="0"
+                                                        Padding="16,4" HorizontalAlignment="Center" BoxShadow="0 0 16 1 #4D7C3AED">
+                                                    <TextBlock Text="{Binding HealthGrade}" FontSize="16" FontWeight="Black" Foreground="#FFFFFF"
+                                                               HorizontalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding HealthSummary}" FontSize="11" Foreground="#6A8FC0"
+                                                           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                                <!-- Capped at 2 lines so the hero stays calm at the hot state; the full insights are the tooltip -->
+                                                <TextBlock x:Name="HealthInsightsText" Text="{Binding HealthInsights}" FontSize="10" Classes="muted"
+                                                           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxLines="2"
+                                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding HealthInsights}"/>
+                                            </StackPanel>
+
+                                            <!-- MIDDLE: CPU + GPU temperature gauges -->
+                                            <Grid Grid.Column="1" ColumnDefinitions="*,*" ColumnSpacing="12" VerticalAlignment="Center">
+                                                <StackPanel Grid.Column="0" Spacing="8">
+                                                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" ClipToBounds="False">
+                                                        <!-- Package → hotspot → average core; shows a dash placeholder when no CPU sensor exists -->
+                                                        <controls:ThermalGauge Value="{Binding CpuGaugeTempValue}"
+                                                                               Size="160" Thickness="12" Label="CPU" Unit="°C"/>
+                                                    </Viewbox>
+                                                    <!-- Wraps to 2 lines so long model names ("…8-Core Processor", "RTX 4080 SUPER") stay readable at MinWidth -->
+                                                    <TextBlock x:Name="HeroCpuNameText" Text="{Binding CpuName}" Classes="metric-caption" HorizontalAlignment="Center"
+                                                               TextAlignment="Center" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding CpuName}"/>
                                                 </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="8">
+                                                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" ClipToBounds="False">
+                                                        <controls:ThermalGauge Value="{Binding GpuCoreTempValue}"
+                                                                               Size="160" Thickness="12" Label="GPU" Unit="°C"/>
+                                                    </Viewbox>
+                                                    <TextBlock x:Name="HeroGpuNameText" Text="{Binding GpuName}" Classes="metric-caption" HorizontalAlignment="Center"
+                                                               TextAlignment="Center" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding GpuName}"/>
+                                                </StackPanel>
+                                            </Grid>
 
-                                                <Border CornerRadius="10" Background="#0A1422" Padding="12,6" HorizontalAlignment="Center">
-                                                    <TextBlock Text="{Binding HealthGrade}" FontSize="24" FontWeight="Black" Foreground="#60A5FA" HorizontalAlignment="Center"/>
+                                            <!-- RIGHT: compact Game Mode + AI Coach cards -->
+                                            <StackPanel Grid.Column="2" Spacing="12" VerticalAlignment="Center">
+
+                                                <Border Classes="tile" Background="#B30A1422" Padding="14,12">
+                                                    <StackPanel Spacing="6">
+                                                        <TextBlock Text="GAME MODE AI" Classes="label-caps" TextTrimming="CharacterEllipsis"/>
+                                                        <!-- Short static title (never trims); the game name + session length wrap on the line below -->
+                                                        <TextBlock x:Name="GameModeTitleText" Text="{Binding GameModeTitle}"
+                                                                   FontSize="15" FontWeight="Black" Foreground="#22C55E"
+                                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding GameModeStatus}"/>
+                                                        <TextBlock x:Name="GameModeDetailText" Text="{Binding GameModeDetail}" FontSize="11" Classes="muted"
+                                                                   IsVisible="{Binding IsGameMode}" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                                                   ToolTip.Tip="{Binding GameModeStatus}"/>
+                                                        <Border IsVisible="{Binding IsGameMode}" Classes="pill" HorizontalAlignment="Left"
+                                                                Background="#064E3B" BorderBrush="#166534">
+                                                            <TextBlock Text="🎮 Gaming profile active" FontSize="11" FontWeight="Bold" Foreground="#34D399"/>
+                                                        </Border>
+                                                        <Border IsVisible="{Binding !IsGameMode}" Classes="pill" HorizontalAlignment="Left">
+                                                            <!-- The title already says "Desktop mode"; the pill states why -->
+                                                            <TextBlock Text="🖥️ No game detected" FontSize="11" FontWeight="Bold" Foreground="#5A7FA8"/>
+                                                        </Border>
+                                                    </StackPanel>
                                                 </Border>
 
-                                                <TextBlock Text="{Binding HealthSummary}" FontSize="12" Foreground="#6A8FC0" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
-                                                <TextBlock Text="{Binding HealthInsights}" FontSize="10" Foreground="#4A6A8F" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280"/>
+                                                <Border Classes="tile" Background="#B30A1422" Padding="14,12">
+                                                    <StackPanel Spacing="8">
+                                                        <TextBlock Text="AI THERMAL COACH" Classes="label-caps" TextTrimming="CharacterEllipsis"/>
+                                                        <Border Classes="pill" HorizontalAlignment="Left" Background="#0A1A10" BorderBrush="#166534" Padding="8,2">
+                                                            <TextBlock Text="{Binding AiStatus}" FontSize="10" FontWeight="Black" Foreground="#34D399"/>
+                                                        </Border>
+                                                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="4">
+                                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="TREND" Classes="label-caps" FontSize="9" LetterSpacing="1" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AiTrend}" FontSize="13" FontWeight="Black" Foreground="#60A5FA"
+                                                                       HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="30s FORECAST" Classes="label-caps" FontSize="9" LetterSpacing="1" VerticalAlignment="Center"/>
+                                                            <TextBlock x:Name="CoachForecastText" Grid.Row="1" Grid.Column="1" Text="{Binding AiForecast}" FontSize="13" FontWeight="Black" Foreground="#FBBF24"
+                                                                       HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
+                                                                       ToolTip.Tip="Predicted CPU temperature in 30 seconds (-- while AEDi is still learning)"/>
+                                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="AI FAN" Classes="label-caps" FontSize="9" LetterSpacing="1" VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding AiSuggestedFan}" FontSize="13" FontWeight="Black" Foreground="#34D399"
+                                                                       HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                                                        </Grid>
+                                                    </StackPanel>
+                                                </Border>
                                             </StackPanel>
-                                        </Border>
-
-                                        <!-- RIGHT: Game Mode + AI Coach stacked -->
-                                        <Grid Grid.Column="1" RowDefinitions="*,*" RowSpacing="14">
-
-                                            <!-- Game Mode AI -->
-                                            <Border Grid.Row="0" CornerRadius="14" Padding="18,14" BorderBrush="#1A2845" BorderThickness="1">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                        <GradientStop Color="#0A1422" Offset="0"/>
-                                                        <GradientStop Color="#0D1A2E" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <Grid ColumnDefinitions="Auto,*,Auto">
-                                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="4">
-                                                        <TextBlock Text="GAME MODE AI" FontSize="11" FontWeight="Black" Foreground="#4E6E95" LetterSpacing="3"/>
-                                                        <TextBlock Text="{Binding GameModeStatus}" FontSize="22" FontWeight="Black" Foreground="#22C55E"/>
-                                                        <TextBlock Text="{Binding DetectedGame}" FontSize="13" Foreground="#5A7899" IsVisible="{Binding IsGameMode}"/>
-                                                    </StackPanel>
-                                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6" HorizontalAlignment="Right">
-                                                        <Border IsVisible="{Binding IsGameMode}" CornerRadius="10" Padding="14,8" HorizontalAlignment="Right"
-                                                                BorderBrush="#166534" BorderThickness="1">
-                                                            <Border.Background>
-                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                                    <GradientStop Color="#064E3B" Offset="0"/>
-                                                                    <GradientStop Color="#0A1A10" Offset="1"/>
-                                                                </LinearGradientBrush>
-                                                            </Border.Background>
-                                                            <TextBlock Text="🎮 Gaming Profile Active" FontSize="13" FontWeight="Black" Foreground="#34D399"/>
-                                                        </Border>
-                                                        <Border IsVisible="{Binding !IsGameMode}" CornerRadius="10" Background="#0F1A2A" Padding="14,8" HorizontalAlignment="Right">
-                                                            <TextBlock Text="🖥️ Desktop Mode" FontSize="13" FontWeight="Black" Foreground="#5A7FA8"/>
-                                                        </Border>
-                                                    </StackPanel>
-                                                </Grid>
-                                            </Border>
-
-                                            <!-- AI Thermal Coach -->
-                                            <Border Grid.Row="1" CornerRadius="14" Padding="18,14" BorderBrush="#1A2845" BorderThickness="1">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                        <GradientStop Color="#0A1422" Offset="0"/>
-                                                        <GradientStop Color="#0D1A2E" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <StackPanel Spacing="8">
-                                                    <Grid ColumnDefinitions="*,Auto">
-                                                        <TextBlock Grid.Column="0" Text="AI THERMAL COACH" FontSize="11" FontWeight="Black" Foreground="#4E6E95" LetterSpacing="3"/>
-                                                        <Border Grid.Column="1" CornerRadius="8" Background="#0A1A10" Padding="10,4" BorderBrush="#166534" BorderThickness="1">
-                                                            <TextBlock Text="{Binding AiStatus}" FontSize="11" FontWeight="Black" Foreground="#34D399"/>
-                                                        </Border>
-                                                    </Grid>
-                                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="16">
-                                                        <StackPanel Grid.Column="0">
-                                                            <TextBlock Text="TREND" FontSize="9" FontWeight="Bold" Foreground="#3A5A80" LetterSpacing="1"/>
-                                                            <TextBlock Text="{Binding AiTrend}" FontSize="20" FontWeight="Black" Foreground="#60A5FA" Margin="0,2,0,0"/>
-                                                        </StackPanel>
-                                                        <StackPanel Grid.Column="1">
-                                                            <TextBlock Text="30s PREDICTION" FontSize="9" FontWeight="Bold" Foreground="#3A5A80" LetterSpacing="1"/>
-                                                            <TextBlock Text="{Binding AiPrediction}" FontSize="20" FontWeight="Black" Foreground="#FBBF24" Margin="0,2,0,0"/>
-                                                        </StackPanel>
-                                                        <StackPanel Grid.Column="2">
-                                                            <TextBlock Text="AI FAN SPEED" FontSize="9" FontWeight="Bold" Foreground="#3A5A80" LetterSpacing="1"/>
-                                                            <TextBlock Text="{Binding AiSuggestedFan}" FontSize="20" FontWeight="Black" Foreground="#34D399" Margin="0,2,0,0"/>
-                                                        </StackPanel>
-                                                    </Grid>
-                                                </StackPanel>
-                                            </Border>
                                         </Grid>
-                                    </Grid>
+                                    </Panel>
+                                </Border>
+
+                                <!-- Live thermal history: CPU + GPU temperature over the selected window (1 / 5 / 15 min) -->
+                                <Border x:Name="ThermalHistoryPanel" Classes="card" Padding="20,16">
+                                    <StackPanel Spacing="12">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock x:Name="ThermalHistoryTitleText" Text="{Binding HistoryTitle}" Classes="h2" FontSize="14"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="Live temperatures, colour-coded by heat" Classes="muted" FontSize="10"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                <RadioButton Classes="segment" GroupName="HistoryWindow" Content="1 min"
+                                                             IsChecked="{Binding IsHistoryWindow1Min, Mode=TwoWay}"
+                                                             AutomationProperties.Name="Show the last 1 minute"/>
+                                                <RadioButton Classes="segment" GroupName="HistoryWindow" Content="5 min"
+                                                             IsChecked="{Binding IsHistoryWindow5Min, Mode=TwoWay}"
+                                                             AutomationProperties.Name="Show the last 5 minutes"/>
+                                                <RadioButton Classes="segment" GroupName="HistoryWindow" Content="15 min"
+                                                             IsChecked="{Binding IsHistoryWindow15Min, Mode=TwoWay}"
+                                                             AutomationProperties.Name="Show the last 15 minutes"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="24">
+                                            <controls:ThermalHistoryChart x:Name="CpuHistoryChart" Grid.Column="0" Height="150" Title="CPU"
+                                                                          History="{Binding History.CpuTemperature}"
+                                                                          TimeWindow="{Binding HistoryWindow}"
+                                                                          Revision="{Binding HistoryRevision}"
+                                                                          AutomationProperties.Name="CPU temperature history"/>
+                                            <controls:ThermalHistoryChart x:Name="GpuHistoryChart" Grid.Column="1" Height="150" Title="GPU"
+                                                                          History="{Binding History.GpuTemperature}"
+                                                                          TimeWindow="{Binding HistoryWindow}"
+                                                                          Revision="{Binding HistoryRevision}"
+                                                                          AutomationProperties.Name="GPU temperature history"/>
+                                        </Grid>
+                                    </StackPanel>
                                 </Border>
 
                                 <!-- Coach Recommendations -->
-                                <Border IsVisible="{Binding HasCoachRecommendations}" CornerRadius="12" Background="#0A1422" BorderBrush="#1E3A6E" BorderThickness="1" Padding="16,10">
+                                <Border IsVisible="{Binding HasCoachRecommendations}" Classes="tile" BorderBrush="{StaticResource CardBorderGradient}" Padding="16,10">
                                     <StackPanel Spacing="6">
-                                        <TextBlock Text="🧠 AI COACH RECOMMENDATIONS" FontSize="10" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="2"/>
+                                        <TextBlock Text="🧠 AI COACH RECOMMENDATIONS" Classes="label-caps"/>
                                         <TextBlock Text="{Binding CoachRecommendations}" FontSize="11" Foreground="#A0C0E0" TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </Border>
 
                                 <!-- CPU Temperatures -->
+                                <!-- Temperature-reactive cards: border, glow, top accent bar and value gradient follow TemperatureColorScale -->
                                 <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
-                                    <Border Grid.Column="0" Classes="card-accent">
+                                    <Border Grid.Column="0" Classes="card temp-card"
+                                            BorderBrush="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                        <Border.BoxShadow>
+                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                <Binding Path="CpuPackageTempValue"/>
+                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                            </MultiBinding>
+                                        </Border.BoxShadow>
                                         <StackPanel Spacing="4">
+                                            <Border Classes="temp-bar" Background="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
                                             <TextBlock Text="CPU PACKAGE" Classes="section-title"/>
-                                            <TextBlock Text="{Binding CpuPackageTemperature}" Classes="metric-value"/>
-                                            <TextBlock Text="{Binding CpuName}" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuPackageTemperature}" Classes="metric-value"
+                                                           Foreground="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                            </Viewbox>
+                                            <TextBlock x:Name="CpuPackageNameText" Text="{Binding CpuName}" Classes="metric-caption"
+                                                       TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CpuName}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Grid.Column="1" Classes="card-glow">
+                                    <Border Grid.Column="1" Classes="card temp-card"
+                                            BorderBrush="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                        <Border.BoxShadow>
+                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                <Binding Path="CpuAverageTempValue"/>
+                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                            </MultiBinding>
+                                        </Border.BoxShadow>
                                         <StackPanel Spacing="4">
+                                            <Border Classes="temp-bar" Background="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
                                             <TextBlock Text="AVERAGE CORE" Classes="section-title"/>
-                                            <TextBlock Text="{Binding CpuAverageTemperature}" Classes="metric-value"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuAverageTemperature}" Classes="metric-value"
+                                                           Foreground="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                            </Viewbox>
                                             <TextBlock Text="Average across cores" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Grid.Column="2" Classes="card">
+                                    <Border Grid.Column="2" Classes="card temp-card"
+                                            BorderBrush="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                        <Border.BoxShadow>
+                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                <Binding Path="CpuHotspotTempValue"/>
+                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                            </MultiBinding>
+                                        </Border.BoxShadow>
                                         <StackPanel Spacing="4">
+                                            <Border Classes="temp-bar" Background="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
                                             <TextBlock Text="HOTSPOT" Classes="section-title"/>
-                                            <TextBlock Text="{Binding CpuHotspotTemperature}" Classes="metric-value"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuHotspotTemperature}" Classes="metric-value"
+                                                           Foreground="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                            </Viewbox>
                                             <TextBlock Text="Hottest sensor" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
                                 </Grid>
 
                                 <!-- CPU Stats + Fan -->
-                                <Grid ColumnDefinitions="1.4*,*,*,*,*" ColumnSpacing="12">
+                                <!-- The fan card is taller (slider + buttons); the four stat cards keep their own height,
+                                     top-aligned and equal to each other, instead of stretching into empty space. -->
+                                <Grid ColumnDefinitions="1.4*,4*" ColumnSpacing="12">
                                     <Border Grid.Column="0" Classes="card-glow">
                                         <StackPanel Spacing="4">
                                             <TextBlock Text="{Binding CpuFanName}" Classes="section-title"/>
-                                            <TextBlock Text="{Binding CpuFanSpeed}" FontSize="26" FontWeight="Black" Foreground="#E8F0FF"/>
+                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuFanSpeed}" FontSize="26" FontWeight="Black" Foreground="#E8F0FF" TextWrapping="Wrap"/>
                                             <TextBlock Text="{Binding CpuFanControl}" FontSize="16" FontWeight="Bold" Foreground="#2563EB"/>
                                             <Slider Minimum="0" Maximum="100" Value="{Binding CpuFanDesiredPercent, Mode=TwoWay}" IsEnabled="{Binding CpuFanCanControl}" Margin="0,4"/>
                                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                                 <TextBlock Grid.Column="0" Text="{Binding CpuFanDesiredLabel}" Foreground="#4A6A8F" FontSize="11" VerticalAlignment="Center"/>
-                                                <Button Grid.Column="1" Content="Apply" Classes="primary" Command="{Binding ApplyCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="60" Padding="10,5" FontSize="11"/>
-                                                <Button Grid.Column="2" Content="Auto" Command="{Binding AutoCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="60" Padding="10,5" FontSize="11"/>
+                                                <Button Grid.Column="1" Content="Apply" Classes="primary" Command="{Binding ApplyCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="0" Padding="10,5" FontSize="11"/>
+                                                <Button Grid.Column="2" Content="Auto" Command="{Binding AutoCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="0" Padding="10,5" FontSize="11"/>
                                             </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                    <Grid x:Name="CpuStatCards" Grid.Column="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="12" VerticalAlignment="Top">
+                                    <Border Grid.Column="0" Classes="card">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="CPU LOAD" Classes="section-title"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuTotalLoad}" Classes="metric-value"/>
+                                            </Viewbox>
+                                            <ProgressBar Classes="thin" Value="{Binding CpuLoadValue}" Margin="0,2,0,2"/>
+                                            <TextBlock Text="Utilization" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
                                     <Border Grid.Column="1" Classes="card">
                                         <StackPanel Spacing="4">
-                                            <TextBlock Text="CPU LOAD" Classes="section-title"/>
-                                            <TextBlock Text="{Binding CpuTotalLoad}" Classes="metric-value"/>
-                                            <TextBlock Text="Utilization" Classes="metric-caption"/>
+                                            <TextBlock Text="AVG CLOCK" Classes="section-title"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuAverageClock}" Classes="metric-value"/>
+                                            </Viewbox>
+                                            <TextBlock Text="Core frequency" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
                                     <Border Grid.Column="2" Classes="card">
                                         <StackPanel Spacing="4">
-                                            <TextBlock Text="AVG CLOCK" Classes="section-title"/>
-                                            <TextBlock Text="{Binding CpuAverageClock}" Classes="metric-value"/>
-                                            <TextBlock Text="Core frequency" Classes="metric-caption"/>
+                                            <TextBlock Text="PKG POWER" Classes="section-title"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuPackagePower}" Classes="metric-value"/>
+                                            </Viewbox>
+                                            <TextBlock Text="Package draw" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
                                     <Border Grid.Column="3" Classes="card">
                                         <StackPanel Spacing="4">
-                                            <TextBlock Text="PKG POWER" Classes="section-title"/>
-                                            <TextBlock Text="{Binding CpuPackagePower}" Classes="metric-value"/>
-                                            <TextBlock Text="Package draw" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="4" Classes="card">
-                                        <StackPanel Spacing="4">
                                             <TextBlock Text="VOLTAGE" Classes="section-title"/>
-                                            <TextBlock Text="{Binding CpuCoreVoltage}" Classes="metric-value"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuCoreVoltage}" Classes="metric-value"/>
+                                            </Viewbox>
                                             <TextBlock Text="Vcore" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
+                                    </Grid>
                                 </Grid>
 
                                 <!-- GPU Row -->
                                 <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="12">
-                                    <Border Grid.Column="0" Classes="card-glow">
+                                    <Border Grid.Column="0" Classes="card temp-card"
+                                            BorderBrush="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                        <Border.BoxShadow>
+                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                <Binding Path="GpuCoreTempValue"/>
+                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                            </MultiBinding>
+                                        </Border.BoxShadow>
                                         <StackPanel Spacing="4">
+                                            <Border Classes="temp-bar" Background="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
                                             <TextBlock Text="GPU TEMP" Classes="section-title"/>
-                                            <TextBlock Text="{Binding GpuCoreTemperature}" Classes="metric-value"/>
-                                            <TextBlock Text="{Binding GpuName}" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuCoreTemperature}" Classes="metric-value"
+                                                           Foreground="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                            </Viewbox>
+                                            <TextBlock x:Name="GpuTempNameText" Text="{Binding GpuName}" Classes="metric-caption"
+                                                       TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding GpuName}"/>
                                         </StackPanel>
                                     </Border>
-                                    <Border Grid.Column="1" Classes="card">
+                                    <Border Grid.Column="1" Classes="card temp-card"
+                                            BorderBrush="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                        <Border.BoxShadow>
+                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                <Binding Path="GpuHotspotTempValue"/>
+                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                            </MultiBinding>
+                                        </Border.BoxShadow>
                                         <StackPanel Spacing="4">
+                                            <Border Classes="temp-bar" Background="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
                                             <TextBlock Text="GPU HOTSPOT" Classes="section-title"/>
-                                            <TextBlock Text="{Binding GpuHotspotTemperature}" Classes="metric-value"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuHotspotTemperature}" Classes="metric-value"
+                                                           Foreground="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                            </Viewbox>
                                             <TextBlock Text="Junction" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
                                     <Border Grid.Column="2" Classes="card">
                                         <StackPanel Spacing="4">
                                             <TextBlock Text="GPU LOAD" Classes="section-title"/>
-                                            <TextBlock Text="{Binding GpuLoad}" Classes="metric-value"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuLoad}" Classes="metric-value"/>
+                                            </Viewbox>
+                                            <ProgressBar Classes="thin" Value="{Binding GpuLoadValue}" Margin="0,2,0,2"/>
                                             <TextBlock Text="Utilization" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
                                     <Border Grid.Column="3" Classes="card">
                                         <StackPanel Spacing="4">
                                             <TextBlock Text="GPU CLOCK" Classes="section-title"/>
-                                            <TextBlock Text="{Binding GpuClock}" Classes="metric-value"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuClock}" Classes="metric-value"/>
+                                            </Viewbox>
                                             <TextBlock Text="Core clock" Classes="metric-caption"/>
                                         </StackPanel>
                                     </Border>
                                     <Border Grid.Column="4" Classes="card">
                                         <StackPanel Spacing="4">
                                             <TextBlock Text="GPU POWER" Classes="section-title"/>
-                                            <TextBlock Text="{Binding GpuPower}" Classes="metric-value"/>
+                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuPower}" Classes="metric-value"/>
+                                            </Viewbox>
                                             <TextBlock Text="{Binding GpuVram}" Classes="metric-caption" IsVisible="{Binding GpuVram, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                         </StackPanel>
                                     </Border>
@@ -569,7 +572,7 @@
                     <!-- ══ TAB: FAN CONTROL ═══════════════════════ -->
                     <TabItem Header="Fans">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Spacing="12" Margin="0,12,0,12">
+                            <StackPanel Spacing="12" Margin="0,12,12,12">
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
                                     <StackPanel Grid.Column="0">
                                         <TextBlock Text="Fan &amp; Pump Channels" FontSize="20" FontWeight="Black" Foreground="#E8F0FF"/>
@@ -581,10 +584,55 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <!-- CPU fan curve editor: the active profile's FanCurve (what AI Auto-Fan follows) -->
+                                <Border Classes="card" Padding="20,16,20,14">
+                                    <StackPanel Spacing="10">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <StackPanel Grid.Column="0" Spacing="3">
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock Text="CPU fan curve" Classes="h2" VerticalAlignment="Center"/>
+                                                    <Border Classes="pill info" VerticalAlignment="Center">
+                                                        <TextBlock x:Name="FanCurvePresetText" Text="{Binding FanCurvePresetLabel}" FontSize="10" FontWeight="Bold"
+                                                                   Foreground="{StaticResource FanziAccentSoftBrush}"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock x:Name="FanCurveStatusText" Text="{Binding FanCurveStatus}" Classes="muted" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                <RadioButton Classes="segment" GroupName="FanCurvePreset" Content="Silent" IsChecked="{Binding IsFanCurveSilent}"
+                                                             ToolTip.Tip="Whisper-quiet, fans low until 65 °C" AutomationProperties.Name="Silent fan curve preset"/>
+                                                <RadioButton Classes="segment" GroupName="FanCurvePreset" Content="Balanced" IsChecked="{Binding IsFanCurveBalanced}"
+                                                             ToolTip.Tip="Default — good cooling, low noise" AutomationProperties.Name="Balanced fan curve preset"/>
+                                                <RadioButton Classes="segment" GroupName="FanCurvePreset" Content="Performance" IsChecked="{Binding IsFanCurvePerformance}"
+                                                             ToolTip.Tip="Aggressive ramp from 45 °C — keeps temps low" AutomationProperties.Name="Performance fan curve preset"/>
+                                                <RadioButton Classes="segment" GroupName="FanCurvePreset" Content="Full" IsChecked="{Binding IsFanCurveFull}"
+                                                             ToolTip.Tip="100 % at every temperature" AutomationProperties.Name="Full speed fan curve preset"/>
+                                                <Button Content="Reset" Command="{Binding ResetFanCurveCommand}" Padding="10,4" FontSize="11" Margin="4,0,0,0"
+                                                        ToolTip.Tip="Back to the default (Balanced) curve" AutomationProperties.Name="Reset fan curve to default"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <controls:FanCurveEditor x:Name="FanCurveEditor" Height="280"
+                                                                 Points="{Binding FanCurvePoints, Mode=TwoWay}"
+                                                                 CurrentTemperature="{Binding HottestTempValue}"
+                                                                 AutomationProperties.Name="CPU fan curve editor"
+                                                                 AutomationProperties.HelpText="Arrow keys move the selected point by 1 degree or 1 percent, Shift for 5. Page Up and Page Down select a point, Delete removes it, Insert adds one."/>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <TextBlock x:Name="FanCurveHelpText" Grid.Column="0" Classes="legend" TextWrapping="Wrap" VerticalAlignment="Center"
+                                                       Text="Drag points · double-click to add · right-click to remove · arrow keys nudge (Shift ×5) · PgUp/PgDn select · Del removes"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                                                        ToolTip.Tip="Curve input: CPU hotspot → package → average core. AI Auto-Fan adds trend and acoustic smoothing on top.">
+                                                <TextBlock Text="LIVE" Classes="section-title" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="FanCurveLiveText" Text="{Binding FanCurveDutyLabel}" FontSize="13" FontWeight="Black" VerticalAlignment="Center"
+                                                           Foreground="{Binding HottestTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
                                 <ItemsControl ItemsSource="{Binding FanChannels}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:FanChannelViewModel">
-                                            <Border Margin="0,0,0,8" CornerRadius="14" Background="#080E18" BorderBrush="#142238" BorderThickness="1" Padding="16,12">
+                                            <Border Margin="0,0,0,8" Classes="tile" CornerRadius="14" Background="{StaticResource CardBackground}" BorderBrush="{StaticResource CardBorderGradient}" Padding="16,12">
                                                 <Grid ColumnDefinitions="2*,1.1*,1.8*" ColumnSpacing="14">
                                                     <StackPanel Grid.Column="0" Spacing="4">
                                                         <StackPanel Orientation="Horizontal" Spacing="8">
@@ -593,9 +641,9 @@
                                                             </Border>
                                                             <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" Foreground="#E8F0FF" VerticalAlignment="Center"/>
                                                         </StackPanel>
-                                                        <TextBlock Text="{Binding SourceLabel}" Foreground="#2A4060" FontSize="10" IsVisible="{Binding SourceLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                        <TextBlock Text="{Binding SourceLabel}" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="10" IsVisible="{Binding SourceLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                                         <TextBlock Text="{Binding SpeedLabel}" FontSize="22" FontWeight="Black" Foreground="#2563EB"/>
-                                                        <TextBlock Text="{Binding CapabilityMessage}" Foreground="#3A5A80" FontSize="11" TextWrapping="Wrap"/>
+                                                        <TextBlock Text="{Binding CapabilityMessage}" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
                                                         <TextBlock Text="CURRENT" Classes="section-title"/>
@@ -604,15 +652,22 @@
                                                         <TextBlock Text="{Binding DesiredControlLabel}" FontSize="14" Foreground="#60A5FA"/>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
-                                                        <Slider Minimum="0" Maximum="100" Value="{Binding DesiredPercent, Mode=TwoWay}" IsEnabled="{Binding CanControl}"/>
+                                                        <StackPanel Spacing="0">
+                                                            <Slider Minimum="0" Maximum="100" Value="{Binding DesiredPercent, Mode=TwoWay}" IsEnabled="{Binding CanControl}"/>
+                                                            <!-- Range legend spans the slider track: 0 % left, 50 % centre, 100 % right -->
+                                                            <Grid ColumnDefinitions="*,*,*">
+                                                                <TextBlock Grid.Column="0" Text="0%" Classes="legend" HorizontalAlignment="Left"/>
+                                                                <TextBlock Grid.Column="1" Text="50%" Classes="legend" HorizontalAlignment="Center"/>
+                                                                <TextBlock Grid.Column="2" Text="100%" Classes="legend" HorizontalAlignment="Right"/>
+                                                            </Grid>
+                                                        </StackPanel>
                                                         <Border IsVisible="{Binding ShowMinSpeedWarning}" CornerRadius="8" Background="#1A1000" BorderBrush="#78350F" BorderThickness="1" Padding="8,4">
                                                             <TextBlock Text="Below 20% — bearing wear risk" Foreground="#FDE68A" FontSize="10"/>
                                                         </Border>
-                                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-                                                            <TextBlock Grid.Column="0" Text="0%    50%    100%" Foreground="#2A4060" FontSize="10" VerticalAlignment="Center"/>
-                                                            <Button Grid.Column="1" Content="Apply" Classes="primary" Command="{Binding ApplyCommand}" IsEnabled="{Binding CanControl}" MinWidth="65" Padding="8,5" FontSize="11"/>
-                                                            <Button Grid.Column="2" Content="Auto" Command="{Binding AutoCommand}" IsEnabled="{Binding CanControl}" MinWidth="65" Padding="8,5" FontSize="11"/>
-                                                        </Grid>
+                                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                                                            <Button Content="Apply" Classes="primary" Command="{Binding ApplyCommand}" IsEnabled="{Binding CanControl}" MinWidth="65" Padding="8,5" FontSize="11"/>
+                                                            <Button Content="Auto" Command="{Binding AutoCommand}" IsEnabled="{Binding CanControl}" MinWidth="65" Padding="8,5" FontSize="11"/>
+                                                        </StackPanel>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>
@@ -626,15 +681,84 @@
                     <!-- ══ TAB: SENSORS ═══════════════════════════ -->
                     <TabItem Header="Sensors">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" Margin="0,12,0,12">
+                            <ScrollViewer.Resources>
+                                <!-- Heatmap tile: colours come from TemperatureColorScale (°C or load %) and animate via the theme's BrushTransitions -->
+                                <DataTemplate x:Key="HeatTileTemplate" x:DataType="vm:SensorTileViewModel">
+                                    <Border Classes="heat-tile" Background="{Binding BackgroundBrush}" BorderBrush="{Binding BorderBrush}"
+                                            AutomationProperties.Name="{Binding AutomationName}" ToolTip.Tip="{Binding AutomationName}">
+                                        <Grid RowDefinitions="Auto,*,Auto,Auto">
+                                            <TextBlock Grid.Row="0" Classes="heat-label" Text="{Binding Label}"/>
+                                            <TextBlock Grid.Row="1" Classes="heat-value" controls:AnimatedNumber.Text="{Binding ValueText}" Foreground="{Binding ValueBrush}"/>
+                                            <TextBlock Grid.Row="2" Classes="heat-detail" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"/>
+                                            <ProgressBar Grid.Row="3" Classes="heat-bar" Value="{Binding FillPercent}" Foreground="{Binding AccentBrush}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ScrollViewer.Resources>
+                            <StackPanel Spacing="12" Margin="0,12,12,12">
+
+                            <!-- Heatmap: per-core CPU tiles + CPU-wide sensors, GPU sensors -->
+                            <Border Classes="card" Padding="18,16" x:Name="SensorHeatmapCard">
+                                <Grid RowDefinitions="Auto,Auto" RowSpacing="14">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="Thermal heatmap" Classes="h2"/>
+                                            <TextBlock Text="Live per-core and GPU sensors — hotter tiles glow amber to red" Classes="metric-caption" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center"
+                                                    AutomationProperties.Name="Colour scale: 30 degrees blue to 95 degrees red">
+                                            <Border Width="180" Height="8" CornerRadius="4" Background="{StaticResource TemperatureScaleGradient}"/>
+                                            <Grid ColumnDefinitions="*,*,*" Width="180">
+                                                <TextBlock Grid.Column="0" Text="30°" Classes="legend" HorizontalAlignment="Left"/>
+                                                <TextBlock Grid.Column="1" Text="60°" Classes="legend" HorizontalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="95°C" Classes="legend" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                    <Grid Grid.Row="1" ColumnDefinitions="3*,2*" ColumnSpacing="18">
+                                        <StackPanel Grid.Column="0" Spacing="8">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                <TextBlock Text="CPU · PER CORE" Classes="label-caps" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" x:Name="CpuHeatmapCaptionText" Text="{Binding CpuHeatmapCaption}" Classes="legend" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                            </Grid>
+                                            <ItemsControl x:Name="CpuCoreHeatmap" ItemsSource="{Binding CpuCoreTiles}" ItemTemplate="{StaticResource HeatTileTemplate}"
+                                                          IsVisible="{Binding HasCpuCoreTiles}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                            <TextBlock Text="CPU · PACKAGE" Classes="label-caps" Margin="0,4,0,0"/>
+                                            <ItemsControl x:Name="CpuSummaryHeatmap" ItemsSource="{Binding CpuSummaryTiles}" ItemTemplate="{StaticResource HeatTileTemplate}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Spacing="8">
+                                            <TextBlock Text="GPU" Classes="label-caps"/>
+                                            <ItemsControl x:Name="GpuHeatmap" ItemsSource="{Binding GpuTiles}" ItemTemplate="{StaticResource HeatTileTemplate}"
+                                                          IsVisible="{Binding HasGpuTiles}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                            </ItemsControl>
+                                            <Border Classes="tile empty" IsVisible="{Binding !HasGpuTiles}">
+                                                <TextBlock Text="No GPU sensors exposed" Classes="muted" FontSize="11"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                                 <Border Grid.Column="0" Classes="card" Padding="16">
                                     <Grid RowDefinitions="Auto,*" RowSpacing="10">
                                         <StackPanel>
                                             <TextBlock Text="CPU Sensors" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"/>
-                                            <TextBlock Text="Temp · Load · Clock · Power" Foreground="#3A5A80" FontSize="10"/>
+                                            <TextBlock Text="Temp · Load · Clock · Power" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="10"/>
                                         </StackPanel>
                                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="550">
-                                            <ItemsControl ItemsSource="{Binding CpuReadings}">
+                                            <ItemsControl ItemsSource="{Binding CpuReadings}" Margin="0,0,12,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="model:CpuReadingSnapshot">
                                                         <Border Margin="0,0,0,4" CornerRadius="8" Background="#060C14" Padding="10,5">
@@ -653,10 +777,10 @@
                                     <Grid RowDefinitions="Auto,*" RowSpacing="10">
                                         <StackPanel>
                                             <TextBlock Text="GPU Sensors" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"/>
-                                            <TextBlock Text="Temp · Load · Clock · Power" Foreground="#3A5A80" FontSize="10"/>
+                                            <TextBlock Text="Temp · Load · Clock · Power" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="10"/>
                                         </StackPanel>
                                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="550">
-                                            <ItemsControl ItemsSource="{Binding GpuReadings}">
+                                            <ItemsControl ItemsSource="{Binding GpuReadings}" Margin="0,0,12,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="model:GpuReadingSnapshot">
                                                         <Border Margin="0,0,0,4" CornerRadius="8" Background="#060C14" Padding="10,5">
@@ -672,6 +796,7 @@
                                     </Grid>
                                 </Border>
                             </Grid>
+                            </StackPanel>
                         </ScrollViewer>
                     </TabItem>
 
@@ -703,7 +828,7 @@
                     <!-- ══ TAB: NOTIFICATIONS ═════════════════════ -->
                     <TabItem Header="Alerts">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Spacing="14" Margin="0,12,0,12">
+                            <StackPanel Spacing="14" Margin="0,12,12,12">
 
                                 <Border CornerRadius="14" Background="#0A0D04" BorderBrush="#3A5A20" BorderThickness="1" Padding="18,14">
                                     <StackPanel Spacing="10">
@@ -751,13 +876,57 @@
                     <!-- ══ TAB: SETTINGS ══════════════════════════ -->
                     <TabItem Header="Settings">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel Spacing="14" Margin="0,12,0,12">
+                            <StackPanel Spacing="14" Margin="0,12,12,12">
+
+                                <!-- Alerts & Notifications -->
+                                <Border Classes="card" x:Name="NotificationSettingsCard">
+                                    <StackPanel Spacing="12">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Border Classes="pill info" Padding="8,3">
+                                                <TextBlock Text="🔔" FontSize="11"/>
+                                            </Border>
+                                            <TextBlock Text="Alerts &amp; Notifications" FontSize="16" FontWeight="Black" Foreground="#E8F0FF" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="Toast notifications" Foreground="#A0C0E0" FontSize="13"/>
+                                                <TextBlock x:Name="ToastSettingHelpText" Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                           Text="Pop-up alerts for CPU temperature over your threshold, detected anomalies, OpenRGB connected / failed and profile saved / loaded. Each alert shows at most once every 2 minutes. While FANZi is in the tray, alerts appear in the tray icon tooltip instead."/>
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" x:Name="ToastNotificationsToggle" IsChecked="{Binding ToastNotificationsEnabled}"
+                                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                          AutomationProperties.Name="Toast notifications"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Appearance & accessibility -->
+                                <Border Classes="card" x:Name="AccessibilitySettingsCard">
+                                    <StackPanel Spacing="12">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Border Classes="pill info" Padding="8,3">
+                                                <TextBlock Text="Aa" FontSize="11" FontWeight="Black" Foreground="{StaticResource FanziAccentSoftBrush}"/>
+                                            </Border>
+                                            <TextBlock Text="Appearance &amp; Accessibility" FontSize="16" FontWeight="Black" Foreground="#E8F0FF" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="Reduce motion" Foreground="#A0C0E0" FontSize="13"/>
+                                                <TextBlock x:Name="ReduceMotionHelpText" Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                           Text="Gauges jump straight to the new reading, numbers change without counting and the loading and pulse animations stand still. Press F1 any time for the keyboard shortcuts."/>
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" x:Name="ReduceMotionToggle" IsChecked="{Binding ReduceMotion}"
+                                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                          AutomationProperties.Name="Reduce motion"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
 
                                 <!-- Startup & Tray -->
                                 <Border Classes="card">
                                     <StackPanel Spacing="14">
                                         <TextBlock Text="Startup &amp; System Tray" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"/>
-                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
                                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Start with Windows" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
                                             <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding StartWithWindows}" HorizontalAlignment="Right"/>
                                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Start minimized to tray" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
@@ -766,13 +935,17 @@
                                             <ToggleSwitch Grid.Row="2" Grid.Column="1" IsChecked="{Binding MinimizeToTray}" HorizontalAlignment="Right"/>
                                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Close to tray (keep running)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
                                             <ToggleSwitch Grid.Row="3" Grid.Column="1" IsChecked="{Binding CloseToTray}" HorizontalAlignment="Right"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Overlay transparent (acrylic blur)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Overlay transparent background" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
                                             <ToggleSwitch Grid.Row="4" Grid.Column="1" IsChecked="{Binding OverlayTransparent}" HorizontalAlignment="Right"/>
                                             <TextBlock Grid.Row="5" Grid.Column="0" Text="Overlay opacity" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
                                             <Slider Grid.Row="5" Grid.Column="1" Minimum="0.1" Maximum="1.0" Value="{Binding OverlayOpacity, Mode=TwoWay}" Width="140" HorizontalAlignment="Right" Foreground="#2563EB"/>
+                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Overlay always on top" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <ToggleSwitch Grid.Row="6" Grid.Column="1" IsChecked="{Binding OverlayTopmost}" HorizontalAlignment="Right"/>
                                         </Grid>
+                                        <TextBlock Text="{Binding StartupStatus}" Foreground="#22C55E" FontSize="11" TextWrapping="Wrap"
+                                                   IsVisible="{Binding StartupStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                         <Border CornerRadius="8" Background="#060C14" Padding="12,8">
-                                            <TextBlock Text="When minimized, FANZI reduces polling to save CPU. Right-click the tray icon to restore or exit." Foreground="#3A5A80" FontSize="11" TextWrapping="Wrap"/>
+                                            <TextBlock Text="When minimized, FANZI reduces polling to save CPU. Right-click the tray icon to restore or exit." Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </Border>
                                     </StackPanel>
                                 </Border>
@@ -823,7 +996,7 @@
                                                                     <Button Content="Load" Padding="10,3" FontSize="11"
                                                                             Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).LoadProfileFromDiskCommand}"
                                                                             CommandParameter="{Binding}"/>
-                                                                    <Button Content="Delete" Padding="10,3" FontSize="11" Background="#7C2D12" Foreground="#FFF"
+                                                                    <Button Content="Delete" Padding="10,3" FontSize="11" Classes="danger"
                                                                             Command="{Binding $parent[DataGrid].((vm:MainWindowViewModel)DataContext).DeleteProfileFromDiskCommand}"
                                                                             CommandParameter="{Binding}"/>
                                                                 </StackPanel>
@@ -868,12 +1041,12 @@
                                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="12">
                                             <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
                                                 <TextBlock Text="AI Auto-Fan Control" Foreground="#A0C0E0" FontSize="13"/>
-                                                <TextBlock Text="AI continuously adjusts fan speed using predictive thermal modeling" Foreground="#3A5A80" FontSize="10"/>
+                                                <TextBlock Text="AI continuously adjusts fan speed using predictive thermal modeling" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="10"/>
                                             </StackPanel>
                                             <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding AiAutoFanEnabled}" HorizontalAlignment="Right"/>
                                             <StackPanel Grid.Row="1" Grid.Column="0" Spacing="2">
                                                 <TextBlock Text="Anomaly Detection" Foreground="#A0C0E0" FontSize="13"/>
-                                                <TextBlock Text="Detect thermal spikes, fan stalls, and unusual behavior patterns" Foreground="#3A5A80" FontSize="10"/>
+                                                <TextBlock Text="Detect thermal spikes, fan stalls, and unusual behavior patterns" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="10"/>
                                             </StackPanel>
                                             <ToggleSwitch Grid.Row="1" Grid.Column="1" IsChecked="{Binding AiAnomalyDetection}" HorizontalAlignment="Right"/>
                                         </Grid>
@@ -888,16 +1061,20 @@
                                 <Border Classes="card">
                                     <StackPanel Spacing="10">
                                         <StackPanel Orientation="Horizontal" Spacing="14">
-                                            <Image Source="/Assets/ionity-logo.png" Width="48" Opacity="0.9"/>
+                                            <Panel Width="48" Height="48" VerticalAlignment="Center">
+                                                <Ellipse Width="72" Height="72" Margin="-12" Fill="{StaticResource LogoGlow}" Opacity="0.75"
+                                                         IsHitTestVisible="False" Effect="blur(10)"/>
+                                                <Image Source="/Assets/ionity-logo.png" Width="48" Opacity="0.95"/>
+                                            </Panel>
                                             <StackPanel Spacing="2" VerticalAlignment="Center">
-                                                <TextBlock Text="FANZI v2.1" FontSize="18" FontWeight="Black" Foreground="#2563EB"/>
+                                                <TextBlock Text="{x:Static services:AppVersion.ProductTitle}" FontSize="18" FontWeight="Black" Foreground="{StaticResource AccentGradient}"/>
                                                 <TextBlock Text="AI Thermal Intelligence &amp; RGB Lighting" FontSize="12" Foreground="#6A8AAF"/>
                                             </StackPanel>
                                         </StackPanel>
-                                        <TextBlock Text="© 2018-2026 Antwerp Designs. ALL Rights Reserved." Foreground="#2A4060" FontSize="11"/>
-                                        <TextBlock Text="Johan Wilhelm van Antwerp · AI@IONITY.TODAY" Foreground="#2A4060" FontSize="11"/>
-                                        <TextBlock Text="POL986 AED License 990|900 · FREE TO USE" Foreground="#2A4060" FontSize="11"/>
-                                        <TextBlock TextWrapping="Wrap" Foreground="#2A4060" FontSize="10"
+                                        <TextBlock Text="© 2018-2026 Antwerp Designs. ALL Rights Reserved." Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"/>
+                                        <TextBlock Text="Johan Wilhelm van Antwerp · AI@IONITY.TODAY" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"/>
+                                        <TextBlock Text="POL986 AED License 990|900 · FREE TO USE" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"/>
+                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="10"
                                                    Text="Powered by LibreHardwareMonitor, OpenRGB, Avalonia UI, and custom AI thermal intelligence."/>
                                     </StackPanel>
                                 </Border>
@@ -914,28 +1091,21 @@
                 <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" RowSpacing="10">
 
                     <!-- AEDi Header -->
-                    <Border Grid.Row="0" CornerRadius="14" Padding="14,10" BorderBrush="#1E3A6E" BorderThickness="1"
-                            BoxShadow="0 0 20 1 #0A2050">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#0C1A30" Offset="0"/>
-                                <GradientStop Color="#081020" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.Background>
+                    <Border Grid.Row="0" Classes="card-accent" CornerRadius="14" Padding="14,10">
                         <StackPanel Spacing="6">
                             <Grid ColumnDefinitions="Auto,*,Auto">
-                                <Border Grid.Column="0" CornerRadius="8" Background="#1D4ED8" Padding="6,3">
+                                <Border Grid.Column="0" CornerRadius="8" Background="{StaticResource AccentGradient}" Padding="6,3">
                                     <TextBlock Text="AEDi" FontSize="12" FontWeight="Black" Foreground="#FFF"/>
                                 </Border>
                                 <TextBlock Grid.Column="1" Text="by Ionity" FontSize="10" Foreground="#4A6A8F" VerticalAlignment="Center" Margin="6,0"/>
-                                <TextBlock Grid.Column="2" Text="v2.1" FontSize="9" Foreground="#3A5070" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Text="{x:Static services:AppVersion.ShortLabel}" FontSize="9" Foreground="#3A5070" VerticalAlignment="Center"/>
                             </Grid>
                             <TextBlock Text="Search &amp; Ping AI" FontSize="9" Foreground="#5A7899" LetterSpacing="1"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Search Area -->
-                    <Border Grid.Row="1" CornerRadius="14" Padding="12,10" BorderBrush="#1A2845" BorderThickness="1" Background="#080E18">
+                    <Border Grid.Row="1" Classes="card" CornerRadius="14" Padding="12,10">
                         <StackPanel Spacing="8">
                             <!-- Search Input -->
                             <TextBox Text="{Binding AediQuery, Mode=TwoWay}" Watermark="Search or type command..."
@@ -977,7 +1147,7 @@
                     </Border>
 
                     <!-- Google Profile -->
-                    <Border Grid.Row="2" CornerRadius="14" Padding="12,10" BorderBrush="#1A2845" BorderThickness="1" Background="#080E18">
+                    <Border Grid.Row="2" Classes="card" CornerRadius="14" Padding="12,10">
                         <StackPanel Spacing="6">
                             <TextBlock Text="GOOGLE PROFILE" FontSize="9" FontWeight="Bold" Foreground="#4E6E95" LetterSpacing="1"/>
 
@@ -1017,16 +1187,39 @@
             </Grid>
 
             <!-- ── HELP PANEL ──────────────────────────────────── -->
-            <Border IsVisible="{Binding ShowHelp}" ZIndex="50" Margin="20,80,20,0" VerticalAlignment="Top"
-                    CornerRadius="14" Background="#0A1220" BorderBrush="#1A2845" BorderThickness="1" Padding="20" BoxShadow="0 8 32 4 #000000">
-                <StackPanel Spacing="10">
-                    <TextBlock Text="FANZI Quick Guide" FontSize="18" FontWeight="Black" Foreground="#E8F0FF"/>
-                    <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="FANZI requires administrator privileges to access hardware sensors via LibreHardwareMonitor kernel drivers."/>
-                    <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="Fan channels are auto-detected. Use sliders to set manual duty, Apply to commit, Auto to restore BIOS control."/>
-                    <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="RGB control works out of the box — FANZI launches OpenRGB automatically in the background (SDK port 6742) and connects on its own. Just open the RGB tab."/>
-                    <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="AI engine learns your system's thermal characteristics and predictively adjusts fans. Enable in Settings."/>
-                    <Button Content="Close" Command="{Binding ToggleHelpCommand}" HorizontalAlignment="Right" MinWidth="80"/>
-                </StackPanel>
+            <Border x:Name="HelpPanel" IsVisible="{Binding ShowHelp}" ZIndex="50" Margin="20,80,20,0" VerticalAlignment="Top"
+                    Classes="panel" BorderBrush="{StaticResource GlowBorderGradient}" Padding="20"
+                    BoxShadow="0 8 32 4 #CC000000, 0 0 24 0 #262563EB, inset 0 1 0 0 #1AFFFFFF">
+                <Grid ColumnDefinitions="3*,2*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="28" RowSpacing="12">
+                    <TextBlock Grid.ColumnSpan="2" Text="FANZI Quick Guide" Classes="h1" FontSize="18"/>
+                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="10">
+                        <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="FANZI requires administrator privileges to access hardware sensors via LibreHardwareMonitor kernel drivers."/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="Fan channels are auto-detected. Use sliders to set manual duty, Apply to commit, Auto to restore BIOS control."/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="RGB control works out of the box — FANZI launches OpenRGB automatically in the background (SDK port 6742) and connects on its own. Just open the RGB tab."/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="AI engine learns your system's thermal characteristics and predictively adjusts fans. Enable in Settings."/>
+                    </StackPanel>
+                    <!-- Keyboard shortcuts (KeyboardShortcuts.HelpEntries — the same table the window handles) -->
+                    <Border Grid.Row="1" Grid.Column="1" Classes="tile section" Padding="14,12" VerticalAlignment="Top">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="KEYBOARD SHORTCUTS" Classes="label-caps"/>
+                            <ItemsControl x:Name="HelpShortcutsList" ItemsSource="{Binding ShortcutHelpEntries}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="services:ShortcutHelp">
+                                        <Grid ColumnDefinitions="104,*" ColumnSpacing="10" Margin="0,0,0,6">
+                                            <Border Classes="kbd">
+                                                <TextBlock Text="{Binding Keys}"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Description}" Foreground="#A0C0E0" FontSize="12"
+                                                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                    <Button Grid.Row="2" Grid.ColumnSpan="2" Content="Close" Command="{Binding ToggleHelpCommand}" HorizontalAlignment="Right" MinWidth="80"
+                            ToolTip.Tip="Close the guide (F1)"/>
+                </Grid>
             </Border>
         </Panel>
     </Panel>

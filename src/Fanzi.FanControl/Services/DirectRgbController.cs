@@ -21,7 +21,7 @@ public sealed class DirectRgbController : IRgbService, IDisposable
     private int _frameCounter;
 
     public bool IsConnected => _virtualDevices.Count > 0 || (_bridge?.IsConnected ?? false);
-    public string ServerVersion => _bridge?.ServerVersion ?? "IO-nity Direct RGB Engine v2.0";
+    public string ServerVersion => _bridge?.ServerVersion ?? $"IO-nity Direct RGB Engine {AppVersion.ShortLabel}";
     public string ModeSwitchStatus => _bridge?.ModeSwitchStatus ?? "Virtual devices (no mode switch needed)";
 
     public IReadOnlyList<VirtualRgbDevice> VirtualDevices => _virtualDevices;

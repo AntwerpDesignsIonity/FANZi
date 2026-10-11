@@ -10,6 +10,9 @@ using System.Threading.Tasks;
 
 namespace Fanzi.FanControl.Services;
 
+/// <summary>The parts of a sensor used to pair fan readings with their control channel.</summary>
+internal readonly record struct SensorMatchKey(string HardwareId, int Index, string Name);
+
 public sealed class HardwareMonitorService : IHardwareMonitorService
 {
     private readonly object _syncRoot = new();
@@ -24,7 +27,7 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             return;
         }
 
-        _computer = new Computer
+        var computer = new Computer
         {
             IsCpuEnabled = true,
             IsMotherboardEnabled = true,
@@ -38,8 +41,24 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             IsPowerMonitorEnabled = false,
         };
 
-        _computer.Open();
+        try
+        {
+            computer.Open();
+            _computer = computer;
+            AppLog.Info("Hardware monitor opened (LibreHardwareMonitor).");
+        }
+        catch (Exception ex)
+        {
+            // A broken/blocked ring-0 driver must not take the whole app down.
+            InitializationError = $"Hardware monitor failed to start ({ex.GetType().Name}: {ex.Message}). " +
+                                  "Run FANZi as Administrator and check that no other tool is blocking the sensor driver.";
+            AppLog.Error("Hardware monitor failed to open", ex);
+            try { computer.Close(); } catch { }
+        }
     }
+
+    /// <summary>Set when LibreHardwareMonitor could not be opened; null when sensors are available.</summary>
+    public string? InitializationError { get; }
 
     public void Dispose()
     {
@@ -61,9 +80,17 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Sensor polling (hardware.Update) can take hundreds of ms — keep it off the UI thread.
+        return Task.Run(() => GetSnapshotCore(cancellationToken), cancellationToken);
+    }
+
+    private HardwareSnapshot GetSnapshotCore(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!OperatingSystem.IsWindows() || _computer is null)
         {
-            return Task.FromResult(new HardwareSnapshot(
+            return new HardwareSnapshot(
                 DateTimeOffset.UtcNow,
                 null,
                 null,
@@ -81,11 +108,12 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
                 Array.Empty<CpuReadingSnapshot>(),
                 Array.Empty<GpuReadingSnapshot>(),
                 Array.Empty<FanChannelSnapshot>(),
-                "Hardware access is only enabled on Windows. The UI still runs cross-platform, but fan telemetry requires Windows sensor support.",
+                InitializationError
+                    ?? "Hardware access is only enabled on Windows. The UI still runs cross-platform, but fan telemetry requires Windows sensor support.",
                 null,
                 null,
                 null,
-                null));
+                null);
         }
 
         lock (_syncRoot)
@@ -272,7 +300,7 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
                 _ => "Telemetry is live. Apply sends a manual duty target; Auto restores the device default or BIOS-controlled mode for supported channels."
             };
 
-            return Task.FromResult(new HardwareSnapshot(
+            return new HardwareSnapshot(
                 DateTimeOffset.UtcNow,
                 cpuPackageTemperature,
                 cpuTemperatures.Count == 0 ? null : cpuTemperatures.Average(),
@@ -294,7 +322,7 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
                 cpuName,
                 gpuName,
                 gpuMemoryUsedMb,
-                gpuMemoryTotalMb));
+                gpuMemoryTotalMb);
         }
     }
 
@@ -302,41 +330,47 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        return Task.Run(() =>
         {
-            ThrowIfDisposed();
-
-            if (!_controlMap.TryGetValue(channelId, out IControl? control))
+            lock (_syncRoot)
             {
-                return Task.FromResult(new SetFanControlResult(false, "That fan channel is not currently controllable."));
+                ThrowIfDisposed();
+
+                if (!_controlMap.TryGetValue(channelId, out IControl? control))
+                {
+                    return new SetFanControlResult(false, "That fan channel is not currently controllable.");
+                }
+
+                float clamped = (float)Math.Clamp(percent, control.MinSoftwareValue, control.MaxSoftwareValue);
+                control.SetSoftware(clamped);
+                control.Sensor?.Hardware.Update();
+
+                return new SetFanControlResult(true, $"Manual control applied at {clamped.ToString("F0", CultureInfo.InvariantCulture)}%.");
             }
-
-            float clamped = (float)Math.Clamp(percent, control.MinSoftwareValue, control.MaxSoftwareValue);
-            control.SetSoftware(clamped);
-            control.Sensor?.Hardware.Update();
-
-            return Task.FromResult(new SetFanControlResult(true, $"Manual control applied at {clamped.ToString("F0", CultureInfo.InvariantCulture)}%."));
-        }
+        }, cancellationToken);
     }
 
     public Task<SetFanControlResult> RestoreAutomaticControlAsync(string channelId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        lock (_syncRoot)
+        return Task.Run(() =>
         {
-            ThrowIfDisposed();
-
-            if (!_controlMap.TryGetValue(channelId, out IControl? control))
+            lock (_syncRoot)
             {
-                return Task.FromResult(new SetFanControlResult(false, "That fan channel does not expose a default control mode."));
+                ThrowIfDisposed();
+
+                if (!_controlMap.TryGetValue(channelId, out IControl? control))
+                {
+                    return new SetFanControlResult(false, "That fan channel does not expose a default control mode.");
+                }
+
+                control.SetDefault();
+                control.Sensor?.Hardware.Update();
+
+                return new SetFanControlResult(true, "Automatic or BIOS control restored for this channel.");
             }
-
-            control.SetDefault();
-            control.Sensor?.Hardware.Update();
-
-            return Task.FromResult(new SetFanControlResult(true, "Automatic or BIOS control restored for this channel."));
-        }
+        }, cancellationToken);
     }
 
     private List<FanChannelSnapshot> BuildFanSnapshots(List<ISensor> sensors)
@@ -345,29 +379,45 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
 
         List<ISensor> fanSensors = sensors.Where(sensor => sensor.SensorType == SensorType.Fan).ToList();
         List<ISensor> controlSensors = sensors.Where(sensor => sensor.Control is not null).ToList();
+        List<SensorMatchKey> controlKeys = controlSensors.Select(ToMatchKey).ToList();
         List<FanChannelSnapshot> fanSnapshots = new();
-        HashSet<string> claimedControlIds = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<int> claimedControls = new();
+        HashSet<string> usedIds = new(StringComparer.OrdinalIgnoreCase);
 
         foreach (ISensor fanSensor in fanSensors)
         {
-            ISensor? controlSensor = FindBestControlSensor(fanSensor, controlSensors);
-            if (controlSensor?.Control is not null)
+            ISensor? controlSensor = null;
+            if (fanSensor.Control is not null)
             {
-                claimedControlIds.Add(controlSensor.Control.Identifier.ToString());
+                // The fan sensor carries its own control — claim it so no other fan grabs it.
+                controlSensor = fanSensor;
+                int own = controlSensors.FindIndex(sensor => ReferenceEquals(sensor, fanSensor));
+                if (own >= 0)
+                {
+                    claimedControls.Add(own);
+                }
+            }
+            else
+            {
+                int match = FindBestControlIndex(ToMatchKey(fanSensor), controlKeys, claimedControls);
+                if (match >= 0)
+                {
+                    claimedControls.Add(match);
+                    controlSensor = controlSensors[match];
+                }
             }
 
-            fanSnapshots.Add(CreateFanSnapshot(fanSensor, controlSensor));
+            fanSnapshots.Add(CreateFanSnapshot(fanSensor, controlSensor, usedIds));
         }
 
-        foreach (ISensor controlSensor in controlSensors.Where(sensor => sensor.Control is not null))
+        for (int i = 0; i < controlSensors.Count; i++)
         {
-            string controlId = controlSensor.Control!.Identifier.ToString();
-            if (claimedControlIds.Contains(controlId))
+            if (claimedControls.Contains(i))
             {
                 continue;
             }
 
-            fanSnapshots.Add(CreateFanSnapshot(null, controlSensor));
+            fanSnapshots.Add(CreateFanSnapshot(null, controlSensors[i], usedIds));
         }
 
         return fanSnapshots
@@ -375,12 +425,16 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             .ToList();
     }
 
-    private FanChannelSnapshot CreateFanSnapshot(ISensor? fanSensor, ISensor? controlSensor)
+    private static SensorMatchKey ToMatchKey(ISensor sensor) =>
+        new(sensor.Hardware.Identifier.ToString(), sensor.Index, sensor.Name);
+
+    private FanChannelSnapshot CreateFanSnapshot(ISensor? fanSensor, ISensor? controlSensor, ISet<string> usedIds)
     {
         IControl? control = controlSensor?.Control;
-        string id = control?.Identifier.ToString()
-            ?? fanSensor?.Identifier.ToString()
-            ?? Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+        string id = PickUniqueChannelId(
+            control?.Identifier.ToString(),
+            fanSensor?.Identifier.ToString(),
+            usedIds);
 
         if (control is not null)
         {
@@ -437,30 +491,96 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             sensorIndex);
     }
 
-    private static ISensor? FindBestControlSensor(ISensor fanSensor, List<ISensor> controlSensors)
+    /// <summary>
+    /// Picks the control channel that belongs to a fan sensor. A control matches only when it is on the
+    /// same hardware AND either its normalized name is exactly equal (non-empty names only) or it has the
+    /// same sensor index. Exact name matches win over index matches. Already-claimed controls are skipped,
+    /// so two fans never share one control. Returns the index into <paramref name="controls"/>, or -1.
+    /// </summary>
+    internal static int FindBestControlIndex(
+        SensorMatchKey fan,
+        IReadOnlyList<SensorMatchKey> controls,
+        IReadOnlySet<int>? claimed = null)
     {
-        if (fanSensor.Control is not null)
+        string fanName = NormalizeSensorName(fan.Name);
+        int indexMatch = -1;
+
+        for (int i = 0; i < controls.Count; i++)
         {
-            return fanSensor;
+            if (claimed?.Contains(i) == true)
+            {
+                continue;
+            }
+
+            SensorMatchKey control = controls[i];
+            if (!string.Equals(control.HardwareId, fan.HardwareId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (fanName.Length > 0 && string.Equals(NormalizeSensorName(control.Name), fanName, StringComparison.Ordinal))
+            {
+                return i;
+            }
+
+            if (indexMatch < 0 && control.Index == fan.Index)
+            {
+                indexMatch = i;
+            }
         }
 
-        string normalizedFanName = NormalizeSensorName(fanSensor.Name);
-
-        return controlSensors.FirstOrDefault(controlSensor =>
-            controlSensor.Hardware.Identifier.ToString() == fanSensor.Hardware.Identifier.ToString()
-            && (controlSensor.Index == fanSensor.Index
-                || NormalizeSensorName(controlSensor.Name) == normalizedFanName
-                || NormalizeSensorName(controlSensor.Name).Contains(normalizedFanName, StringComparison.OrdinalIgnoreCase)
-                || normalizedFanName.Contains(NormalizeSensorName(controlSensor.Name), StringComparison.OrdinalIgnoreCase)));
+        return indexMatch;
     }
 
-    private static string NormalizeSensorName(string name)
+    /// <summary>"Fan Control #1" → "1", "CPU Fan" → "cpu", "Fan" → "" (empty never matches by name).</summary>
+    internal static string NormalizeSensorName(string? name)
     {
-        return name
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return string.Empty;
+        }
+
+        string stripped = name
             .Replace("control", string.Empty, StringComparison.OrdinalIgnoreCase)
             .Replace("fan", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("#", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Trim();
+            .Replace("#", string.Empty, StringComparison.Ordinal);
+
+        return new string(stripped.Where(c => !char.IsWhiteSpace(c)).ToArray()).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Returns a channel ID that is unique within one snapshot: the control identifier, else the fan
+    /// sensor identifier, else a deterministic "#n" suffix (stable across polls, unlike a GUID).
+    /// </summary>
+    internal static string PickUniqueChannelId(string? preferredId, string? fallbackId, ISet<string> usedIds)
+    {
+        if (!string.IsNullOrEmpty(preferredId) && usedIds.Add(preferredId))
+        {
+            return preferredId;
+        }
+
+        if (!string.IsNullOrEmpty(fallbackId) && usedIds.Add(fallbackId))
+        {
+            return fallbackId;
+        }
+
+        string baseId = !string.IsNullOrEmpty(preferredId) ? preferredId
+            : !string.IsNullOrEmpty(fallbackId) ? fallbackId
+            : "channel";
+
+        if (usedIds.Add(baseId))
+        {
+            return baseId;
+        }
+
+        for (int n = 2; ; n++)
+        {
+            string candidate = $"{baseId}#{n.ToString(CultureInfo.InvariantCulture)}";
+            if (usedIds.Add(candidate))
+            {
+                return candidate;
+            }
+        }
     }
 
     private static bool IsCpuTemperature(ISensor sensor)
@@ -584,6 +704,9 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
                 || sensor.Name.Contains("hotspot", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>Cap on CPU/GPU readings per poll (a 24-thread CPU exposes ~110 temperature/load/clock/power sensors).</summary>
+    internal const int MaxSensorReadings = 160;
+
     private static List<CpuReadingSnapshot> BuildCpuReadings(List<ISensor> sensors)
     {
         IEnumerable<CpuReadingSnapshot> readings = sensors
@@ -597,7 +720,9 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             .Select(sensor => new CpuReadingSnapshot(sensor.Name, FormatSensorValue(sensor), sensor.SensorType.ToString()))
             .OrderBy(reading => reading.Kind, StringComparer.OrdinalIgnoreCase)
             .ThenBy(reading => reading.Name, StringComparer.OrdinalIgnoreCase)
-            .Take(24);
+            // Room for every per-core temperature/load on many-core CPUs (the Sensors heatmap reads these);
+            // 24 cut the temperatures off because Clock and Load sort first.
+            .Take(MaxSensorReadings);
 
         return readings.ToList();
     }
@@ -615,7 +740,7 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             .Select(sensor => new GpuReadingSnapshot(sensor.Name, FormatSensorValue(sensor), sensor.SensorType.ToString()))
             .OrderBy(reading => reading.Kind, StringComparer.OrdinalIgnoreCase)
             .ThenBy(reading => reading.Name, StringComparer.OrdinalIgnoreCase)
-            .Take(24);
+            .Take(MaxSensorReadings);
 
         return readings.ToList();
     }

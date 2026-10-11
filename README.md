@@ -200,9 +200,17 @@ FANZi's built-in effects engine runs at 30 fps and drives all OpenRGB-connected 
 
 ### Connecting OpenRGB
 
-1. Download and install [OpenRGB](https://openrgb.org).
-2. In OpenRGB, go to **Settings → SDK Server** and click **Start Server**.
-3. Launch FANZi — it will automatically connect on port **6742**.
+FANZi targets **OpenRGB 1.0** (SDK server on port **6742**).
+
+1. **Automatic:** open the RGB tab. If OpenRGB is not found, FANZi resolves the current Windows portable zip from [openrgb.org/releases.html](https://openrgb.org/releases.html) (with verified pinned fallbacks, HTTPS only), validates it and installs it to `%LOCALAPPDATA%\FANZI\OpenRGB`, then starts the SDK server. The FANZi installer does the same into `<install dir>\OpenRGB`.
+2. **Existing install:** FANZi detects OpenRGB via common paths and the Windows Uninstall / App Paths registry keys. If it still can't find it, use **Locate OpenRGB.exe…** in the RGB tab; the path is saved in settings.
+3. **Manual:** download OpenRGB yourself, enable **Settings → SDK Server → Start Server**, then click **Retry** in FANZi.
+
+If installation or connection fails, the RGB tab keeps a banner with the exact error plus **Retry**, **Locate OpenRGB.exe…**, **Open download page** and **PawnIO** buttons. Automatic re-download is attempted at most once every 10 minutes.
+
+**PawnIO:** since 1.0rc2, OpenRGB needs the [PawnIO](https://pawnio.eu) driver and Administrator rights to control RAM and motherboard RGB. If FANZi reports "Connected to OpenRGB but no devices found", install PawnIO and run FANZi/OpenRGB as Administrator.
+
+**Logs:** FANZi writes a daily log to `%APPDATA%\FANZI\logs\fanzi-yyyyMMdd.log` (kept 7 days), including every OpenRGB download, install and connection attempt. Crash logs are in `%APPDATA%\FANZI\crash-logs`.
 
 ---
 

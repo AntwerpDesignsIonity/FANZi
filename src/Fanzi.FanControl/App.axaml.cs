@@ -5,6 +5,7 @@ using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Fanzi.FanControl.Services;
 using Fanzi.FanControl.ViewModels;
 using Fanzi.FanControl.Views;
@@ -30,10 +31,13 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        Dispatcher.UIThread.UnhandledException += OnDispatcherUnhandledException;
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             DisableAvaloniaDataAnnotationValidation();
 
+            // HardwareMonitorService guards its own driver start-up (InitializationError).
             _hardwareMonitorService = new HardwareMonitorService();
             _rgbService = new OpenRgbService();
             _settingsService = new SettingsService();
@@ -49,8 +53,16 @@ public partial class App : Application
 
             DataContext = viewModel;
 
+            bool shuttingDown = false;
+
             mainWindow.Closing += (_, e) =>
             {
+                if (e.CloseReason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown)
+                {
+                    shuttingDown = true;
+                    return;
+                }
+
                 if (viewModel.CloseToTray)
                 {
                     e.Cancel = true;
@@ -58,22 +70,67 @@ public partial class App : Application
                 }
             };
 
-            desktop.Exit += (_, _) =>
+            // Close-to-tray off: closing the window ends the app (ShutdownMode is explicit).
+            mainWindow.Closed += (_, _) =>
             {
-                viewModel.Dispose();
-                _hardwareMonitorService.Dispose();
-                _rgbService.Dispose();
+                if (shuttingDown) return;
+                shuttingDown = true;
+                try { desktop.Shutdown(); }
+                catch (Exception ex) { AppLog.Warn("Shutdown after main window close failed", ex); }
             };
 
-            if (StartMinimizedFromArgs || viewModel.StartMinimized)
+            desktop.Exit += (_, _) =>
             {
-                mainWindow.WindowState = WindowState.Minimized;
-                if (viewModel.MinimizeToTray)
-                    mainWindow.Hide();
+                AppLog.Info("Application exit: restoring automatic fan control and releasing hardware.");
+                try { viewModel.RestoreAutomaticControlOnExit(); }
+                catch (Exception ex) { AppLog.Warn("Restoring automatic fan control on exit failed", ex); }
+
+                try { viewModel.Dispose(); } catch (Exception ex) { AppLog.Warn("View model dispose failed", ex); }
+                try { _hardwareMonitorService.Dispose(); } catch (Exception ex) { AppLog.Warn("Hardware monitor dispose failed", ex); }
+                try { _rgbService.Dispose(); } catch (Exception ex) { AppLog.Warn("RGB service dispose failed", ex); }
+            };
+
+            if (StartMinimizedFromArgs)
+            {
+                MinimizeMainWindow(mainWindow, viewModel);
             }
+            else
+            {
+                // StartMinimized lives in settings, which load asynchronously — apply it once they're in.
+                viewModel.SettingsLoaded += (_, _) =>
+                {
+                    if (viewModel.StartMinimized)
+                        MinimizeMainWindow(mainWindow, viewModel);
+                };
+            }
+
+            // A second launch signals us: bring the window back.
+            Program.StartShowWindowListener(() =>
+                Dispatcher.UIThread.Post(() => viewModel.ShowWindowCommand.Execute(null)));
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void MinimizeMainWindow(Window window, MainWindowViewModel viewModel)
+    {
+        try
+        {
+            window.WindowState = WindowState.Minimized;
+            if (viewModel.MinimizeToTray)
+                window.Hide();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Start minimized failed", ex);
+        }
+    }
+
+    private static void OnDispatcherUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        AppLog.Error("Unhandled exception on the UI thread (kept running)", e.Exception);
+        CrashGuardService.WriteCrashLog(e.Exception, "DispatcherUnhandledException", isTerminating: false);
+        e.Handled = true;
     }
 
     private void DisableAvaloniaDataAnnotationValidation()

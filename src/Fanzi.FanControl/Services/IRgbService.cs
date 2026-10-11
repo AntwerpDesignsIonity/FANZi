@@ -25,6 +25,12 @@ public interface IRgbService : IDisposable
     string ModeSwitchStatus { get; }
 
     /// <summary>
+    /// Error from the last device query (e.g. OpenRGB controller data could not be parsed —
+    /// a protocol mismatch). Null when the last query succeeded.
+    /// </summary>
+    string? LastDeviceQueryError => null;
+
+    /// <summary>
     /// Attempts to connect to the OpenRGB server.
     /// Returns true on success; false if server is not reachable.
     /// </summary>

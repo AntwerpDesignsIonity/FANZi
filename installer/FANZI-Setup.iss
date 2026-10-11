@@ -3,7 +3,7 @@
 ; Requires: Inno Setup 6.x (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "FANZI"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "2.2.0"
 #define MyAppPublisher "Antwerp Designs — Johan Wilhelm van Antwerp"
 #define MyAppURL "https://www.ionity.today"
 #define MyAppExeName "Fanzi.FanControl.exe"
@@ -53,10 +53,18 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Comment:
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Comment: "{#MyAppDescription}"
 
 [Registry]
-Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#MyAppName}"; ValueData: """{app}\{#MyAppExeName}"" --minimized"; Flags: uninsdeletevalue; Tasks: startup
+; FANZI requires administrator rights, so Windows ignores HKCU\...\Run for it. Remove the
+; v2.0 Run value on upgrade; startup is handled by an elevated scheduled task below.
+Root: HKCU; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "{#MyAppName}"; Flags: deletevalue dontcreatekey
 
 [Run]
+; Upgrade with "Start FANZI with Windows" unticked: remove a startup task left by an earlier install.
+Filename: "schtasks"; Parameters: "/Delete /F /TN ""FANZI"""; Flags: runhidden; Check: not WizardIsTaskSelected('startup')
+Filename: "schtasks"; Parameters: "/Create /F /RL HIGHEST /SC ONLOGON /TN ""FANZI"" /TR ""'{app}\{#MyAppExeName}' --minimized"""; Flags: runhidden; Tasks: startup
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runascurrentuser
+
+[UninstallRun]
+Filename: "schtasks"; Parameters: "/Delete /F /TN ""FANZI"""; Flags: runhidden; RunOnceId: "DeleteFanziStartupTask"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{localappdata}\FANZI"

@@ -1,0 +1,826 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="using:Fanzi.FanControl.Converters"
+        xmlns:controls="using:Fanzi.FanControl.Controls">
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         FANZi shared theme — palette, gradients, cards, panels, buttons, tabs.
+         Included in App.axaml after FluentTheme and the DataGrid theme.
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <Styles.Resources>
+        <ResourceDictionary>
+            <!-- ── Palette (prefixed so they never shadow Fluent theme keys) ── -->
+            <SolidColorBrush x:Key="FanziBg0Brush" Color="#050A12"/>
+            <SolidColorBrush x:Key="FanziBg1Brush" Color="#080E18"/>
+            <SolidColorBrush x:Key="FanziSurfaceBrush" Color="#0C1524"/>
+            <SolidColorBrush x:Key="FanziSurfaceAltBrush" Color="#0A1422"/>
+            <SolidColorBrush x:Key="FanziBorderBrush" Color="#1A2845"/>
+            <SolidColorBrush x:Key="FanziAccentBrush" Color="#2563EB"/>
+            <SolidColorBrush x:Key="FanziAccentHoverBrush" Color="#3B82F6"/>
+            <SolidColorBrush x:Key="FanziAccentSoftBrush" Color="#60A5FA"/>
+
+            <!-- Text tiers -->
+            <SolidColorBrush x:Key="FanziTextPrimaryBrush" Color="#E8F0FF"/>
+            <SolidColorBrush x:Key="FanziTextSecondaryBrush" Color="#A0C0E0"/>
+            <SolidColorBrush x:Key="FanziTextMutedBrush" Color="#6A8AAF"/>
+            <SolidColorBrush x:Key="FanziTextDimBrush" Color="#4A6A8F"/>
+            <SolidColorBrush x:Key="FanziTextFaintBrush" Color="#2A4060"/>
+            <SolidColorBrush x:Key="FanziTextCaptionBrush" Color="#4E6E95"/>
+
+            <!-- Status -->
+            <SolidColorBrush x:Key="FanziSuccessBrush" Color="#22C55E"/>
+            <SolidColorBrush x:Key="FanziAiBrush" Color="#34D399"/>
+            <SolidColorBrush x:Key="FanziWarningBrush" Color="#FBBF24"/>
+            <SolidColorBrush x:Key="FanziCautionBrush" Color="#FB923C"/>
+            <SolidColorBrush x:Key="FanziDangerBrush" Color="#EF4444"/>
+            <SolidColorBrush x:Key="FanziInfoBrush" Color="#38BDF8"/>
+
+            <!-- ── Gradients ─────────────────────────────────────────────── -->
+            <LinearGradientBrush x:Key="AccentGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#2563EB" Offset="0"/>
+                <GradientStop Color="#7C3AED" Offset="0.5"/>
+                <GradientStop Color="#06B6D4" Offset="1"/>
+            </LinearGradientBrush>
+            <!-- AccentGradient at 40 % opacity — hero border -->
+            <LinearGradientBrush x:Key="AccentGradientSoft" StartPoint="0%,0%" EndPoint="100%,100%" Opacity="0.4">
+                <GradientStop Color="#2563EB" Offset="0"/>
+                <GradientStop Color="#7C3AED" Offset="0.5"/>
+                <GradientStop Color="#06B6D4" Offset="1"/>
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="CardBorderGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#2A4875" Offset="0"/>
+                <GradientStop Color="#0F1E35" Offset="1"/>
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="GlowBorderGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#3B82F6" Offset="0"/>
+                <GradientStop Color="#06B6D4" Offset="1"/>
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="CardBackground" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#0D1729" Offset="0"/>
+                <GradientStop Color="#0A1220" Offset="1"/>
+            </LinearGradientBrush>
+            <!-- CardBackground lifted ~6 % — hover state of temperature-reactive cards -->
+            <LinearGradientBrush x:Key="CardBackgroundHover" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#132240" Offset="0"/>
+                <GradientStop Color="#0D182C" Offset="1"/>
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="DangerGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#EF4444" Offset="0"/>
+                <GradientStop Color="#B91C1C" Offset="1"/>
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="PanelBackground" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#0C1828" Offset="0"/>
+                <GradientStop Color="#091220" Offset="1"/>
+            </LinearGradientBrush>
+            <!-- Hero: linear dark-navy base; HeroGlow is the radial layer drawn on top of it -->
+            <LinearGradientBrush x:Key="HeroBackground" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#071022" Offset="0"/>
+                <GradientStop Color="#0A1430" Offset="0.55"/>
+                <GradientStop Color="#060C1A" Offset="1"/>
+            </LinearGradientBrush>
+            <RadialGradientBrush x:Key="HeroGlow" Center="18%,30%" GradientOrigin="18%,30%">
+                <GradientStop Color="#3A2563EB" Offset="0"/>
+                <GradientStop Color="#142563EB" Offset="0.45"/>
+                <GradientStop Color="#00050A12" Offset="1"/>
+            </RadialGradientBrush>
+            <RadialGradientBrush x:Key="HeroGlowSecondary" Center="85%,80%" GradientOrigin="85%,80%">
+                <GradientStop Color="#227C3AED" Offset="0"/>
+                <GradientStop Color="#0006B6D4" Offset="1"/>
+            </RadialGradientBrush>
+            <RadialGradientBrush x:Key="LoaderBackground" Center="50%,42%" GradientOrigin="50%,42%">
+                <GradientStop Color="#0F2142" Offset="0"/>
+                <GradientStop Color="#081329" Offset="0.45"/>
+                <GradientStop Color="#050A12" Offset="1"/>
+            </RadialGradientBrush>
+            <RadialGradientBrush x:Key="LogoGlow">
+                <GradientStop Color="#992563EB" Offset="0"/>
+                <GradientStop Color="#447C3AED" Offset="0.5"/>
+                <GradientStop Color="#0006B6D4" Offset="1"/>
+            </RadialGradientBrush>
+            <ConicGradientBrush x:Key="SpinnerGradient" Center="50%,50%" Angle="0">
+                <GradientStop Color="#002563EB" Offset="0"/>
+                <GradientStop Color="#2563EB" Offset="0.4"/>
+                <GradientStop Color="#7C3AED" Offset="0.7"/>
+                <GradientStop Color="#06B6D4" Offset="0.75"/>
+                <GradientStop Color="#0006B6D4" Offset="1"/>
+            </ConicGradientBrush>
+            <LinearGradientBrush x:Key="LoadBarGradient" StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#38BDF8" Offset="0"/>
+                <GradientStop Color="#2563EB" Offset="0.5"/>
+                <GradientStop Color="#7C3AED" Offset="1"/>
+            </LinearGradientBrush>
+
+            <!-- TemperatureColorScale stops 30 / 45 / 60 / 75 / 85 / 95 °C, left to right — heatmap legend -->
+            <LinearGradientBrush x:Key="TemperatureScaleGradient" StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Color="#38BDF8" Offset="0"/>
+                <GradientStop Color="#22D3EE" Offset="0.2308"/>
+                <GradientStop Color="#22C55E" Offset="0.4615"/>
+                <GradientStop Color="#FBBF24" Offset="0.6923"/>
+                <GradientStop Color="#F97316" Offset="0.8462"/>
+                <GradientStop Color="#EF4444" Offset="1"/>
+            </LinearGradientBrush>
+
+            <!-- Keyboard focus ring (shown only for keyboard focus, :focus-visible): 2 px accent outline + soft glow -->
+            <FocusAdornerTemplate x:Key="FanziFocusRing">
+                <!-- Not clipped to the control: the ring sits 3 px outside it -->
+                <Border BorderThickness="2" BorderBrush="{StaticResource FanziAccentSoftBrush}" CornerRadius="10" Margin="-3"
+                        BoxShadow="0 0 10 1 #993B82F6" IsHitTestVisible="False" AdornerLayer.IsClipEnabled="False"/>
+            </FocusAdornerTemplate>
+
+            <!-- ── Converters ────────────────────────────────────────────── -->
+            <conv:TemperatureToBrushConverter x:Key="TemperatureToBrush"/>
+            <conv:TemperatureToGradientConverter x:Key="TemperatureToGradient"/>
+            <conv:TemperatureToBoxShadowConverter x:Key="TemperatureToBoxShadow"/>
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <!-- ═══ CARD STYLES ═══ -->
+    <Style Selector="Border.card">
+        <Setter Property="CornerRadius" Value="16"/>
+        <Setter Property="Padding" Value="20"/>
+        <Setter Property="Background" Value="{StaticResource CardBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderGradient}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BoxShadow" Value="0 4 24 0 #59000000, inset 0 1 0 0 #1AFFFFFF"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
+                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.25"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.card:pointerover">
+        <Setter Property="BorderBrush" Value="{StaticResource GlowBorderGradient}"/>
+        <Setter Property="BoxShadow" Value="0 6 28 2 #332563EB, inset 0 1 0 0 #26FFFFFF"/>
+    </Style>
+
+    <Style Selector="Border.card-glow">
+        <Setter Property="CornerRadius" Value="16"/>
+        <Setter Property="Padding" Value="20"/>
+        <Setter Property="Background" Value="{StaticResource CardBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderGradient}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BoxShadow" Value="0 0 22 2 #262563EB, inset 0 1 0 0 #1AFFFFFF"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
+                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.25"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.card-glow:pointerover">
+        <Setter Property="BorderBrush" Value="{StaticResource GlowBorderGradient}"/>
+        <Setter Property="BoxShadow" Value="0 0 30 4 #403B82F6, inset 0 1 0 0 #26FFFFFF"/>
+    </Style>
+
+    <Style Selector="Border.card-accent">
+        <Setter Property="CornerRadius" Value="16"/>
+        <Setter Property="Padding" Value="20"/>
+        <Setter Property="Background" Value="{StaticResource CardBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentGradient}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BoxShadow" Value="0 0 26 2 #332563EB, inset 0 1 0 0 #1AFFFFFF"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
+                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.25"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.card-accent:pointerover">
+        <Setter Property="BoxShadow" Value="0 0 34 4 #4D2563EB, inset 0 1 0 0 #26FFFFFF"/>
+    </Style>
+
+    <!-- Temperature-reactive card: BorderBrush/BoxShadow are bound per card (local values beat the
+         Border.card:pointerover setters), so hover is a lift + lighter surface here and a stronger
+         temperature-tinted glow from TemperatureToBoxShadowConverter's [temp, IsPointerOver] MultiBinding. -->
+    <Style Selector="Border.card.temp-card">
+        <Setter Property="RenderTransform" Value="translateY(0px)"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.25"/>
+                <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.25"/>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.card.temp-card:pointerover">
+        <Setter Property="Background" Value="{StaticResource CardBackgroundHover}"/>
+        <Setter Property="RenderTransform" Value="translateY(-3px)"/>
+    </Style>
+
+    <!-- 3px temperature accent bar at the top of a temperature card (Background bound per card) -->
+    <Style Selector="Border.temp-bar">
+        <Setter Property="Height" Value="3"/>
+        <Setter Property="CornerRadius" Value="2"/>
+        <Setter Property="Margin" Value="0,-8,0,8"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.4"/>
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <!-- Large section container (replaces hand-copied sub-view roots) -->
+    <Style Selector="Border.panel">
+        <Setter Property="CornerRadius" Value="20"/>
+        <Setter Property="Padding" Value="24"/>
+        <Setter Property="Background" Value="{StaticResource PanelBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderGradient}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BoxShadow" Value="0 8 32 0 #66000000, inset 0 1 0 0 #14FFFFFF"/>
+    </Style>
+
+    <!-- Inner tile (sub-cards, table hosts, bars) -->
+    <Style Selector="Border.tile">
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="14,10"/>
+        <Setter Property="Background" Value="{StaticResource FanziSurfaceAltBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.2"/>
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <!-- Small rounded badge -->
+    <Style Selector="Border.pill">
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="Background" Value="#0F1A2A"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <!-- Status pill variants -->
+    <Style Selector="Border.pill.success">
+        <Setter Property="Background" Value="#0A1A10"/>
+        <Setter Property="BorderBrush" Value="#166534"/>
+    </Style>
+    <Style Selector="Border.pill.info">
+        <Setter Property="Background" Value="#0A1622"/>
+        <Setter Property="BorderBrush" Value="#1E3A60"/>
+    </Style>
+
+    <!-- Tile variants: a section block inside a panel, list rows inside a tile, and the empty-state placeholder -->
+    <Style Selector="Border.tile.section">
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="16,12"/>
+        <Setter Property="Background" Value="#071015"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderGradient}"/>
+    </Style>
+    <Style Selector="Border.tile.row">
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Background" Value="#0A1520"/>
+        <Setter Property="BorderBrush" Value="#162842"/>
+    </Style>
+    <Style Selector="Border.tile.row:pointerover">
+        <Setter Property="BorderBrush" Value="#2A4875"/>
+    </Style>
+    <Style Selector="Border.tile.empty">
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Background" Value="#060E18"/>
+        <Setter Property="BorderBrush" Value="#132238"/>
+        <Setter Property="Padding" Value="14,10"/>
+    </Style>
+
+    <!-- Inline alert banners -->
+    <Style Selector="Border.banner">
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="14,10"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="Border.banner.warning">
+        <Setter Property="Background" Value="#1A0A0A"/>
+        <Setter Property="BorderBrush" Value="#7C2D12"/>
+        <Setter Property="BoxShadow" Value="0 0 18 0 #267C2D12"/>
+    </Style>
+    <Style Selector="Border.banner.danger">
+        <Setter Property="Background" Value="#1A0505"/>
+        <Setter Property="BorderBrush" Value="#DC2626"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="BoxShadow" Value="0 0 24 2 #40DC2626"/>
+    </Style>
+
+    <!-- ═══ TEXT STYLES ═══ -->
+    <Style Selector="TextBlock.h1">
+        <Setter Property="FontSize" Value="20"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.h2">
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.label-caps">
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextCaptionBrush}"/>
+        <Setter Property="LetterSpacing" Value="2"/>
+    </Style>
+    <Style Selector="TextBlock.section-title">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="#5A7FA8"/>
+        <Setter Property="LetterSpacing" Value="1"/>
+    </Style>
+    <Style Selector="TextBlock.metric-value">
+        <Setter Property="FontSize" Value="32"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.metric-caption">
+        <Setter Property="Foreground" Value="{StaticResource FanziTextDimBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+    <!-- Secondary/helper text on card surfaces: FanziTextMutedBrush (#6A8AAF) is ~5:1 on the card navy -->
+    <Style Selector="TextBlock.muted">
+        <Setter Property="Foreground" Value="{StaticResource FanziTextMutedBrush}"/>
+    </Style>
+    <!-- Slider range legend (min / mid / max under a slider) -->
+    <Style Selector="TextBlock.legend">
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextMutedBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.ai-glow">
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziAiBrush}"/>
+    </Style>
+
+    <!-- ═══ BUTTON STYLES ═══ -->
+    <Style Selector="Button">
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Background" Value="#141E30"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextSecondaryBrush}"/>
+        <Setter Property="Padding" Value="14,8"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.2"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#1E3050"/>
+    </Style>
+    <Style Selector="Button:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="#0E1825"/>
+    </Style>
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="{StaticResource FanziAccentBrush}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource FanziAccentHoverBrush}"/>
+    </Style>
+    <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="#1D4ED8"/>
+    </Style>
+    <Style Selector="Button.danger">
+        <Setter Property="Background" Value="#7F1D1D"/>
+        <Setter Property="Foreground" Value="#FCA5A5"/>
+    </Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#991B1B"/>
+    </Style>
+    <!-- Destructive confirm (irreversible actions): solid red gradient, white bold text, red glow -->
+    <Style Selector="Button.danger.strong">
+        <Setter Property="Background" Value="{StaticResource DangerGradient}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="BorderBrush" Value="#FCA5A5"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="Button.danger.strong /template/ ContentPresenter">
+        <Setter Property="BoxShadow" Value="0 0 16 1 #66EF4444"/>
+    </Style>
+    <Style Selector="Button.danger.strong:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#DC2626"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="BoxShadow" Value="0 0 22 3 #80EF4444"/>
+    </Style>
+    <Style Selector="Button.danger.strong:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="#991B1B"/>
+    </Style>
+    <Style Selector="Button.danger.strong:disabled /template/ ContentPresenter">
+        <Setter Property="Background" Value="#3A1414"/>
+        <Setter Property="Foreground" Value="#9A6B6B"/>
+        <Setter Property="BoxShadow" Value="0 0 0 0 #00000000"/>
+    </Style>
+    <Style Selector="Button.success">
+        <Setter Property="Background" Value="#064E3B"/>
+        <Setter Property="Foreground" Value="#6EE7B7"/>
+    </Style>
+    <Style Selector="Button.success:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#065F46"/>
+    </Style>
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextSecondaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#0F1E35"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziAccentHoverBrush}"/>
+    </Style>
+
+    <!-- ═══ TEXT BOX: compact monospace hex/colour input ═══ -->
+    <Style Selector="TextBox.hex">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontFamily" Value="Consolas,monospace"/>
+        <Setter Property="Foreground" Value="#C4D8F4"/>
+        <Setter Property="Background" Value="#060E1A"/>
+        <Setter Property="BorderBrush" Value="#1E3A60"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBox.hex:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="#081426"/>
+        <Setter Property="BorderBrush" Value="#2A4875"/>
+    </Style>
+    <Style Selector="TextBox.hex:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="#060E1A"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziAccentHoverBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="TextBox.hex:pointerover, TextBox.hex:focus">
+        <Setter Property="Foreground" Value="#E8F0FF"/>
+    </Style>
+
+    <!-- ═══ TAB-LEVEL SCROLLERS: keep the panel clear of the vertical scrollbar ═══ -->
+    <Style Selector="ScrollViewer.tab-scroll > Border.panel">
+        <Setter Property="Margin" Value="0,0,12,0"/>
+    </Style>
+
+    <!-- ═══ SLIDER ═══ -->
+    <Style Selector="Slider">
+        <Setter Property="Foreground" Value="{StaticResource FanziAccentBrush}"/>
+    </Style>
+
+    <!-- ═══ PROGRESS BAR (thin load bars) ═══ -->
+    <Style Selector="ProgressBar.thin">
+        <Setter Property="Height" Value="4"/>
+        <Setter Property="MinHeight" Value="4"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="CornerRadius" Value="2"/>
+        <Setter Property="Background" Value="#142238"/>
+        <Setter Property="Foreground" Value="{StaticResource LoadBarGradient}"/>
+        <Setter Property="Minimum" Value="0"/>
+        <Setter Property="Maximum" Value="100"/>
+    </Style>
+
+    <!-- ═══ PROFILE TABS ═══ -->
+    <Style Selector="Border.profile-tab">
+        <Setter Property="Background" Value="#141E30"/>
+        <Setter Property="CornerRadius" Value="20"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.2"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.profile-tab:pointerover">
+        <Setter Property="Background" Value="#1A2A42"/>
+    </Style>
+    <Style Selector="Border.profile-tab.active">
+        <Setter Property="Background" Value="#1D4ED8"/>
+        <Setter Property="BoxShadow" Value="0 0 12 1 #1D4ED8"/>
+    </Style>
+
+    <!-- ═══ TAB CONTROL ═══ -->
+    <Style Selector="TabControl">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+    <Style Selector="TabItem">
+        <Setter Property="Background" Value="{StaticResource FanziBg1Brush}"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextDimBrush}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <!-- Content-sized tabs: all ten fit on one row down to the window's 1100 px MinWidth -->
+        <Setter Property="Padding" Value="12,10"/>
+        <Setter Property="Margin" Value="0,0,2,0"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <!-- Reserve the underline space so selection doesn't shift layout -->
+        <Setter Property="BorderThickness" Value="0,0,0,2"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.2"/>
+                <BrushTransition Property="Foreground" Duration="0:0:0.2"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="TabItem:selected">
+        <Setter Property="Background" Value="{StaticResource FanziSurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,2"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentGradient}"/>
+    </Style>
+    <!-- The accent-gradient border is the selection indicator; hide Fluent's solid pipe -->
+    <Style Selector="TabItem:selected /template/ Border#PART_SelectedPipe">
+        <Setter Property="IsVisible" Value="False"/>
+    </Style>
+    <Style Selector="TabItem:pointerover">
+        <Setter Property="Foreground" Value="{StaticResource FanziTextSecondaryBrush}"/>
+        <Setter Property="Background" Value="#0A1220"/>
+    </Style>
+
+    <!-- ═══ SEGMENTED SELECTOR (RadioButton.segment: 1 / 5 / 15 min) ═══ -->
+    <Style Selector="RadioButton.segment">
+        <Setter Property="Foreground" Value="{StaticResource FanziTextMutedBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Segment" Background="#0A1422" BorderBrush="{StaticResource FanziBorderBrush}"
+                        BorderThickness="1" CornerRadius="8" Padding="10,3">
+                    <Border.Transitions>
+                        <Transitions>
+                            <BrushTransition Property="Background" Duration="0:0:0.15"/>
+                            <BrushTransition Property="BorderBrush" Duration="0:0:0.15"/>
+                        </Transitions>
+                    </Border.Transitions>
+                    <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="RadioButton.segment:pointerover /template/ Border#PART_Segment">
+        <Setter Property="BorderBrush" Value="#2A4875"/>
+        <Setter Property="Background" Value="#0F1E35"/>
+    </Style>
+    <Style Selector="RadioButton.segment:pointerover">
+        <Setter Property="Foreground" Value="{StaticResource FanziTextSecondaryBrush}"/>
+    </Style>
+    <Style Selector="RadioButton.segment:checked /template/ Border#PART_Segment">
+        <Setter Property="Background" Value="{StaticResource FanziAccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziAccentHoverBrush}"/>
+    </Style>
+    <Style Selector="RadioButton.segment:checked">
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
+    <!-- ═══ THERMAL HISTORY CHART ═══ -->
+    <Style Selector="controls|ThermalHistoryChart">
+        <Setter Property="LabelBrush" Value="{StaticResource FanziTextMutedBrush}"/>
+        <Setter Property="TitleBrush" Value="{StaticResource FanziTextPrimaryBrush}"/>
+        <Setter Property="GridBrush" Value="#1E2F4D"/>
+    </Style>
+    <!-- ═══ FAN CURVE EDITOR ═══ -->
+    <Style Selector="controls|FanCurveEditor">
+        <Setter Property="LabelBrush" Value="{StaticResource FanziTextMutedBrush}"/>
+        <Setter Property="GridBrush" Value="#1E2F4D"/>
+        <Setter Property="PlotBackground" Value="#070F1C"/>
+        <Setter Property="FocusBrush" Value="{StaticResource FanziAccentHoverBrush}"/>
+    </Style>
+    <!-- ═══ SENSORS HEATMAP TILES (Background/BorderBrush/value brushes bound per tile) ═══ -->
+    <Style Selector="Border.heat-tile">
+        <Setter Property="Width" Value="122"/>
+        <Setter Property="Height" Value="94"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="11,8,11,9"/>
+        <Setter Property="Margin" Value="0,0,8,8"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BoxShadow" Value="inset 0 1 0 0 #14FFFFFF"/>
+        <Setter Property="RenderTransform" Value="translateY(0px)"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.6"/>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.6"/>
+                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.2"/>
+                <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.heat-tile:pointerover">
+        <Setter Property="RenderTransform" Value="translateY(-2px)"/>
+        <Setter Property="BoxShadow" Value="0 6 18 0 #59000000, inset 0 1 0 0 #26FFFFFF"/>
+    </Style>
+    <Style Selector="TextBlock.heat-label">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextSecondaryBrush}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.heat-value">
+        <Setter Property="FontSize" Value="24"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Foreground" Duration="0:0:0.6"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="TextBlock.heat-detail">
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextMutedBrush}"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="ProgressBar.heat-bar">
+        <Setter Property="Height" Value="3"/>
+        <Setter Property="MinHeight" Value="3"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="CornerRadius" Value="2"/>
+        <Setter Property="Background" Value="#33000000"/>
+        <Setter Property="Minimum" Value="0"/>
+        <Setter Property="Maximum" Value="100"/>
+        <Setter Property="Margin" Value="0,5,0,0"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Foreground" Duration="0:0:0.6"/>
+                <DoubleTransition Property="Value" Duration="0:0:0.6" Easing="CubicEaseOut"/>
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <!-- ═══ TOAST NOTIFICATIONS (WindowNotificationManager cards) ═══ -->
+    <Style Selector="NotificationCard">
+        <Setter Property="Width" Value="360"/>
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Background" Value="{StaticResource CardBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderGradient}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
+    </Style>
+    <Style Selector="NotificationCard:information">
+        <Setter Property="BorderBrush" Value="#1E3A60"/>
+    </Style>
+    <Style Selector="NotificationCard:information /template/ Panel#PART_HeaderBar">
+        <Setter Property="Background" Value="{StaticResource GlowBorderGradient}"/>
+    </Style>
+    <Style Selector="NotificationCard:success">
+        <Setter Property="BorderBrush" Value="#166534"/>
+    </Style>
+    <Style Selector="NotificationCard:success /template/ Panel#PART_HeaderBar">
+        <Setter Property="Background" Value="{StaticResource FanziSuccessBrush}"/>
+    </Style>
+    <Style Selector="NotificationCard:warning">
+        <Setter Property="BorderBrush" Value="#92400E"/>
+    </Style>
+    <Style Selector="NotificationCard:warning /template/ Panel#PART_HeaderBar">
+        <Setter Property="Background" Value="{StaticResource FanziWarningBrush}"/>
+    </Style>
+    <Style Selector="NotificationCard:error">
+        <Setter Property="BorderBrush" Value="#B91C1C"/>
+    </Style>
+    <Style Selector="NotificationCard:error /template/ Panel#PART_HeaderBar">
+        <Setter Property="Background" Value="{StaticResource DangerGradient}"/>
+    </Style>
+    <Style Selector="Border.toast-icon">
+        <Setter Property="Width" Value="30"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="CornerRadius" Value="15"/>
+        <Setter Property="VerticalAlignment" Value="Top"/>
+        <Setter Property="Background" Value="#0F1E35"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziAccentSoftBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="Border.toast-icon > TextBlock">
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziAccentSoftBrush}"/>
+    </Style>
+    <Style Selector="Border.toast-icon.success">
+        <Setter Property="Background" Value="#0A1A10"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziSuccessBrush}"/>
+    </Style>
+    <Style Selector="Border.toast-icon.success > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource FanziSuccessBrush}"/>
+    </Style>
+    <Style Selector="Border.toast-icon.warning">
+        <Setter Property="Background" Value="#1A1305"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziWarningBrush}"/>
+    </Style>
+    <Style Selector="Border.toast-icon.warning > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource FanziWarningBrush}"/>
+    </Style>
+    <Style Selector="Border.toast-icon.error">
+        <Setter Property="Background" Value="#1A0505"/>
+        <Setter Property="BorderBrush" Value="{StaticResource FanziDangerBrush}"/>
+        <Setter Property="BoxShadow" Value="0 0 12 1 #59EF4444"/>
+    </Style>
+    <Style Selector="Border.toast-icon.error > TextBlock">
+        <Setter Property="Foreground" Value="#FCA5A5"/>
+    </Style>
+    <Style Selector="TextBlock.toast-title">
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style Selector="TextBlock.toast-message">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextSecondaryBrush}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="MaxLines" Value="4"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.toast-time">
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextDimBrush}"/>
+    </Style>
+
+    <!-- Pulsing glow behind the chart's "now" dot (off with Reduce motion: windows carry .reduce-motion) -->
+    <Style Selector=":is(Window):not(.reduce-motion) Ellipse.history-now-glow">
+        <Style.Animations>
+            <Animation Duration="0:0:1.4" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%">
+                    <Setter Property="Opacity" Value="0.45"/>
+                    <Setter Property="ScaleTransform.ScaleX" Value="0.75"/>
+                    <Setter Property="ScaleTransform.ScaleY" Value="0.75"/>
+                </KeyFrame>
+                <KeyFrame Cue="100%">
+                    <Setter Property="Opacity" Value="1"/>
+                    <Setter Property="ScaleTransform.ScaleX" Value="1.3"/>
+                    <Setter Property="ScaleTransform.ScaleY" Value="1.3"/>
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <!-- ═══ TOGGLE SWITCH ═══ -->
+    <Style Selector="ToggleSwitch">
+        <Setter Property="OnContent" Value=""/>
+        <Setter Property="OffContent" Value=""/>
+    </Style>
+
+    <!-- ═══ LOGO GLOW / LOADER ANIMATIONS ═══ -->
+    <!-- Animations only run while the loader carries the .loading class (IsLoading),
+         so they stop ticking once the dashboard is shown. -->
+    <Style Selector=":is(Window):not(.reduce-motion) Border.loading Ellipse.logo-pulse">
+        <Style.Animations>
+            <Animation Duration="0:0:1.8" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%">
+                    <Setter Property="Opacity" Value="0.35"/>
+                </KeyFrame>
+                <KeyFrame Cue="100%">
+                    <Setter Property="Opacity" Value="0.95"/>
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+    <Style Selector=":is(Window):not(.reduce-motion) Border.loading Arc.spinner">
+        <Style.Animations>
+            <Animation Duration="0:0:1.1" IterationCount="Infinite">
+                <KeyFrame Cue="0%">
+                    <Setter Property="RotateTransform.Angle" Value="0"/>
+                </KeyFrame>
+                <KeyFrame Cue="100%">
+                    <Setter Property="RotateTransform.Angle" Value="360"/>
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <!-- ═══ REDUCE MOTION (Settings → Appearance & accessibility) ═══ -->
+    <!-- Gauge sweeps and number counts are switched off in code (MotionPreferences); here the heatmap bars
+         jump instead of sliding and the loader shows a still, full-opacity logo with a static ring. -->
+    <Style Selector=":is(Window).reduce-motion ProgressBar.heat-bar">
+        <Setter Property="Transitions" Value="{x:Null}"/>
+    </Style>
+    <Style Selector=":is(Window).reduce-motion Ellipse.logo-pulse">
+        <Setter Property="Opacity" Value="0.8"/>
+    </Style>
+
+    <!-- ═══ KEYBOARD FOCUS RING (buttons, toggles, sliders, tabs, segments) ═══ -->
+    <Style Selector="Button, ToggleButton, ToggleSwitch, Slider, TabItem, RadioButton, CheckBox, ComboBox, NumericUpDown">
+        <Setter Property="FocusAdorner" Value="{StaticResource FanziFocusRing}"/>
+    </Style>
+
+    <!-- ═══ KEYBOARD KEY CAP (help panel shortcut list) ═══ -->
+    <Style Selector="Border.kbd">
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="8,2"/>
+        <Setter Property="MinWidth" Value="28"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Background" Value="#0F1E35"/>
+        <Setter Property="BorderBrush" Value="#2A4875"/>
+        <Setter Property="BorderThickness" Value="1,1,1,2"/>
+    </Style>
+    <Style Selector="Border.kbd > TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="FontFamily" Value="Consolas,monospace"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+    </Style>
+</Styles>

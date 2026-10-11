@@ -13,16 +13,18 @@
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+        <StyleInclude Source="avares://Fanzi.FanControl/Styles/FanziTheme.axaml"/>
     </Application.Styles>
 
     <TrayIcon.Icons>
         <TrayIcons>
             <TrayIcon Icon="/Assets/ionity-logo.ico"
-                      ToolTipText="FANZI — AI Fan Control &amp; RGB"
+                      ToolTipText="{Binding TrayTooltip}"
                       Command="{Binding ShowWindowCommand}">
                 <TrayIcon.Menu>
                     <NativeMenu>
                         <NativeMenuItem Header="Show FANZI" Command="{Binding ShowWindowCommand}"/>
+                        <NativeMenuItem Header="Toggle Mini Overlay" Command="{Binding ToggleMiniOverlayCommand}"/>
                         <NativeMenuItemSeparator/>
                         <NativeMenuItem Header="Exit" Command="{Binding ExitApplicationCommand}"/>
                     </NativeMenu>

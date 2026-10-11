@@ -57,22 +57,14 @@ public record struct RgbColor(byte R, byte G, byte B)
             (byte)Math.Clamp((b + m) * 255, 0, 255));
     }
 
-    /// <summary>Maps a temperature to a colour gradient (cool → hot).</summary>
+    /// <summary>
+    /// Maps a temperature to a colour (cool blue → cyan → green → amber → red) using the same
+    /// <see cref="Services.TemperatureColorScale"/> as the dashboard, so LEDs match the UI.
+    /// </summary>
     public static RgbColor FromTemperature(double tempCelsius)
     {
-        // ≤ 40 °C  → ice blue
-        // 40-60    → blue → cyan
-        // 60-75    → cyan → yellow
-        // 75-85    → yellow → orange
-        // ≥ 85 °C  → orange → red (danger)
-        return tempCelsius switch
-        {
-            <= 40 => IceBlue,
-            <= 60 => Lerp(Blue,   Cyan,   (tempCelsius - 40) / 20.0),
-            <= 75 => Lerp(Cyan,   Yellow, (tempCelsius - 60) / 15.0),
-            <= 85 => Lerp(Yellow, Orange, (tempCelsius - 75) / 10.0),
-            _     => Lerp(Orange, Red,    Math.Clamp((tempCelsius - 85) / 10.0, 0, 1)),
-        };
+        var c = Services.TemperatureColorScale.ForTemperature(tempCelsius);
+        return new RgbColor(c.R, c.G, c.B);
     }
 
     /// <summary>Maps a load percentage (0-100) to a cool→hot gradient.</summary>
