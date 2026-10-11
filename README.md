@@ -13,7 +13,7 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-blue?logo=windows"/>
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet"/>
   <img alt="License" src="https://img.shields.io/badge/license-Proprietary-red"/>
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-green"/>
+  <img alt="Version" src="https://img.shields.io/badge/version-4.0.0-green"/>
 </p>
 
 ---
@@ -57,6 +57,20 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | 🌈 **RGB Lighting** | 9 built-in lighting effects, 12 preset themes, per-channel colour pickers |
 | 🔔 **Email Alerts** | SMTP-based notifications when CPU temperature exceeds a configurable threshold |
 | 🖥️ **Cross-Platform UI** | Avalonia renders on Windows, macOS, and Linux (hardware monitoring on Windows only) |
+| 🎨 **RGB Studio (v4)** | Colourful effect / theme / swatch buttons, AI colour harmony, device cards with Identify, deep hardware scan |
+| 🤖 **AEDi Lighting AI (v4)** | Describe-a-mood lighting, Smart Ambient, Thermal Guardian alert, Night dimming, AEDi suggest — all offline |
+| ▣ **Overlay Studio (v4)** | Switchable rows incl. RAM and network ↓/↑, 80–160 % size, 8 accents incl. RGB Sync, snap to corners |
+| ⏱ **Live heartbeat (v4)** | Dashboard, Tasks, Network, Power and the overlay update together, in place — no list flicker |
+
+### What's new in v4.0.0
+
+- **RGB Studio** — the RGB tab is rebuilt: a rotating rainbow orb, outlined cards and buttons painted in their own colours.
+- **AEDi Lighting AI** — type a mood ("calm ocean", "fast cyberpunk party", "south africa"), or let Smart Ambient follow
+  idle / work / gaming / heat. Thermal Guardian (on by default) flashes every device red when the CPU reaches 92 °C or the GPU 86 °C.
+- **Deep scan** — explains exactly which RGB hardware FANZi can and cannot reach and why (RAM sticks vs ENE controllers,
+  fan headers vs ARGB controllers, motherboard support, PawnIO, unclaimed USB RGB devices).
+- **Overlay Studio** — Settings → Overlay Studio, or right-click the overlay. Title-bar **▣ Overlay** button, Ctrl+O, tray menu.
+- **Outlined tabs** and **one synced update cycle** for every live panel.
 
 ---
 

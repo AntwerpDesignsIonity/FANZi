@@ -84,11 +84,37 @@ public sealed partial class NetworkManagerViewModel : ViewModelBase, IDisposable
         ProcessGroups.Add(new ProcessGroup("Downloads", "torrent.exe;dropbox.exe;onedrive.exe", 10000, 1000));
         ProcessGroups.Add(new ProcessGroup("Communication", "teams.exe;zoom.exe;discord.exe;slack.exe", 2000, 1000));
 
-        _timer = new System.Timers.Timer(2000) { AutoReset = true };
-        _timer.Elapsed += (_, _) => _ = RefreshAsync();
+        // v4: one heartbeat with the dashboard (LiveSyncHub); the timer is only a fallback.
+        _liveSync = LiveSyncHub.Shared.Register("Network", CollectAsync);
+        _timer = new System.Timers.Timer(4000) { AutoReset = true };
+        _timer.Elapsed += (_, _) => { if (!LiveSyncHub.Shared.IsDriven) _ = RefreshAsync(); };
         _timer.Start();
         _ = RefreshAsync();
         RefreshListeningPorts();
+    }
+
+    private readonly IDisposable _liveSync;
+
+    /// <summary>Total receive rate across adapters in bytes/s (overlay bars and AI insights).</summary>
+    [ObservableProperty] private double _downloadBps;
+
+    /// <summary>Total send rate across adapters in bytes/s.</summary>
+    [ObservableProperty] private double _uploadBps;
+
+    /// <summary>Highest combined rate seen this session (bytes/s) — scales the overlay's network bars.</summary>
+    [ObservableProperty] private double _peakBps = 1024 * 1024;
+
+    /// <summary>Last ~60 samples of the receive rate (bytes/s), newest last.</summary>
+    public RingBuffer<double> DownloadHistory { get; } = new(60);
+
+    /// <summary>Last ~60 samples of the send rate (bytes/s), newest last.</summary>
+    public RingBuffer<double> UploadHistory { get; } = new(60);
+
+    private async Task<Action?> CollectAsync(CancellationToken token)
+    {
+        var adapters = await _service.GetAdaptersAsync(token).ConfigureAwait(false);
+        var procs = await _service.GetProcessNetworkActivityAsync(token).ConfigureAwait(false);
+        return () => Apply(adapters, procs);
     }
 
     private async Task RefreshAsync()
@@ -97,28 +123,34 @@ public sealed partial class NetworkManagerViewModel : ViewModelBase, IDisposable
         {
             var adapters = await _service.GetAdaptersAsync(_cts.Token);
             var procs = await _service.GetProcessNetworkActivityAsync(_cts.Token);
-
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                Adapters.Clear();
-                double totalDl = 0, totalUl = 0;
-                foreach (var a in adapters)
-                {
-                    Adapters.Add(a);
-                    totalDl += a.DownloadBps;
-                    totalUl += a.UploadBps;
-                }
-
-                ActiveProcesses.Clear();
-                foreach (var p in procs) ActiveProcesses.Add(p);
-
-                TotalDownloadRate = FormatBps(totalDl);
-                TotalUploadRate = FormatBps(totalUl);
-                LastUpdated = $"Updated {DateTime.Now:HH:mm:ss}";
-            });
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Apply(adapters, procs));
         }
         catch (OperationCanceledException) { }
-        catch { }
+        catch (ObjectDisposedException) { }
+        catch (Exception ex) { AppLog.Warn("Network refresh failed", ex); }
+    }
+
+    /// <summary>Applies one sample in place (UI thread) — rows are diffed, never cleared.</summary>
+    private void Apply(IReadOnlyList<NetworkAdapterStats> adapters, IReadOnlyList<ProcessNetworkStats> procs)
+    {
+        double totalDl = 0, totalUl = 0;
+        foreach (var a in adapters)
+        {
+            totalDl += a.DownloadBps;
+            totalUl += a.UploadBps;
+        }
+
+        CollectionSync.Sync(Adapters, adapters, a => a.Name);
+        CollectionSync.Sync(ActiveProcesses, procs, p => p.Pid);
+
+        DownloadBps = totalDl;
+        UploadBps = totalUl;
+        PeakBps = Math.Max(PeakBps, totalDl + totalUl);
+        DownloadHistory.Add(totalDl);
+        UploadHistory.Add(totalUl);
+        TotalDownloadRate = FormatBps(totalDl);
+        TotalUploadRate = FormatBps(totalUl);
+        LastUpdated = $"Live · {DateTime.Now:HH:mm:ss}";
     }
 
     private void ApplyLimit()
@@ -239,7 +271,7 @@ public sealed partial class NetworkManagerViewModel : ViewModelBase, IDisposable
         SpeedLimitStatus = $"Applied limits to {applied} processes in '{group.Name}'";
     }
 
-    private static string FormatBps(double bps)
+    internal static string FormatBps(double bps)
     {
         if (bps < 1024) return $"{bps:F0} B/s";
         if (bps < 1024 * 1024) return $"{bps / 1024:F1} KB/s";
@@ -249,6 +281,7 @@ public sealed partial class NetworkManagerViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _liveSync.Dispose();
         _timer.Stop();
         _timer.Dispose();
         _cts.Cancel();

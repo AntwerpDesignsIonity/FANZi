@@ -38,6 +38,28 @@ public sealed class AppSettings
     /// <summary>CPU temperature sparkline under the overlay's CPU gauge. Missing in older files → default on.</summary>
     public bool OverlayShowCpuHistory { get; set; } = true;
 
+    // v4 overlay studio — every row of the mini overlay can be switched on/off. Missing in older files → defaults.
+    public bool OverlayShowCpu { get; set; } = true;
+    public bool OverlayShowGpu { get; set; } = true;
+    public bool OverlayShowFan { get; set; } = true;
+    public bool OverlayShowCpuLoad { get; set; } = true;
+    public bool OverlayShowGpuLoad { get; set; } = true;
+    public bool OverlayShowRam { get; set; } = true;
+    public bool OverlayShowNetwork { get; set; } = true;
+    public bool OverlayShowHealth { get; set; } = true;
+    public bool OverlayShowClock { get; set; }
+
+    /// <summary>Overlay zoom, 0.8–1.6 (1 = 300 px wide).</summary>
+    public double OverlayScale { get; set; } = 1.0;
+
+    /// <summary>Accent preset name (see OverlayAccents); "RGB Sync" follows the live RGB colour.</summary>
+    public string OverlayAccent { get; set; } = "Ionity Blue";
+
+    // v4 AEDi lighting (RGB tab). Thermal Guardian defaults on: a critical temperature turns the lights into an alert.
+    public bool RgbSmartAmbient { get; set; }
+    public bool RgbThermalGuardian { get; set; } = true;
+    public bool RgbNightDimming { get; set; }
+
     /// <summary>Last overlay position in screen pixels; null = default (top-right of the primary screen).</summary>
     public int? OverlayX { get; set; }
     public int? OverlayY { get; set; }

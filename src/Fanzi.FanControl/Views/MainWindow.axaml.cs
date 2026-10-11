@@ -77,9 +77,25 @@ public partial class MainWindow : Window
     private void AttachToasts(MainWindowViewModel? vm)
     {
         if (ReferenceEquals(vm, _toastSource)) return;
-        if (_toastSource is not null) _toastSource.ToastRequested -= OnToastRequested;
+        if (_toastSource is not null)
+        {
+            _toastSource.ToastRequested -= OnToastRequested;
+            _toastSource.OverlayStudioRequested -= OnOverlayStudioRequested;
+        }
         _toastSource = vm;
-        if (vm is not null) vm.ToastRequested += OnToastRequested;
+        if (vm is not null)
+        {
+            vm.ToastRequested += OnToastRequested;
+            vm.OverlayStudioRequested += OnOverlayStudioRequested;
+        }
+    }
+
+    /// <summary>Overlay context menu → "Overlay Studio…": the Settings tab is selected; scroll the card into view.</summary>
+    private void OnOverlayStudioRequested(object? sender, EventArgs e)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(
+            () => this.FindControl<Border>("OverlayStudioCard")?.BringIntoView(),
+            Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     private void OnToastRequested(object? sender, AppNotification notification)

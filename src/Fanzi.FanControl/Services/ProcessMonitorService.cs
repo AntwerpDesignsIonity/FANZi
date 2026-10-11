@@ -20,11 +20,16 @@ public sealed class ProcessMonitorService
     {
         return Task.Run<IReadOnlyList<ProcessInfo>>(() =>
         {
+          // v4: the live-sync heartbeat and "Refresh now" can overlap — the CPU-time cache is not thread-safe.
+          lock (_lastSample)
+          {
             var now = DateTime.UtcNow;
             var list = new List<ProcessInfo>();
 
             foreach (var p in Process.GetProcesses())
             {
+                // Process objects hold OS handles: dispose every one (v3 leaked ~300 handles per refresh).
+                using var _ = p;
                 try
                 {
                     if (p.HasExited) continue;
@@ -62,6 +67,7 @@ public sealed class ProcessMonitorService
                 .OrderByDescending(p => p.CpuPercent)
                 .ThenByDescending(p => p.MemoryMb)
                 .ToList();
+          }
         }, ct);
     }
 

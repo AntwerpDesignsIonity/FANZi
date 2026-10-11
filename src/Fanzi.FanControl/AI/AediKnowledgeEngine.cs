@@ -240,10 +240,20 @@ public sealed class AediKnowledgeEngine
             new[] { "settings", "config", "startup", "tray", "polling", "overlay", "transparent", "tab", "visibility" },
             9, "Go to Settings tab"));
 
-        _entries.Add(new AediEntry("Overlay", "Mini transparent overlay",
-            "Always-on-top mini window showing CPU temp, GPU temp, fan speed, load. Draggable. Toggle transparency on/off in Settings.",
-            new[] { "overlay", "mini", "small", "transparent", "opacity", "always on top", "floating", "widget" },
-            9, "Overlay settings in Settings tab"));
+        _entries.Add(new AediEntry("Overlay", "Mini overlay & Overlay Studio",
+            "Always-on-top mini window: CPU/GPU gauges, CPU history, fan, CPU/GPU load, RAM, network down/up, health, clock. Toggle with the ▣ Overlay title-bar button or Ctrl+O. Right-click it (or Settings → Overlay Studio) to switch rows, size 80–160 %, accent (incl. RGB Sync) and snap to a corner.",
+            new[] { "overlay", "mini", "small", "transparent", "opacity", "always on top", "floating", "widget", "studio", "network", "ram", "accent", "snap", "osd", "hud" },
+            9, "Overlay Studio in Settings tab"));
+
+        // v4 RGB studio + AEDi lighting
+        _entries.Add(new AediEntry("RGB Control", "AEDi Lighting AI",
+            "RGB tab → AEDi Lighting AI: describe a mood (\"calm ocean\", \"fast cyberpunk party\"), Smart Ambient (follows idle / work / gaming / heat), Thermal Guardian (red alert at 92 °C CPU / 86 °C GPU), Night dimming, AEDi suggest and AI colour harmony.",
+            new[] { "mood", "ambient", "guardian", "night", "dim", "suggest", "harmony", "ai lighting", "smart", "scene" },
+            8, "RGB tab → AEDi Lighting AI"));
+        _entries.Add(new AediEntry("RGB Control", "Deep hardware scan",
+            "RGB tab → Deep scan: compares OpenRGB with Windows — RAM sticks vs RGB RAM controllers, fan headers vs ARGB controllers, motherboard, GPU, USB RGB devices and the PawnIO driver — and explains anything missing.",
+            new[] { "deep scan", "scan", "missing", "fans", "fan rgb", "argb", "ram rgb", "not detected", "detect", "pawnio", "identify" },
+            8, "RGB tab → Deep scan"));
 
         // About
         _entries.Add(new AediEntry("About FANZi IO-nity", "Ionity Global",

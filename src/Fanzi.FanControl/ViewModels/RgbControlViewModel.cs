@@ -362,6 +362,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         LocateOpenRgbCommand = new AsyncRelayCommand(LocateOpenRgbAsync);
         RetryOpenRgbCommand = new AsyncRelayCommand(RetryOpenRgbAsync);
         OpenPawnIoCommand = new RelayCommand(() => OpenUrl(PawnIoUrl));
+        InitializeStudio();
 
         _serverManager.DetectInstallation();
         ServerStatus = _serverManager.Status;
@@ -798,6 +799,8 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 ? (pumpRpm is double pr ? $"Pump {pr:F0} RPM" : "Pump — RPM")
                 : "Air cooled";
         });
+
+        ReevaluateAi();
     }
 
     // ── Timer tick (frame loop) ───────────────────────────────────────────────
@@ -806,18 +809,22 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     {
         double elapsed = _stopwatch.Elapsed.TotalSeconds;
 
-        // Use hardware-reactive data only when the toggle is on.
-        double? cpuTemp = HardwareReactiveEnabled ? _cpuTempC : null;
-        double? gpuTemp = HardwareReactiveEnabled ? _gpuTempC : null;
-        double? cpuLoad = HardwareReactiveEnabled ? _cpuLoadPct : null;
+        // Use hardware-reactive data only when the toggle is on (AI scenes always see the sensors).
+        bool reactive = HardwareReactiveEnabled || _aiOverride is not null;
+        double? cpuTemp = reactive ? _cpuTempC : null;
+        double? gpuTemp = reactive ? _gpuTempC : null;
+        double? cpuLoad = reactive ? _cpuLoadPct : null;
+
+        // v4: AEDi Smart Ambient / Thermal Guardian / Night dimming can override the user's effect.
+        var frame = FrameParameters();
 
         RgbColor color = RgbEffectsEngine.Tick(
             elapsedSeconds:  elapsed,
-            effect:          SelectedEffect,
-            primary:         PrimaryColor,
-            secondary:       SecondaryColor,
-            speedMultiplier: SpeedMultiplier,
-            brightness:      Brightness,
+            effect:          frame.Effect,
+            primary:         frame.Primary,
+            secondary:       frame.Secondary,
+            speedMultiplier: frame.Speed,
+            brightness:      frame.Brightness,
             cpuTempC:        cpuTemp,
             gpuTempC:        gpuTemp,
             cpuLoadPct:      cpuLoad,
@@ -839,7 +846,8 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             if (RgbEnabled && _rgbService.IsConnected)
             {
                 // Fire-and-forget; errors are swallowed inside the service.
-                if (ZoneModeEnabled && HasZones)
+                // An active AEDi scene (e.g. the Thermal Guardian alert) paints every device the same way.
+                if (ZoneModeEnabled && HasZones && _aiOverride is null)
                     _ = SendZoneFrameToHardwareAsync(elapsed);
                 else
                     _ = SendFrameToHardwareAsync(elapsed, color);
@@ -851,25 +859,30 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            if (_deviceCount <= 1)
+            int identifying = _identifyingDevice;
+            if (_deviceCount <= 1 && identifying < 0)
             {
                 await _rgbService.SetAllDevicesColorAsync(masterColor, _cts.Token);
             }
             else
             {
+                var frame = FrameParameters();
+                bool reactive = HardwareReactiveEnabled || _aiOverride is not null;
                 // Each device gets a phase-shifted colour for wave effects.
                 for (int i = 0; i < _deviceCount; i++)
                 {
+                    if (i == identifying) continue; // "Identify" is flashing this one
+
                     RgbColor deviceColor = RgbEffectsEngine.Tick(
                         elapsedSeconds:  elapsed,
-                        effect:          SelectedEffect,
-                        primary:         PrimaryColor,
-                        secondary:       SecondaryColor,
-                        speedMultiplier: SpeedMultiplier,
-                        brightness:      Brightness,
-                        cpuTempC:        HardwareReactiveEnabled ? _cpuTempC : null,
-                        gpuTempC:        HardwareReactiveEnabled ? _gpuTempC : null,
-                        cpuLoadPct:      HardwareReactiveEnabled ? _cpuLoadPct : null,
+                        effect:          frame.Effect,
+                        primary:         frame.Primary,
+                        secondary:       frame.Secondary,
+                        speedMultiplier: frame.Speed,
+                        brightness:      frame.Brightness,
+                        cpuTempC:        reactive ? _cpuTempC : null,
+                        gpuTempC:        reactive ? _gpuTempC : null,
+                        cpuLoadPct:      reactive ? _cpuLoadPct : null,
                         deviceIndex:     i,
                         deviceCount:     _deviceCount);
 
@@ -997,8 +1010,8 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 LastOpenRgbError = DeviceQueryBannerError(list.Count, null); // null — clears the banner
             }
 
-            Devices.Clear();
-            foreach (var d in list) Devices.Add(d);
+            // v4: in-place sync — watchdog refreshes no longer flash the device list.
+            SyncDevices(list);
             _deviceCount  = Math.Max(1, Devices.Count);
             DeviceSummary = Devices.Count == 0
                 ? "No RGB devices found in OpenRGB"

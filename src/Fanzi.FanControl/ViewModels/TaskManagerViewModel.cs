@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Fanzi.FanControl.Services;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
@@ -47,10 +48,22 @@ public sealed partial class TaskManagerViewModel : ViewModelBase, IDisposable
         OpenWindowsTaskMgrCommand = new RelayCommand(PowerMonitorService.OpenTaskManager);
         OpenResourceMonitorCommand = new RelayCommand(PowerMonitorService.OpenResourceMonitor);
 
-        _timer = new System.Timers.Timer(2000) { AutoReset = true };
-        _timer.Elapsed += (_, _) => _ = RefreshAsync();
+        // v4: refreshed by the shared live-sync heartbeat (same frame as the dashboard); the timer only
+        // takes over when nothing drives the hub (tests, dashboard loop paused).
+        _liveSync = LiveSyncHub.Shared.Register("Tasks", CollectAsync);
+        _timer = new System.Timers.Timer(4000) { AutoReset = true };
+        _timer.Elapsed += (_, _) => { if (!LiveSyncHub.Shared.IsDriven) _ = RefreshAsync(); };
         _timer.Start();
         _ = RefreshAsync();
+    }
+
+    private readonly IDisposable _liveSync;
+    private IReadOnlyList<ProcessInfo> _lastProcs = Array.Empty<ProcessInfo>();
+
+    private async Task<Action?> CollectAsync(CancellationToken token)
+    {
+        var procs = await _service.GetProcessesAsync(token).ConfigureAwait(false);
+        return () => Apply(procs);
     }
 
     private async Task RefreshAsync()
@@ -58,34 +71,47 @@ public sealed partial class TaskManagerViewModel : ViewModelBase, IDisposable
         try
         {
             var procs = await _service.GetProcessesAsync(_cts.Token);
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                var currentSelection = Processes.Where(p => p.IsSelected).Select(p => p.Pid).ToHashSet();
-
-                Processes.Clear();
-                double totalCpu = 0;
-                double totalMem = 0;
-                foreach (var p in procs)
-                {
-                    totalCpu += p.CpuPercent;
-                    totalMem += p.MemoryMb;
-                    if (string.IsNullOrWhiteSpace(Filter) ||
-                        p.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var item = new ProcessInfoItem(p) { IsSelected = currentSelection.Contains(p.Pid) };
-                        item.PropertyChanged += OnItemSelectionChanged;
-                        Processes.Add(item);
-                    }
-                }
-                ProcessCount = procs.Count;
-                TotalCpuPercent = Math.Round(totalCpu, 1);
-                TotalMemoryGb = Math.Round(totalMem / 1024.0, 2);
-                LastUpdated = $"Updated {DateTime.Now:HH:mm:ss}";
-                UpdateSelectedCount();
-            });
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Apply(procs));
         }
         catch (OperationCanceledException) { }
-        catch { }
+        catch (ObjectDisposedException) { }
+        catch (Exception ex) { AppLog.Warn("Task manager refresh failed", ex); }
+    }
+
+    /// <summary>Applies one sample in place (UI thread): rows keep their selection, scroll position and hover.</summary>
+    private void Apply(IReadOnlyList<ProcessInfo> procs)
+    {
+        _lastProcs = procs;
+        double totalCpu = 0;
+        double totalMem = 0;
+        var visible = new List<ProcessInfoItem>(procs.Count);
+        var existing = Processes.ToDictionary(p => p.Pid);
+        foreach (var p in procs)
+        {
+            totalCpu += p.CpuPercent;
+            totalMem += p.MemoryMb;
+            if (!string.IsNullOrWhiteSpace(Filter) && !p.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (!existing.TryGetValue(p.Pid, out var item))
+            {
+                item = new ProcessInfoItem(p);
+                item.PropertyChanged += OnItemSelectionChanged;
+            }
+            visible.Add(item);
+        }
+
+        var byPid = procs.GroupBy(p => p.Pid).ToDictionary(g => g.Key, g => g.First());
+        CollectionSync.Sync(Processes, visible, p => p.Pid, (current, _) => current.UpdateFrom(byPid[current.Pid]));
+        var kept = visible.ToHashSet();
+        foreach (var gone in existing.Values.Where(i => !kept.Contains(i)))
+            gone.PropertyChanged -= OnItemSelectionChanged;
+
+        ProcessCount = procs.Count;
+        TotalCpuPercent = Math.Round(totalCpu, 1);
+        TotalMemoryGb = Math.Round(totalMem / 1024.0, 2);
+        LastUpdated = $"Live · {DateTime.Now:HH:mm:ss}";
+        UpdateSelectedCount();
     }
 
     private void OnItemSelectionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -111,7 +137,8 @@ public sealed partial class TaskManagerViewModel : ViewModelBase, IDisposable
         foreach (var p in Processes) p.IsSelected = false;
     }
 
-    partial void OnFilterChanged(string value) => _ = RefreshAsync();
+    // Instant: re-filter the last sample instead of waiting for the next poll.
+    partial void OnFilterChanged(string value) => Apply(_lastProcs);
     partial void OnSelectedProcessChanged(ProcessInfoItem? value) => KillSelectedCommand.NotifyCanExecuteChanged();
 
     private void KillSelected()
@@ -137,6 +164,7 @@ public sealed partial class TaskManagerViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        _liveSync.Dispose();
         _timer.Stop();
         _timer.Dispose();
         _cts.Cancel();
@@ -146,7 +174,11 @@ public sealed partial class TaskManagerViewModel : ViewModelBase, IDisposable
 
 public sealed partial class ProcessInfoItem : ObservableObject
 {
-    public ProcessInfo Info { get; }
+    /// <summary>Latest sample; replaced in place each live-sync cycle so the row (and its selection) survives.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Name), nameof(Description), nameof(CpuPercent), nameof(MemoryMb), nameof(Threads), nameof(Handles))]
+    private ProcessInfo _info;
+
     [ObservableProperty] private bool _isSelected;
 
     public int Pid => Info.Pid;
@@ -157,5 +189,11 @@ public sealed partial class ProcessInfoItem : ObservableObject
     public int Threads => Info.Threads;
     public int Handles => Info.Handles;
 
-    public ProcessInfoItem(ProcessInfo info) => Info = info;
+    public ProcessInfoItem(ProcessInfo info) => _info = info;
+
+    /// <summary>Takes the newer sample; raises change notifications only when something differs.</summary>
+    public void UpdateFrom(ProcessInfo info)
+    {
+        if (!Equals(Info, info)) Info = info;
+    }
 }

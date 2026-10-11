@@ -188,6 +188,8 @@ public sealed class OpenRgbService : IRgbService
                                 Zones = zones,
                                 ControlLabel = _controls[i].Label,
                                 IsControllable = _controls[i].Kind != RgbControlKind.Unsupported,
+                                Vendor = d.Vendor ?? string.Empty,
+                                Location = d.Location ?? string.Empty,
                             };
                         })
                         .ToArray();

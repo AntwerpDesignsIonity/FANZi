@@ -510,33 +510,69 @@
         <Setter Property="Foreground" Value="{StaticResource FanziTextDimBrush}"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontWeight" Value="Bold"/>
-        <!-- Content-sized tabs: all ten fit on one row down to the window's 1100 px MinWidth -->
-        <Setter Property="Padding" Value="12,10"/>
-        <Setter Property="Margin" Value="0,0,2,0"/>
+        <!-- Content-sized outlined tabs: all ten still fit on one row down to the window's 1100 px MinWidth -->
+        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Margin" Value="0,0,4,6"/>
         <Setter Property="MinWidth" Value="0"/>
-        <!-- Reserve the underline space so selection doesn't shift layout -->
-        <Setter Property="BorderThickness" Value="0,0,0,2"/>
-        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <!-- v4: every tab carries a visible outline; the same thickness is kept when selected so nothing shifts -->
+        <Setter Property="BorderThickness" Value="1.5"/>
+        <Setter Property="BorderBrush" Value="#22385C"/>
         <Setter Property="Transitions">
             <Transitions>
                 <BrushTransition Property="Background" Duration="0:0:0.2"/>
                 <BrushTransition Property="Foreground" Duration="0:0:0.2"/>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.2"/>
             </Transitions>
         </Setter>
     </Style>
+    <Style Selector="TabItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="CornerRadius" Value="10"/>
+    </Style>
     <Style Selector="TabItem:selected">
-        <Setter Property="Background" Value="{StaticResource FanziSurfaceBrush}"/>
+        <Setter Property="Background" Value="#10203A"/>
         <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
-        <Setter Property="BorderThickness" Value="0,0,0,2"/>
         <Setter Property="BorderBrush" Value="{StaticResource AccentGradient}"/>
     </Style>
-    <!-- The accent-gradient border is the selection indicator; hide Fluent's solid pipe -->
-    <Style Selector="TabItem:selected /template/ Border#PART_SelectedPipe">
+    <Style Selector="TabItem:selected /template/ Border#PART_LayoutRoot">
+        <Setter Property="BoxShadow" Value="0 0 12 0 #552563EB"/>
+        <Setter Property="Background" Value="#10203A"/>
+    </Style>
+    <!-- The accent-gradient outline is the selection indicator; hide Fluent's solid pipe -->
+    <Style Selector="TabItem /template/ Border#PART_SelectedPipe">
         <Setter Property="IsVisible" Value="False"/>
     </Style>
     <Style Selector="TabItem:pointerover">
         <Setter Property="Foreground" Value="{StaticResource FanziTextSecondaryBrush}"/>
-        <Setter Property="Background" Value="#0A1220"/>
+        <Setter Property="BorderBrush" Value="#3B82F6"/>
+    </Style>
+    <Style Selector="TabItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="#0E1A2E"/>
+    </Style>
+    <Style Selector="TabItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="#132848"/>
+    </Style>
+
+    <!-- ═══ TITLE-BAR OVERLAY BUTTON (v4) ═══ -->
+    <Style Selector="Button.title-overlay">
+        <Setter Property="Background" Value="#0A1422"/>
+        <Setter Property="Foreground" Value="#8EACD0"/>
+        <Setter Property="BorderBrush" Value="#22385C"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+    </Style>
+    <Style Selector="Button.title-overlay:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="#10203A"/>
+        <Setter Property="BorderBrush" Value="#3B82F6"/>
+        <Setter Property="Foreground" Value="#E8F0FF"/>
+    </Style>
+    <Style Selector="Button.title-overlay.active">
+        <Setter Property="Foreground" Value="#E8F0FF"/>
+        <Setter Property="BorderBrush" Value="{StaticResource AccentGradient}"/>
+        <Setter Property="Background" Value="#10203A"/>
+    </Style>
+    <Style Selector="Button.title-overlay.active /template/ ContentPresenter">
+        <Setter Property="BoxShadow" Value="0 0 10 0 #552563EB"/>
     </Style>
 
     <!-- ═══ SEGMENTED SELECTOR (RadioButton.segment: 1 / 5 / 15 min) ═══ -->

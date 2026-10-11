@@ -5,12 +5,12 @@ namespace Fanzi.FanControl.Tests;
 public sealed class AppVersionTests
 {
     [Fact]
-    public void Display_ComesFromTheAssembly_AndIs300()
+    public void Display_ComesFromTheAssembly_AndIs400()
     {
-        Assert.Equal("3.0.0", AppVersion.Display);
-        Assert.Equal("v3.0", AppVersion.ShortLabel);
-        Assert.Equal("FANZi IO-nity v3.0.0", AppVersion.ProductTitle);
-        Assert.Equal(new Version(3, 0, 0, 0), typeof(AppVersion).Assembly.GetName().Version);
+        Assert.Equal("4.0.0", AppVersion.Display);
+        Assert.Equal("v4.0", AppVersion.ShortLabel);
+        Assert.Equal("FANZi IO-nity v4.0.0", AppVersion.ProductTitle);
+        Assert.Equal(new Version(4, 0, 0, 0), typeof(AppVersion).Assembly.GetName().Version);
     }
 
     [Theory]

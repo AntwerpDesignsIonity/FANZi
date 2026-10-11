@@ -1,6 +1,6 @@
 # FANZi — Complete Wiki
 
-> **Version:** 1.0.0 · **Author:** Johan Wilhelm van Antwerp · **Company:** Ionity Global (Pty) Ltd
+> **Version:** 4.0.0 · **Author:** Johan Wilhelm van Antwerp · **Company:** Ionity Global (Pty) Ltd
 
 ---
 

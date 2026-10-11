@@ -76,7 +76,10 @@ public class XamlLoadTests
         Assert.True(root.Margin.Left <= root.BoxShadow[0].Blur + root.BoxShadow[0].Spread,
             $"margin {root.Margin.Left} exceeds the glow extent");
         Assert.Equal(280, window.Width - root.Margin.Left - root.Margin.Right);
-        Assert.Equal(220, window.Height - root.Margin.Top - root.Margin.Bottom);
+        // v4: the window sizes to its content (rows are switchable); it stays within the expanded bound.
+        double cardHeight = window.Height - root.Margin.Top - root.Margin.Bottom;
+        Assert.InRange(cardHeight, 120, MiniOverlayWindow.ExpandedHeight);
+        Assert.Equal(SizeToContent.WidthAndHeight, window.SizeToContent);
         Assert.IsType<LinearGradientBrush>(root.BorderBrush);
         Assert.Equal(2, window.GetVisualDescendants().OfType<Fanzi.FanControl.Controls.ThermalGauge>().Count());
         Assert.NotNull(window.FindControl<Fanzi.FanControl.Controls.ThermalHistoryChart>("CpuSparkline"));

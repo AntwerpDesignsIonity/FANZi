@@ -31,6 +31,8 @@ public partial class MainWindowViewModel
 
     partial void OnOverlayCompactChanged(bool value)
     {
+        NotifyOverlayRows();
+        OverlayLayoutChanged?.Invoke(this, System.EventArgs.Empty);
         if (_suppressProfileSync) return;
         _appSettings.OverlayCompact = value;
         _ = SaveSettingsAsync();

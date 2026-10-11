@@ -104,6 +104,14 @@ public partial class App : Application
                 };
             }
 
+            // v4: a newer FANZi build asks us to make way — shut down cleanly (fans restored in desktop.Exit).
+            UpgradeHandover.StartExitListener(() =>
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try { desktop.Shutdown(); }
+                    catch (Exception ex) { AppLog.Warn("Upgrade shutdown failed", ex); }
+                }));
+
             // A second launch signals us: bring the window back.
             Program.StartShowWindowListener(() =>
                 Dispatcher.UIThread.Post(() => viewModel.ShowWindowCommand.Execute(null)));

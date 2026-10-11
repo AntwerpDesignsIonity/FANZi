@@ -34,6 +34,16 @@ sealed class Program
                     $"OS: {RuntimeInformation.OSDescription}, {RuntimeInformation.OSArchitecture}, {RuntimeInformation.FrameworkDescription})");
 
         bool ownsMutex = AcquireSingleInstance(recovered);
+
+        // v4: a newer build replaces an older FANZi that is still running (e.g. v3 sitting in the tray),
+        // instead of just bringing the old window to the front — "I started v4 but v3 opened".
+        if (!ownsMutex && UpgradeHandover.ReplaceOlderInstances(AppVersion.Display))
+        {
+            _singleInstanceMutex?.Dispose();
+            _singleInstanceMutex = null;
+            ownsMutex = AcquireSingleInstance(recovered: true); // waits up to 10 s; an abandoned lock passes to us
+        }
+
         if (!ownsMutex)
         {
             AppLog.Info("Another FANZi instance is already running — asking it to show its window, then exiting.");

@@ -5,12 +5,13 @@
         xmlns:views="using:Fanzi.FanControl.Views"
         x:Class="Fanzi.FanControl.Views.MiniOverlayWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="FANZi IO-nity"
-        Width="300" Height="240"
+        Title="FANZi IO-nity Overlay"
+        SizeToContent="WidthAndHeight"
         Topmost="{Binding OverlayTopmost}"
         ShowInTaskbar="False"
         CanResize="False"
         SystemDecorations="None"
+        ShowActivated="False"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         TransparencyBackgroundFallback="#050A12"
@@ -18,8 +19,9 @@
         Classes.reduce-motion="{Binding ReduceMotion}"
         Classes.compact="{Binding OverlayCompact}">
 
-    <!-- The window itself is always transparent so the rounded DragRoot corners and glow stay visible;
-         ApplyTransparency (code-behind) only changes the DragRoot tint. -->
+    <!-- v4 Overlay Studio: every row is switchable (Settings → Overlay Studio or right-click), the card scales
+         0.8–1.6×, has accent presets (incl. RGB Sync) and shows RAM + network next to the thermals.
+         The window sizes itself to the card (SizeToContent) so hidden rows never leave gaps. -->
 
     <Window.Styles>
         <Style Selector="TextBlock.overlay-label">
@@ -52,92 +54,162 @@
         <Style Selector="Button.overlay-close:pressed /template/ ContentPresenter">
             <Setter Property="Background" Value="#55EF4444"/>
         </Style>
+        <Style Selector="ProgressBar.net-down">
+            <Setter Property="Foreground" Value="#22D3EE"/>
+        </Style>
+        <Style Selector="ProgressBar.net-up">
+            <Setter Property="Foreground" Value="#A78BFA"/>
+        </Style>
     </Window.Styles>
 
-    <!-- The transparent window margin still takes clicks on Windows (it is part of the window), so it
-         is kept to the minimum the glow needs: Margin 10 = glow extent (blur 10, spread 0).
-         Window size = card (280 x 220) + 2 x margin. -->
-    <Border x:Name="DragRoot"
-            Margin="{x:Static views:MiniOverlayWindow.ShadowMargin}"
-            CornerRadius="18"
-            BorderThickness="1.5"
-            BorderBrush="{StaticResource AccentGradient}"
-            Background="#0A1220"
-            BoxShadow="0 0 10 0 #702563EB, inset 0 1 0 0 #1AFFFFFF"
-            Padding="12,10">
-        <Border.ContextMenu>
-            <ContextMenu>
-                <MenuItem x:Name="CompactModeMenuItem" Header="Compact (gauges only)" ToggleType="CheckBox" IsChecked="{Binding OverlayCompact, Mode=TwoWay}"/>
-                <MenuItem Header="Always on top" ToggleType="CheckBox" IsChecked="{Binding OverlayTopmost, Mode=TwoWay}"/>
-                <!-- The sparkline is part of the expanded layout -->
-                <MenuItem Header="Show CPU history" ToggleType="CheckBox" IsChecked="{Binding OverlayShowCpuHistory, Mode=TwoWay}"
-                          IsEnabled="{Binding !OverlayCompact}"/>
-                <MenuItem Header="Hide" Click="OnHideClick"/>
-                <Separator/>
-                <MenuItem Header="Open FANZi" Command="{Binding ShowWindowCommand}"/>
-            </ContextMenu>
-        </Border.ContextMenu>
+    <!-- Margin = glow extent: the transparent ring still takes clicks on Windows, so it stays minimal. -->
+    <LayoutTransformControl x:Name="ScaleHost">
+        <LayoutTransformControl.LayoutTransform>
+            <ScaleTransform ScaleX="1" ScaleY="1"/>
+        </LayoutTransformControl.LayoutTransform>
 
-        <!-- Rows space themselves with a top margin, so rows hidden in compact mode add no gap -->
-        <Grid x:Name="OverlayContent" RowDefinitions="Auto,Auto,Auto,Auto">
-            <!-- Header: glowing logo · gradient title · health pill · close -->
-            <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
-                <Panel Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center">
-                    <Ellipse Width="24" Height="24" Margin="-4" Fill="{StaticResource LogoGlow}"
-                             IsHitTestVisible="False" Effect="blur(4)"/>
-                    <Image Source="/Assets/ionity-logo.png" Width="16" Height="16" Opacity="0.95"/>
-                </Panel>
-                <TextBlock Grid.Column="1" Text="IO-nity" FontSize="11" FontWeight="Black"
-                           Foreground="{StaticResource AccentGradient}" VerticalAlignment="Center"/>
-                <Border Grid.Column="2" x:Name="HealthPill" Classes="pill" Padding="8,1" VerticalAlignment="Center"
-                        ToolTip.Tip="{Binding HealthSummary}">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="HEALTH" FontSize="8" FontWeight="Bold" LetterSpacing="1" Foreground="#6A8AAF" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="HealthText" Text="{Binding HealthScore}" FontSize="11" FontWeight="Black" VerticalAlignment="Center"/>
+        <Border x:Name="DragRoot"
+                Width="280"
+                Margin="{x:Static views:MiniOverlayWindow.ShadowMargin}"
+                CornerRadius="18"
+                BorderThickness="1.5"
+                BorderBrush="{StaticResource AccentGradient}"
+                Background="#0A1220"
+                BoxShadow="0 0 10 0 #702563EB, inset 0 1 0 0 #1AFFFFFF"
+                Padding="12,10">
+            <Border.ContextMenu>
+                <ContextMenu>
+                    <MenuItem x:Name="CompactModeMenuItem" Header="Compact (gauges only)" ToggleType="CheckBox" IsChecked="{Binding OverlayCompact, Mode=TwoWay}"/>
+                    <MenuItem Header="Always on top" ToggleType="CheckBox" IsChecked="{Binding OverlayTopmost, Mode=TwoWay}"/>
+                    <MenuItem Header="Transparent background" ToggleType="CheckBox" IsChecked="{Binding OverlayTransparent, Mode=TwoWay}"/>
+                    <MenuItem Header="Show">
+                        <MenuItem Header="CPU gauge" ToggleType="CheckBox" IsChecked="{Binding OverlayShowCpu, Mode=TwoWay}"/>
+                        <MenuItem Header="GPU gauge" ToggleType="CheckBox" IsChecked="{Binding OverlayShowGpu, Mode=TwoWay}"/>
+                        <MenuItem Header="CPU history sparkline" ToggleType="CheckBox" IsChecked="{Binding OverlayShowCpuHistory, Mode=TwoWay}"/>
+                        <MenuItem Header="Fan / pump RPM" ToggleType="CheckBox" IsChecked="{Binding OverlayShowFan, Mode=TwoWay}"/>
+                        <MenuItem Header="CPU load" ToggleType="CheckBox" IsChecked="{Binding OverlayShowCpuLoad, Mode=TwoWay}"/>
+                        <MenuItem Header="GPU load" ToggleType="CheckBox" IsChecked="{Binding OverlayShowGpuLoad, Mode=TwoWay}"/>
+                        <MenuItem Header="RAM usage" ToggleType="CheckBox" IsChecked="{Binding OverlayShowRam, Mode=TwoWay}"/>
+                        <MenuItem Header="Network ↓ / ↑" ToggleType="CheckBox" IsChecked="{Binding OverlayShowNetwork, Mode=TwoWay}"/>
+                        <MenuItem Header="Health score" ToggleType="CheckBox" IsChecked="{Binding OverlayShowHealth, Mode=TwoWay}"/>
+                        <MenuItem Header="Clock" ToggleType="CheckBox" IsChecked="{Binding OverlayShowClock, Mode=TwoWay}"/>
+                    </MenuItem>
+                    <MenuItem Header="Size">
+                        <MenuItem Header="Small (80 %)" Command="{Binding SetOverlayScaleCommand}" CommandParameter="0.8"/>
+                        <MenuItem Header="Normal (100 %)" Command="{Binding SetOverlayScaleCommand}" CommandParameter="1.0"/>
+                        <MenuItem Header="Large (125 %)" Command="{Binding SetOverlayScaleCommand}" CommandParameter="1.25"/>
+                        <MenuItem Header="Huge (150 %)" Command="{Binding SetOverlayScaleCommand}" CommandParameter="1.5"/>
+                    </MenuItem>
+                    <MenuItem Header="Accent">
+                        <MenuItem Header="Ionity Blue" Command="{Binding SetOverlayAccentCommand}" CommandParameter="Ionity Blue"/>
+                        <MenuItem Header="Neon Cyan" Command="{Binding SetOverlayAccentCommand}" CommandParameter="Neon Cyan"/>
+                        <MenuItem Header="Aurora Green" Command="{Binding SetOverlayAccentCommand}" CommandParameter="Aurora Green"/>
+                        <MenuItem Header="Ember" Command="{Binding SetOverlayAccentCommand}" CommandParameter="Ember"/>
+                        <MenuItem Header="Royal Purple" Command="{Binding SetOverlayAccentCommand}" CommandParameter="Royal Purple"/>
+                        <MenuItem Header="Gold" Command="{Binding SetOverlayAccentCommand}" CommandParameter="Gold"/>
+                        <MenuItem Header="Stealth" Command="{Binding SetOverlayAccentCommand}" CommandParameter="Stealth"/>
+                        <MenuItem Header="RGB Sync (follows your lighting)" Command="{Binding SetOverlayAccentCommand}" CommandParameter="RGB Sync"/>
+                    </MenuItem>
+                    <MenuItem Header="Snap to corner">
+                        <MenuItem Header="Top left" Command="{Binding SnapOverlayCommand}" CommandParameter="TopLeft"/>
+                        <MenuItem Header="Top right" Command="{Binding SnapOverlayCommand}" CommandParameter="TopRight"/>
+                        <MenuItem Header="Bottom left" Command="{Binding SnapOverlayCommand}" CommandParameter="BottomLeft"/>
+                        <MenuItem Header="Bottom right" Command="{Binding SnapOverlayCommand}" CommandParameter="BottomRight"/>
+                    </MenuItem>
+                    <MenuItem Header="Overlay Studio…" Command="{Binding OpenOverlayStudioCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="Hide" Click="OnHideClick"/>
+                    <MenuItem Header="Open FANZi" Command="{Binding ShowWindowCommand}"/>
+                </ContextMenu>
+            </Border.ContextMenu>
+
+            <!-- Rows space themselves with a top margin, so hidden rows add no gap -->
+            <StackPanel x:Name="OverlayContent" Spacing="0">
+                <!-- Header: glowing logo · accent title · clock · health pill · close -->
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6">
+                    <Panel Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center">
+                        <Ellipse Width="24" Height="24" Margin="-4" Fill="{StaticResource LogoGlow}"
+                                 IsHitTestVisible="False" Effect="blur(4)"/>
+                        <Image Source="/Assets/ionity-logo.png" Width="16" Height="16" Opacity="0.95"/>
+                    </Panel>
+                    <TextBlock x:Name="OverlayTitle" Grid.Column="1" Text="IO-nity" FontSize="11" FontWeight="Black"
+                               Foreground="{StaticResource AccentGradient}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" x:Name="OverlayClockText" Text="{Binding OverlayClock}" FontSize="10" FontWeight="Bold"
+                               Foreground="#8EACD0" VerticalAlignment="Center" IsVisible="{Binding OverlayShowClock}"/>
+                    <Border Grid.Column="3" x:Name="HealthPill" Classes="pill" Padding="8,1" VerticalAlignment="Center"
+                            ToolTip.Tip="{Binding HealthSummary}" IsVisible="{Binding OverlayShowHealth}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="HEALTH" FontSize="8" FontWeight="Bold" LetterSpacing="1" Foreground="#6A8AAF" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="HealthText" Text="{Binding HealthScore}" FontSize="11" FontWeight="Black" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <Button Grid.Column="4" Classes="overlay-close" Content="✕" Click="OnHideClick" ToolTip.Tip="Hide overlay (Ctrl+O)"
+                            AutomationProperties.Name="Hide overlay"/>
+                </Grid>
+
+                <!-- Mini CPU / GPU gauges (UniformGrid: one visible gauge centres itself) -->
+                <UniformGrid x:Name="OverlayGauges" Rows="1" Margin="0,6,0,0" IsVisible="{Binding OverlayGaugesVisible}">
+                    <StackPanel Spacing="0" IsVisible="{Binding OverlayShowCpu}">
+                        <controls:ThermalGauge Value="{Binding CpuGaugeTempValue}"
+                                               Size="84" Thickness="7" Label="CPU" Unit="°C"/>
+                        <!-- Optional CPU temperature sparkline, last 5 min; tucked into the gauge's open bottom -->
+                        <controls:ThermalHistoryChart x:Name="CpuSparkline" ShowLabels="False" Height="20" Width="104"
+                                                      Margin="0,-6,0,0" StrokeThickness="1.5"
+                                                      HorizontalAlignment="Center"
+                                                      IsVisible="{Binding OverlaySparklineVisible}"
+                                                      History="{Binding History.CpuTemperature}"
+                                                      TimeWindow="0:5:0"
+                                                      Revision="{Binding HistoryRevision}"
+                                                      AutomationProperties.Name="CPU temperature, last 5 minutes"/>
                     </StackPanel>
-                </Border>
-                <Button Grid.Column="3" Classes="overlay-close" Content="✕" Click="OnHideClick" ToolTip.Tip="Hide overlay"
-                        AutomationProperties.Name="Hide overlay"/>
-            </Grid>
+                    <controls:ThermalGauge Value="{Binding GpuCoreTempValue}" VerticalAlignment="Top"
+                                           IsVisible="{Binding OverlayShowGpu}"
+                                           Size="84" Thickness="7" Label="GPU" Unit="°C"/>
+                </UniformGrid>
 
-            <!-- Mini CPU / GPU gauges -->
-            <Grid x:Name="OverlayGauges" Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,6,0,0">
-                <StackPanel Grid.Column="0" Spacing="0">
-                    <controls:ThermalGauge Value="{Binding CpuGaugeTempValue}"
-                                           Size="84" Thickness="7" Label="CPU" Unit="°C"/>
-                    <!-- Optional (context menu) CPU temperature sparkline, last 5 min; tucked into the gauge's open bottom -->
-                    <controls:ThermalHistoryChart x:Name="CpuSparkline" ShowLabels="False" Height="20" Width="104"
-                                                  Margin="0,-6,0,0" StrokeThickness="1.5"
-                                                  HorizontalAlignment="Center"
-                                                  IsVisible="{Binding OverlaySparklineVisible}"
-                                                  History="{Binding History.CpuTemperature}"
-                                                  TimeWindow="0:5:0"
-                                                  Revision="{Binding HistoryRevision}"
-                                                  AutomationProperties.Name="CPU temperature, last 5 minutes"/>
+                <!-- Expanded rows (compact mode hides them): label · gradient bar · value -->
+                <StackPanel x:Name="OverlayBars" Spacing="6" Margin="0,6,0,0" IsVisible="{Binding !OverlayCompact}">
+                    <Grid ColumnDefinitions="64,*,72" ColumnSpacing="8" IsVisible="{Binding OverlayFanRowVisible}">
+                        <TextBlock Classes="overlay-label" Text="FAN/PUMP"/>
+                        <ProgressBar Grid.Column="1" Classes="thin" Maximum="3000" Value="{Binding CpuFanRpmValue}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Classes="overlay-value" Text="{Binding CpuFanRpmValue, StringFormat='{}{0:F0} RPM'}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="64,*,72" ColumnSpacing="8" IsVisible="{Binding OverlayCpuLoadRowVisible}">
+                        <TextBlock Classes="overlay-label" Text="CPU LOAD"/>
+                        <ProgressBar Grid.Column="1" Classes="thin" Value="{Binding CpuLoadValue}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Classes="overlay-value" Text="{Binding CpuTotalLoad}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="64,*,72" ColumnSpacing="8" IsVisible="{Binding OverlayGpuLoadRowVisible}">
+                        <TextBlock Classes="overlay-label" Text="GPU LOAD"/>
+                        <ProgressBar Grid.Column="1" Classes="thin" Value="{Binding GpuLoadValue}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Classes="overlay-value" Text="{Binding GpuLoad}"/>
+                    </Grid>
+                    <Grid x:Name="OverlayRamRow" ColumnDefinitions="64,*,72" ColumnSpacing="8" IsVisible="{Binding OverlayRamRowVisible}">
+                        <TextBlock Classes="overlay-label" Text="RAM"/>
+                        <ProgressBar Grid.Column="1" Classes="thin" Value="{Binding RamUsedPercentValue}" VerticalAlignment="Center"
+                                     ToolTip.Tip="{Binding RamUsageText}"/>
+                        <TextBlock Grid.Column="2" Classes="overlay-value" Text="{Binding RamUsageText}"/>
+                    </Grid>
+                    <StackPanel x:Name="OverlayNetworkRow" Spacing="3" IsVisible="{Binding OverlayNetworkRowVisible}">
+                        <Grid ColumnDefinitions="64,*,72" ColumnSpacing="8">
+                            <TextBlock Classes="overlay-label" Text="NET ↓"/>
+                            <ProgressBar Grid.Column="1" Classes="thin net-down" Maximum="{Binding NetworkManagerVm.PeakBps}"
+                                         Value="{Binding NetworkManagerVm.DownloadBps}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Classes="overlay-value" Foreground="#67E8F9" Text="{Binding NetworkManagerVm.TotalDownloadRate}"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="64,*,72" ColumnSpacing="8">
+                            <TextBlock Classes="overlay-label" Text="NET ↑"/>
+                            <ProgressBar Grid.Column="1" Classes="thin net-up" Maximum="{Binding NetworkManagerVm.PeakBps}"
+                                         Value="{Binding NetworkManagerVm.UploadBps}" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Classes="overlay-value" Foreground="#C4B5FD" Text="{Binding NetworkManagerVm.TotalUploadRate}"/>
+                        </Grid>
+                    </StackPanel>
                 </StackPanel>
-                <controls:ThermalGauge Grid.Column="1" Value="{Binding GpuCoreTempValue}" VerticalAlignment="Top"
-                                       Size="84" Thickness="7" Label="GPU" Unit="°C"/>
-            </Grid>
 
-            <!-- FAN/PUMP RPM and CPU LOAD with thin gradient bars -->
-            <!-- Expanded layout only; compact mode (context menu) shows the header and gauges -->
-            <Grid x:Name="OverlayBars" Grid.Row="2" ColumnDefinitions="64,*,64" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="6" Margin="0,6,0,0"
-                  IsVisible="{Binding !OverlayCompact}">
-                <TextBlock Grid.Row="0" Grid.Column="0" Classes="overlay-label" Text="FAN/PUMP"/>
-                <ProgressBar Grid.Row="0" Grid.Column="1" Classes="thin" Maximum="3000"
-                             Value="{Binding CpuFanRpmValue}" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="0" Grid.Column="2" Classes="overlay-value"
-                           Text="{Binding CpuFanRpmValue, StringFormat='{}{0:F0} RPM'}"/>
-
-                <TextBlock Grid.Row="1" Grid.Column="0" Classes="overlay-label" Text="CPU LOAD"/>
-                <ProgressBar Grid.Row="1" Grid.Column="1" Classes="thin"
-                             Value="{Binding CpuLoadValue}" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="1" Grid.Column="2" Classes="overlay-value" Text="{Binding CpuTotalLoad}"/>
-            </Grid>
-
-            <TextBlock x:Name="OverlayHint" Grid.Row="3" Text="Drag to move · right-click for options"
-                       Classes="muted" FontSize="9" HorizontalAlignment="Center" Margin="0,6,0,0"
-                       IsVisible="{Binding !OverlayCompact}"/>
-        </Grid>
-    </Border>
+                <TextBlock x:Name="OverlayHint" Text="Drag to move · right-click to customise"
+                           Classes="muted" FontSize="9" HorizontalAlignment="Center" Margin="0,6,0,0"
+                           IsVisible="{Binding !OverlayCompact}"/>
+            </StackPanel>
+        </Border>
+    </LayoutTransformControl>
 </Window>

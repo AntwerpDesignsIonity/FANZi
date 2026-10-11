@@ -49,6 +49,17 @@
                 <TextBlock Grid.Column="1" Text="AI Thermal Intelligence" FontSize="11" Foreground="#3A5070" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0" Margin="0,0,4,0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding LastUpdated}" FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <!-- v4: one-click mini overlay (also Ctrl+O, tray menu and Settings → Overlay Studio) -->
+                    <Button x:Name="OverlayTitleButton" Command="{Binding ToggleMiniOverlayCommand}"
+                            Classes="title-overlay" Classes.active="{Binding MiniOverlayVisible}"
+                            Padding="10,4" CornerRadius="8" Margin="0,0,6,0" VerticalAlignment="Center"
+                            ToolTip.Tip="Show / hide the mini overlay (Ctrl+O) — right-click it to customise"
+                            AutomationProperties.Name="Toggle the mini overlay">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="▣" FontSize="12" FontWeight="Black" VerticalAlignment="Center"/>
+                            <TextBlock Text="Overlay" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <!-- Window Controls -->
                     <Button x:Name="HelpButton" Content="?" Command="{Binding ToggleHelpCommand}" Background="Transparent" Foreground="#5A7FA8" FontSize="13" FontWeight="Black" Padding="12,6" CornerRadius="6"
                             ToolTip.Tip="Help &amp; keyboard shortcuts (F1)" AutomationProperties.Name="Help and keyboard shortcuts"/>
@@ -947,6 +958,58 @@
                                         <Border CornerRadius="8" Background="#060C14" Padding="12,8">
                                             <TextBlock Text="When minimized, FANZI reduces polling to save CPU. Right-click the tray icon to restore or exit." Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- v4 Overlay Studio: customise every row of the mini overlay -->
+                                <Border Classes="card" x:Name="OverlayStudioCard">
+                                    <StackPanel Spacing="12">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                            <Border Classes="pill info" Padding="8,3">
+                                                <TextBlock Text="▣" FontSize="11" FontWeight="Black" Foreground="{StaticResource FanziAccentSoftBrush}"/>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock Text="Overlay Studio" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"/>
+                                                <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                           Text="Pick what the floating mini overlay shows, its size and accent. Changes apply live and are saved."/>
+                                            </StackPanel>
+                                            <Button Grid.Column="2" x:Name="OverlayStudioToggleButton" Classes="primary" Command="{Binding ToggleMiniOverlayCommand}"
+                                                    Padding="14,8" FontWeight="Bold" VerticalAlignment="Center"
+                                                    Content="{Binding OverlayToggleText}"/>
+                                        </Grid>
+                                        <WrapPanel x:Name="OverlayStudioToggles" Orientation="Horizontal">
+                                            <CheckBox Content="CPU gauge" IsChecked="{Binding OverlayShowCpu}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="GPU gauge" IsChecked="{Binding OverlayShowGpu}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="CPU history" IsChecked="{Binding OverlayShowCpuHistory}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="Fan / pump" IsChecked="{Binding OverlayShowFan}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="CPU load" IsChecked="{Binding OverlayShowCpuLoad}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="GPU load" IsChecked="{Binding OverlayShowGpuLoad}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="RAM" IsChecked="{Binding OverlayShowRam}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="Network ↓ ↑" IsChecked="{Binding OverlayShowNetwork}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="Health" IsChecked="{Binding OverlayShowHealth}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="Clock" IsChecked="{Binding OverlayShowClock}" Margin="0,0,16,6"/>
+                                            <CheckBox Content="Compact (gauges only)" IsChecked="{Binding OverlayCompact}" Margin="0,0,16,6"/>
+                                        </WrapPanel>
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,*" ColumnSpacing="12">
+                                            <TextBlock Text="Size" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
+                                            <Slider Grid.Column="1" Minimum="0.8" Maximum="1.6" TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                                    Value="{Binding OverlayScale, Mode=TwoWay}" Foreground="#2563EB" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding OverlayScale, StringFormat='{}{0:P0}'}" Foreground="#60A5FA" FontWeight="Bold"
+                                                       FontSize="12" VerticalAlignment="Center" MinWidth="44"/>
+                                            <TextBlock Grid.Column="3" Text="Accent" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                            <ComboBox Grid.Column="4" ItemsSource="{Binding OverlayAccentNames}" SelectedItem="{Binding OverlayAccent, Mode=TwoWay}"
+                                                      HorizontalAlignment="Stretch" FontSize="12"/>
+                                        </Grid>
+                                        <WrapPanel>
+                                            <TextBlock Text="Snap:" Foreground="#5A7899" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                                            <Button Content="↖ Top left" Classes="ghost" Command="{Binding SnapOverlayCommand}" CommandParameter="TopLeft" Padding="10,4" FontSize="11" Margin="0,0,6,6"/>
+                                            <Button Content="↗ Top right" Classes="ghost" Command="{Binding SnapOverlayCommand}" CommandParameter="TopRight" Padding="10,4" FontSize="11" Margin="0,0,6,6"/>
+                                            <Button Content="↙ Bottom left" Classes="ghost" Command="{Binding SnapOverlayCommand}" CommandParameter="BottomLeft" Padding="10,4" FontSize="11" Margin="0,0,6,6"/>
+                                            <Button Content="↘ Bottom right" Classes="ghost" Command="{Binding SnapOverlayCommand}" CommandParameter="BottomRight" Padding="10,4" FontSize="11" Margin="0,0,6,6"/>
+                                            <Button Content="Reset layout" Classes="ghost" Command="{Binding ResetOverlayLayoutCommand}" Padding="10,4" FontSize="11" Margin="12,0,6,6"/>
+                                        </WrapPanel>
+                                        <TextBlock x:Name="OverlayStatusText" Text="{Binding OverlayStatus}" Foreground="#22C55E" FontSize="11" TextWrapping="Wrap"
+                                                   IsVisible="{Binding OverlayStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                     </StackPanel>
                                 </Border>
 

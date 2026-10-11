@@ -275,6 +275,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LoadProfileFromDiskCommand = new RelayCommand<ProfileFileInfo>(LoadProfileFromDisk);
         DeleteProfileFromDiskCommand = new RelayCommand<ProfileFileInfo>(DeleteProfileFromDisk);
         ToggleMiniOverlayCommand = new RelayCommand(ToggleMiniOverlay);
+        InitializeOverlayStudio();
         OpenRgbTabCommand = new RelayCommand(() => SelectedTabIndex = RgbTabIndex);
         ExportHardwareReportCommand = new RelayCommand(ExportHardwareReport);
         GoogleLoginCommand = new AsyncRelayCommand(() => SafeExecuteAsync(GoogleLoginAsync, "Google sign-in"));
@@ -456,18 +457,53 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ToggleMiniOverlay()
     {
+        // Tray / shortcut / button can arrive off the UI thread on some platforms: windows are UI-only.
+        if (!Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(ToggleMiniOverlay);
+            return;
+        }
+
+        try
+        {
+            if (_miniOverlay is not null && _miniOverlay.IsVisible)
+            {
+                HideMiniOverlay();
+                return;
+            }
+            ShowMiniOverlay();
+        }
+        catch (Exception ex)
+        {
+            // Never fail silently: v3 users saw "nothing happens" — log it and say so in Settings.
+            AppLog.Error("Showing the mini overlay failed", ex);
+            OverlayStatus = $"Overlay could not open: {ex.Message}";
+            StatusMessage = OverlayStatus;
+            try { _miniOverlay?.Close(); } catch { /* already broken */ }
+            _miniOverlay = null;
+            MiniOverlayVisible = false;
+        }
+    }
+
+    /// <summary>Creates (first time) and shows the overlay, always on a visible screen and above other windows.</summary>
+    private void ShowMiniOverlay()
+    {
         if (_miniOverlay is null)
         {
-            _miniOverlay = new Views.MiniOverlayWindow { DataContext = this };
-            _miniOverlay.Closed += (_, _) => { _miniOverlay = null; MiniOverlayVisible = false; };
-            _miniOverlay.Show();
-            MiniOverlayVisible = true;
+            var overlay = new Views.MiniOverlayWindow { DataContext = this };
+            overlay.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_miniOverlay, overlay)) _miniOverlay = null;
+                MiniOverlayVisible = false;
+            };
+            _miniOverlay = overlay;
         }
-        else
-        {
-            if (_miniOverlay.IsVisible) HideMiniOverlay();
-            else { _miniOverlay.Show(); MiniOverlayVisible = true; }
-        }
+
+        _miniOverlay.Show();
+        if (_miniOverlay is Views.MiniOverlayWindow mini) mini.BringIntoView();
+        MiniOverlayVisible = true;
+        OverlayStatus = "Overlay visible — drag it anywhere, right-click for options (Ctrl+O hides it)";
+        AppLog.Info("Mini overlay shown");
     }
 
     /// <summary>Hides the overlay (✕ button, context menu, tray toggle) and keeps MiniOverlayVisible in sync.</summary>
@@ -475,6 +511,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         _miniOverlay?.Hide();
         MiniOverlayVisible = false;
+        OverlayStatus = "Overlay hidden — Ctrl+O or the ▣ title-bar button shows it again";
     }
 
     /// <summary>Saved overlay position in screen pixels, or null when never moved.</summary>
@@ -651,6 +688,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _disposeTokenSource.Dispose();
         }
 
+        DisposeOverlayStudio();
         try { _miniOverlay?.Close(); }
         catch (Exception ex) { AppLog.Warn("Closing the mini overlay failed", ex); }
         _miniOverlay = null;
@@ -697,6 +735,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 _appSettings.OpenRgbPath = path;
                 _ = SaveSettingsAsync();
             });
+            // v4 AEDi lighting switches + fan-header count for the RGB deep scan.
+            RgbControl.FanHeaderCountProvider = () => FanChannels.Count;
+            RgbControl.ApplyAiSettings(_appSettings.RgbSmartAmbient, _appSettings.RgbThermalGuardian, _appSettings.RgbNightDimming,
+                (smart, guardian, night) =>
+                {
+                    _appSettings.RgbSmartAmbient = smart;
+                    _appSettings.RgbThermalGuardian = guardian;
+                    _appSettings.RgbNightDimming = night;
+                    _ = SaveSettingsAsync();
+                });
             InitialiseProfiles();
             EnsureStartupTaskMatchesSettings();
 
@@ -768,6 +816,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ToastNotificationsEnabled = _appSettings.ToastNotificationsEnabled;
             ReduceMotion = _appSettings.ReduceMotion;
             OverlayCompact = _appSettings.OverlayCompact;
+            ApplyOverlayStudioSettings();
         }
         finally
         {
@@ -1023,7 +1072,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             while (!_disposeTokenSource.IsCancellationRequested)
             {
+                // v4 live sync: Tasks / Network / Power collect in parallel with the hardware poll and are
+                // applied in the same UI pass as the dashboard values (see RefreshAsync).
+                _liveCollect = LiveSyncHub.Shared.CollectAsync(_disposeTokenSource.Token);
                 await RefreshAsync();
+                await CommitLiveSyncAsync();
 
                 int intervalMs = _isWindowVisible
                     ? _appSettings.PollingIntervalSeconds * 1000
@@ -1033,6 +1086,31 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    /// <summary>Pending live-sync collection for the current cycle (null once committed).</summary>
+    private Task<IReadOnlyList<Action>>? _liveCollect;
+
+    /// <summary>Waits for this cycle's panel collectors and applies them on the UI thread (once per cycle).</summary>
+    private async Task CommitLiveSyncAsync()
+    {
+        var pending = Interlocked.Exchange(ref _liveCollect, null);
+        if (pending is null) return;
+
+        IReadOnlyList<Action> applies;
+        try { applies = await pending; }
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Live sync collection failed", ex);
+            applies = Array.Empty<Action>();
+        }
+
+        if (_disposed) return;
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+            LiveSyncHub.Shared.Commit(applies);
+        else
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => LiveSyncHub.Shared.Commit(applies));
     }
 
     private async Task RefreshAsync()
@@ -1053,6 +1131,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             IsRefreshing = true;
             var snapshot = await _hardwareMonitorService.GetSnapshotAsync(_disposeTokenSource.Token);
+
+            // Same frame: the panels' results are committed right before the dashboard values below.
+            await CommitLiveSyncAsync();
 
             CpuPackageTemperature = FormatTemperature(snapshot.CpuPackageTemperature);
             CpuAverageTemperature = FormatTemperature(snapshot.CpuAverageTemperature);
@@ -1224,6 +1305,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             GameModeStatus = _gameModeDetector.StatusMessage;
             DetectedGame = _gameModeDetector.DetectedGame;
             GameModeDetail = _gameModeDetector.DetailMessage;
+            RgbControl.UpdateGameState(IsGameMode, DetectedGame);
 
             // ── IO-nity AI: System Health Score ───────────────────────
             _healthScorer.Update(

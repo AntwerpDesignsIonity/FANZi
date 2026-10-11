@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -91,9 +92,14 @@ public sealed class ScreenshotTests
 
             scope.Vm.SelectedTabIndex = MainWindowViewModel.RgbTabIndex;
             Capture(window, "rgb.png", 1400, 960);
+            AssertRgbStudio(window, scope);
 
             scope.Vm.SelectedTabIndex = TabSettings;
             Capture(window, "settings.png", 1400, 960);
+            window.FindControl<Border>("OverlayStudioCard")!.BringIntoView();
+            Dispatcher.UIThread.RunJobs();
+            Capture(window, "settings-overlay-studio.png", 1400, 960);
+            Assert.True(window.FindControl<WrapPanel>("OverlayStudioToggles")!.Children.Count >= 10, "overlay studio lists every row");
             AssertToastSettingShown(window, scope);
             AssertReduceMotionSettingShown(window, scope);
             window.Width = window.MinWidth;
@@ -160,11 +166,16 @@ public sealed class ScreenshotTests
         try
         {
             Assert.False(scope.Vm.OverlayCompact);
-            int w = (int)overlay.Width, h = (int)overlay.Height;
-            Assert.Equal(MiniOverlayWindow.ExpandedHeight, h);
+            Dispatcher.UIThread.RunJobs();
+            // v4: SizeToContent — the window is exactly the card plus the glow margin, every row on.
+            int w = (int)overlay.Bounds.Width, h = (int)overlay.Bounds.Height;
+            Assert.InRange(h, 260, MiniOverlayWindow.ExpandedHeight);
+            Assert.Equal(MiniOverlayWindow.CardWidth + 2 * MiniOverlayWindow.ShadowMargin.Left, w);
+            Assert.True(overlay.FindControl<Grid>("OverlayRamRow")!.IsEffectivelyVisible, "RAM row shown by default");
+            Assert.True(overlay.FindControl<StackPanel>("OverlayNetworkRow")!.IsEffectivelyVisible, "network rows shown by default");
             Capture(overlay, "overlay-expanded.png", w, h);
             AssertHistoryChartsDrawn(overlay, "CpuSparkline");
-            Assert.True(overlay.FindControl<Grid>("OverlayBars")!.IsEffectivelyVisible, "expanded overlay shows the bars");
+            Assert.True(overlay.FindControl<StackPanel>("OverlayBars")!.IsEffectivelyVisible, "expanded overlay shows the bars");
             Assert.True(overlay.FindControl<TextBlock>("OverlayHint")!.IsEffectivelyVisible);
 
             // Context menu → "Compact (gauges only)": the bars, sparkline and hint go, the window shrinks to the card.
@@ -182,10 +193,11 @@ public sealed class ScreenshotTests
             Assert.True(scope.Settings.SaveCount > saves, "overlay mode change should be saved");
             Assert.True(scope.Settings.LastSaved!.OverlayCompact);
 
-            int compactHeight = (int)overlay.Height;
+            Dispatcher.UIThread.RunJobs();
+            int compactHeight = (int)overlay.Bounds.Height;
             Assert.True(compactHeight < h - 60, $"compact overlay ({compactHeight}px) should be clearly shorter than expanded ({h}px)");
             Capture(overlay, "overlay-compact.png", w, compactHeight);
-            Assert.False(overlay.FindControl<Grid>("OverlayBars")!.IsEffectivelyVisible, "compact overlay hides the bars");
+            Assert.False(overlay.FindControl<StackPanel>("OverlayBars")!.IsEffectivelyVisible, "compact overlay hides the bars");
             Assert.False(overlay.FindControl<ThermalHistoryChart>("CpuSparkline")!.IsEffectivelyVisible, "compact overlay hides the sparkline");
             Assert.False(overlay.FindControl<TextBlock>("OverlayHint")!.IsEffectivelyVisible);
             var gauges = overlay.GetVisualDescendants().OfType<ThermalGauge>().ToList();
@@ -202,8 +214,24 @@ public sealed class ScreenshotTests
             // Back to expanded restores the full layout and size.
             scope.Vm.OverlayCompact = false;
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal(MiniOverlayWindow.ExpandedHeight, overlay.Height);
+            Assert.Equal(h, (int)overlay.Bounds.Height);
             Assert.True(overlay.FindControl<ThermalHistoryChart>("CpuSparkline")!.IsVisible);
+
+            // Overlay Studio: hide rows, scale up, recolour — the window follows the content.
+            scope.Vm.OverlayShowNetwork = false;
+            scope.Vm.OverlayShowRam = false;
+            scope.Vm.OverlayShowGpu = false;
+            Dispatcher.UIThread.RunJobs();
+            int trimmed = (int)overlay.Bounds.Height;
+            Assert.True(trimmed < h - 30, $"hiding RAM + network should shrink the overlay ({trimmed} vs {h})");
+            Assert.Single(overlay.GetVisualDescendants().OfType<ThermalGauge>(), g => g.IsEffectivelyVisible);
+            scope.Vm.OverlayScale = 1.25;
+            scope.Vm.OverlayAccent = "Ember";
+            Dispatcher.UIThread.RunJobs();
+            Assert.InRange(overlay.Bounds.Width, w * 1.2, w * 1.3);
+            Capture(overlay, "overlay-custom.png", (int)overlay.Bounds.Width, (int)overlay.Bounds.Height);
+            Assert.Equal(1.25, scope.Settings.LastSaved!.OverlayScale);
+            Assert.Equal("Ember", scope.Settings.LastSaved!.OverlayAccent);
         }
         finally
         {
@@ -212,6 +240,39 @@ public sealed class ScreenshotTests
     }
 
     // ── Layout checks ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// v4 RGB studio: colourful effect chips and theme pills, the mood prompt applies a scene, device cards
+    /// show every OpenRGB device (numbered duplicates), and the lower sections render (scrolled captures).
+    /// </summary>
+    private static void AssertRgbStudio(Window window, Scope scope)
+    {
+        var view = window.GetVisualDescendants().OfType<RgbControlView>().First(v => v.IsEffectivelyVisible);
+        var chips = view.FindControl<ItemsControl>("EffectChipList")!;
+        Assert.Equal(9, chips.ItemCount);
+        Assert.All(chips.GetVisualDescendants().OfType<Button>(), b => Assert.IsAssignableFrom<IGradientBrush>(b.Background));
+        var themes = view.FindControl<ItemsControl>("ThemeList")!;
+        Assert.All(themes.GetVisualDescendants().OfType<Button>(), b => Assert.IsAssignableFrom<IGradientBrush>(b.Background));
+
+        var rgb = scope.Vm.RgbControl;
+        rgb.MoodPrompt = "red galaxy";
+        rgb.GenerateMoodCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Models.RgbColor.Red, rgb.PrimaryColor);
+        Assert.Contains("galaxy", rgb.AiLightingStatus);
+
+        var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First();
+        scroll.Offset = new Vector(0, 760);
+        Dispatcher.UIThread.RunJobs();
+        Capture(window, "rgb-colours.png", 1400, 960);
+        scroll.Offset = new Vector(0, 1500);
+        Dispatcher.UIThread.RunJobs();
+        Capture(window, "rgb-devices.png", 1400, 960);
+        var cards = view.FindControl<ItemsControl>("DeviceCards")!;
+        Assert.Equal(rgb.Devices.Count, cards.ItemCount);
+        scroll.Offset = new Vector(0, 0);
+        Dispatcher.UIThread.RunJobs();
+    }
 
     /// <summary>All ten tab headers share one row (no orphaned tab wrapping onto a second line).</summary>
     private static void AssertTabsOnOneRow(Window window)
