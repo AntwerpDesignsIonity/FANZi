@@ -60,6 +60,18 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public NetworkManagerViewModel NetworkManagerVm { get; } = new();
     public PowerMonitorViewModel PowerMonitorVm { get; } = new();
     public SystemCleanerViewModel SystemCleanerVm { get; } = new();
+
+    /// <summary>v4.1.0 Tools tab (disk optimiser, drive health, repair, network / quick fixes, power &amp; gaming).</summary>
+    public ToolsViewModel ToolsVm { get; } = new();
+
+    /// <summary>Index of the Tools tab (after Cleaner, before Alerts).</summary>
+    internal const int ToolsTabIndex = 8;
+
+    /// <summary>Drives, drive health and power plans are read the first time the Tools tab opens (not at start-up).</summary>
+    partial void OnSelectedTabIndexChanged(int value)
+    {
+        if (value == ToolsTabIndex) _ = ToolsVm.EnsureLoadedAsync();
+    }
     public SmartFanCurveEngine AiEngine => _aiEngine;
 
     // Section toggles bound to AppSettings
@@ -67,6 +79,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _showNetworkManagerTab = true;
     [ObservableProperty] private bool _showPowerMonitorTab = true;
     [ObservableProperty] private bool _showSystemCleanerTab = true;
+    [ObservableProperty] private bool _showToolsTab = true;
 
     // ── Observable properties ─────────────────────────────────────────────────
 
@@ -555,6 +568,23 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     // ── Google Profile ────────────────────────────────────────────────────
 
+    /// <summary>Start-up: a saved Google sign-in is refreshed and shown without asking the user again.</summary>
+    private async Task RestoreGoogleSessionAsync()
+    {
+        try
+        {
+            bool ok = await _googleProfile.RestoreSessionAsync(_disposeTokenSource.Token);
+            IsLoggedInGoogle = ok;
+            GoogleUserName = _googleProfile.UserName ?? "";
+            GoogleUserEmail = _googleProfile.UserEmail ?? "";
+            GoogleStatus = ok ? _googleProfile.Status
+                : _googleProfile.IsConfigured ? (_googleProfile.Status == "Restoring Google session..." ? "Not signed in" : _googleProfile.Status)
+                : @"Google sign-in needs google_oauth.json in %APPDATA%\FANZI";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { AppLog.Warn("Restoring Google session failed", ex); }
+    }
+
     private async Task GoogleLoginAsync()
     {
         GoogleStatus = "Signing in to Google...";
@@ -699,6 +729,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         NetworkManagerVm.Dispose();
         PowerMonitorVm.Dispose();
         SystemCleanerVm.Dispose();
+        ToolsVm.Dispose();
         foreach (var fanChannel in FanChannels)
             fanChannel.Dispose();
     }
@@ -770,6 +801,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             // Panels (Tasks / Network / Power / RAM) sync on their own 0.5 s cadence, independent of the
             // hardware poll, so lists move in small smooth steps instead of jumps every 2–3 s.
             _ = RunLiveSyncLoopAsync();
+            _ = RestoreGoogleSessionAsync();
             await RunRefreshLoopAsync();
         }
         catch (Exception ex)
@@ -803,6 +835,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         try
         {
             StartWithWindows = _appSettings.StartWithWindows;
+            ThermalFrameEnabled = _appSettings.ThermalFrameEnabled;
             StartMinimized = _appSettings.StartMinimized;
             MinimizeToTray = _appSettings.MinimizeToTray;
             CloseToTray = _appSettings.CloseToTray;
@@ -812,6 +845,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ShowNetworkManagerTab = _appSettings.ShowNetworkManagerTab;
             ShowPowerMonitorTab = _appSettings.ShowPowerMonitorTab;
             ShowSystemCleanerTab = _appSettings.ShowSystemCleanerTab;
+            ShowToolsTab = _appSettings.ShowToolsTab;
             OverlayTransparent = _appSettings.OverlayTransparent;
             OverlayOpacity = _appSettings.OverlayOpacity;
             OverlayTopmost = _appSettings.OverlayTopmost;
@@ -894,6 +928,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_suppressProfileSync) return;
         _appSettings.ShowSystemCleanerTab = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnShowToolsTabChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.ShowToolsTab = value;
         _ = SaveSettingsAsync();
     }
 

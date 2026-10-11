@@ -4,8 +4,42 @@
              ClipToBounds="False"
              HorizontalAlignment="Center"
              VerticalAlignment="Center">
+    <UserControl.Styles>
+        <!-- Living gradient: the aura ring behind the dial slowly turns and breathes (class "living" is
+             set from code and dropped under Reduce motion, so the animations stop). -->
+        <Style Selector="Ellipse.gauge-aura.living">
+            <Style.Animations>
+                <Animation Duration="0:0:16" IterationCount="Infinite">
+                    <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="360"/></KeyFrame>
+                </Animation>
+                <Animation Duration="0:0:3.6" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.55"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.95"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+    </UserControl.Styles>
+
     <!-- Sizes, strokes, brushes and texts are driven from code-behind (ThermalGauge.axaml.cs). -->
     <Panel x:Name="PART_Root" Width="160" Height="160">
+
+        <!-- Living gradient aura: conic ring (value heat colour + brand violet / blue), masked to a soft band -->
+        <Ellipse x:Name="PART_Aura" Classes="gauge-aura" Margin="-10" IsHitTestVisible="False"
+                 Opacity="0.75" RenderTransformOrigin="50%,50%">
+            <Ellipse.RenderTransform>
+                <RotateTransform Angle="0"/>
+            </Ellipse.RenderTransform>
+            <Ellipse.OpacityMask>
+                <RadialGradientBrush>
+                    <GradientStop Color="#00000000" Offset="0"/>
+                    <GradientStop Color="#00000000" Offset="0.66"/>
+                    <GradientStop Color="#FF000000" Offset="0.80"/>
+                    <GradientStop Color="#B0000000" Offset="0.90"/>
+                    <GradientStop Color="#00000000" Offset="1"/>
+                </RadialGradientBrush>
+            </Ellipse.OpacityMask>
+        </Ellipse>
 
         <!-- Radial glow behind the dial, tinted by TemperatureColorScale -->
         <Ellipse x:Name="PART_Glow" Margin="-18" IsHitTestVisible="False">

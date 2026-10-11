@@ -1,0 +1,244 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Fanzi.FanControl.ViewModels"
+             xmlns:tools="using:Fanzi.FanControl.Services.Tools"
+             x:Class="Fanzi.FanControl.Views.ToolsView"
+             x:DataType="vm:ToolsViewModel">
+    <!-- v4.1.0 Tools tab: Disk Optimizer, Drive Health, System Repair, Network & Quick fixes, Power & Gaming.
+         Every button runs a real Windows tool; its output streams into the console on the right. -->
+    <Grid ColumnDefinitions="*,320" ColumnSpacing="12">
+
+        <ScrollViewer Grid.Column="0" Classes="tab-scroll">
+            <StackPanel Spacing="14">
+
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <StackPanel>
+                        <TextBlock Text="Tools &amp; Maintenance" Classes="h1" FontSize="22" TextWrapping="Wrap"/>
+                        <TextBlock Text="Disk optimiser (defrag / TRIM), drive health, Windows repair, network fixes and gaming power settings"
+                                   Foreground="#5A7899" FontSize="11" TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="🛟 Restore point first" Classes="ghost" Padding="12,6" VerticalAlignment="Center"
+                            Command="{Binding RunActionCommand}" CommandParameter="{Binding RepairActions[0]}"
+                            ToolTip.Tip="Create a System Restore point before changing anything"/>
+                </Grid>
+
+                <Border Classes="tile" Background="#1C0D00" BorderBrush="#B45309" IsVisible="{Binding ShowAdminWarning}">
+                    <TextBlock Text="⚠ FANZi is not running as Administrator — defrag, SFC, DISM, CHKDSK, S.M.A.R.T. and GPU scheduling need it. Restart FANZi with 'Run as administrator'."
+                               Foreground="#FDE68A" FontSize="11" TextWrapping="Wrap"/>
+                </Border>
+                <Border Classes="tile" Background="#0A1A10" BorderBrush="#166534" IsVisible="{Binding RestartRequired}">
+                    <TextBlock Text="↻ A change you made finishes after you restart Windows." Foreground="#86EFAC" FontSize="11" TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- Confirmation banner for disruptive actions -->
+                <Border Classes="banner danger" Padding="14,10" IsVisible="{Binding HasPendingConfirmation}">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding PendingConfirmation.Title, FallbackValue=''}" FontSize="14" FontWeight="Black" Foreground="#FCA5A5"/>
+                        <TextBlock Text="{Binding PendingConfirmation.Confirm, FallbackValue=''}" FontSize="12" Foreground="#FECACA" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Run it" Command="{Binding ConfirmPendingCommand}" Classes="danger" Padding="16,6" FontWeight="Bold"/>
+                            <Button Content="Cancel" Command="{Binding CancelPendingCommand}" Classes="ghost" Padding="14,6"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═════ DISK OPTIMIZER ═════ -->
+                <Border Classes="tile" Padding="14,12">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <TextBlock Text="DISK OPTIMIZER — DEFRAG &amp; TRIM" Classes="label-caps" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            <Button Grid.Column="1" Content="⚡ Optimise all" Command="{Binding OptimizeAllCommand}" Classes="primary" Padding="12,6" FontWeight="Bold"
+                                    ToolTip.Tip="defrag /C /O — every drive with the right method (TRIM for SSD, defrag for HDD)"/>
+                            <Button Grid.Column="2" Content="↻" Command="{Binding RefreshDrivesCommand}" Classes="ghost" Padding="10,6" ToolTip.Tip="Reload drives"/>
+                        </Grid>
+                        <TextBlock Text="{Binding DiskStatus}" Foreground="#7090B0" FontSize="11" TextWrapping="Wrap"/>
+                        <ItemsControl ItemsSource="{Binding Volumes}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:VolumeItemViewModel">
+                                    <Border Background="#081322" BorderBrush="#1A2845" BorderThickness="1" CornerRadius="10" Padding="12,10" Margin="0,0,0,8">
+                                        <Grid ColumnDefinitions="56,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="10">
+                                            <Border Grid.RowSpan="3" Width="48" Height="48" CornerRadius="10" Background="#0F2340" VerticalAlignment="Top">
+                                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <TextBlock Text="{Binding Volume.Root}" FontSize="15" FontWeight="Black" Foreground="#E8F0FF" HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding MediaText}" FontSize="9" FontWeight="Bold" Foreground="#60A5FA" HorizontalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" FontWeight="Bold" Foreground="#E8F0FF"/>
+                                            <TextBlock Grid.Column="1" Grid.Row="1" Text="{Binding Detail}" FontSize="10" Foreground="#6A8AAF" TextWrapping="Wrap" Margin="0,2,0,4"/>
+                                            <ProgressBar Grid.Column="1" Grid.Row="2" Classes="thin" Value="{Binding UsedPercent}" VerticalAlignment="Center"/>
+                                            <!-- Actions under the drive info so narrow windows (1100 px) keep full-width text -->
+                                            <StackPanel Grid.Column="1" Grid.Row="3" Spacing="4" Margin="0,8,0,0">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <Button Content="Analyse" Command="{Binding AnalyzeCommand}" IsEnabled="{Binding IsIdle}" Classes="ghost" Padding="10,4"/>
+                                                    <Button Content="Optimise" Command="{Binding OptimizeCommand}" IsEnabled="{Binding IsIdle}" Classes="primary" Padding="10,4" FontWeight="Bold"
+                                                            ToolTip.Tip="defrag /O — TRIM on SSD, defragment on HDD"/>
+                                                    <Button Content="Defrag" Command="{Binding DefragmentCommand}" IsVisible="{Binding CanDefragment}" IsEnabled="{Binding IsIdle}" Classes="ghost" Padding="10,4"
+                                                            ToolTip.Tip="Full defragmentation (HDD). Not needed on SSDs."/>
+                                                    <Button Content="ReTrim" Command="{Binding RetrimCommand}" IsVisible="{Binding CanRetrim}" IsEnabled="{Binding IsIdle}" Classes="ghost" Padding="10,4"
+                                                            ToolTip.Tip="Send TRIM for all free space (SSD)"/>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Fragmentation}" FontSize="10" Foreground="#FBBF24" IsVisible="{Binding Fragmentation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                <TextBlock Text="{Binding Status}" FontSize="10" Foreground="#22C55E" TextWrapping="Wrap"
+                                                           IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═════ DRIVE HEALTH ═════ -->
+                <Border Classes="tile" Padding="14,12">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Text="DRIVE HEALTH — S.M.A.R.T." Classes="label-caps" FontSize="11" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="↻ Check" Command="{Binding RefreshHealthCommand}" Classes="ghost" Padding="10,6"/>
+                        </Grid>
+                        <TextBlock Text="{Binding HealthStatus}" Foreground="#7090B0" FontSize="11" TextWrapping="Wrap"/>
+                        <ItemsControl ItemsSource="{Binding DriveHealth}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DriveHealthItem">
+                                    <Border Background="#081322" BorderBrush="#1A2845" BorderThickness="1" CornerRadius="10" Padding="12,8" Margin="0,0,0,6">
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12" Foreground="#E8F0FF" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Verdict}" FontSize="10" FontWeight="Bold" Foreground="#22C55E" IsVisible="{Binding IsGood}"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Verdict}" FontSize="10" FontWeight="Bold" Foreground="#F87171" IsVisible="{Binding !IsGood}"
+                                                           TextWrapping="Wrap" MaxWidth="260"/>
+                                            </Grid>
+                                            <TextBlock Text="{Binding Kind}" FontSize="10" Foreground="#6A8AAF"/>
+                                            <!-- Metrics wrap on narrow windows -->
+                                            <WrapPanel>
+                                                <StackPanel Width="96" Margin="0,2,0,0"><TextBlock Text="TEMP" Classes="label-caps" FontSize="9"/><TextBlock Text="{Binding Temperature}" FontSize="12" Foreground="#C4D8F4"/></StackPanel>
+                                                <StackPanel Width="96" Margin="0,2,0,0"><TextBlock Text="WEAR" Classes="label-caps" FontSize="9"/><TextBlock Text="{Binding Wear}" FontSize="12" Foreground="#C4D8F4"/></StackPanel>
+                                                <StackPanel Width="96" Margin="0,2,0,0"><TextBlock Text="POWER-ON" Classes="label-caps" FontSize="9"/><TextBlock Text="{Binding Hours}" FontSize="12" Foreground="#C4D8F4"/></StackPanel>
+                                                <StackPanel Width="96" Margin="0,2,0,0"><TextBlock Text="ERR R/W" Classes="label-caps" FontSize="9"/><TextBlock Text="{Binding Errors}" FontSize="12" Foreground="#C4D8F4"/></StackPanel>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═════ SYSTEM REPAIR / NETWORK / QUICK FIXES ═════ -->
+                <Border Classes="tile" Padding="14,12">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="SYSTEM REPAIR" Classes="label-caps" FontSize="11"/>
+                        <ItemsControl ItemsSource="{Binding RepairActions}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="tools:ToolAction">
+                                    <Button Content="{Binding Label}" ToolTip.Tip="{Binding Description}" Classes="ghost" Margin="0,0,8,8" Padding="12,7" FontWeight="Bold"
+                                            Command="{Binding $parent[UserControl].((vm:ToolsViewModel)DataContext).RunActionCommand}" CommandParameter="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Tip: run DISM restore health, then SFC, when Windows behaves strangely after updates or crashes."
+                                   Foreground="#5A7899" FontSize="10" TextWrapping="Wrap"/>
+
+                        <TextBlock Text="NETWORK FIXES" Classes="label-caps" FontSize="11"/>
+                        <ItemsControl ItemsSource="{Binding NetworkActions}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="tools:ToolAction">
+                                    <Button Content="{Binding Label}" ToolTip.Tip="{Binding Description}" Classes="ghost" Margin="0,0,8,8" Padding="12,7" FontWeight="Bold"
+                                            Command="{Binding $parent[UserControl].((vm:ToolsViewModel)DataContext).RunActionCommand}" CommandParameter="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="QUICK FIXES" Classes="label-caps" FontSize="11"/>
+                        <ItemsControl ItemsSource="{Binding FixActions}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="tools:ToolAction">
+                                    <Button Content="{Binding Label}" ToolTip.Tip="{Binding Description}" Classes="ghost" Margin="0,0,8,8" Padding="12,7" FontWeight="Bold"
+                                            Command="{Binding $parent[UserControl].((vm:ToolsViewModel)DataContext).RunActionCommand}" CommandParameter="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═════ POWER & GAMING ═════ -->
+                <Border Classes="tile" Padding="14,12">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="POWER &amp; GAMING" Classes="label-caps" FontSize="11"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <ComboBox ItemsSource="{Binding PowerPlans}" SelectedItem="{Binding SelectedPlan}" HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="tools:PowerPlan">
+                                        <TextBlock Text="{Binding Display}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <Button Grid.Column="1" Content="Activate" Command="{Binding ActivatePlanCommand}" Classes="primary" Padding="12,6" FontWeight="Bold"/>
+                        </Grid>
+                        <Button Content="🚀 Add Ultimate Performance plan" Command="{Binding AddUltimateCommand}" Classes="ghost" Padding="12,6"
+                                IsVisible="{Binding !HasUltimate}"
+                                ToolTip.Tip="Unlocks Windows' hidden Ultimate Performance plan (minimal latency, no power saving)"/>
+                        <TextBlock Text="{Binding PowerStatus}" Foreground="#7090B0" FontSize="11"/>
+
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                            <StackPanel>
+                                <TextBlock Text="Game Mode" FontWeight="Bold" Foreground="#E8F0FF" FontSize="12"/>
+                                <TextBlock Text="Windows prioritises the game and pauses background updates while you play." Foreground="#6A8AAF" FontSize="10" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" IsChecked="{Binding GameModeOn}" OnContent="" OffContent=""/>
+
+                            <StackPanel Grid.Row="1">
+                                <TextBlock Text="Hardware-accelerated GPU scheduling" FontWeight="Bold" Foreground="#E8F0FF" FontSize="12"/>
+                                <TextBlock Foreground="#6A8AAF" FontSize="10" TextWrapping="Wrap">
+                                    <Run Text="Lets the GPU manage its own memory (lower latency; needed for DLSS frame generation). "/>
+                                    <Run Text="{Binding HagsStatus}" Foreground="#FBBF24"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <ToggleSwitch Grid.Row="1" Grid.Column="1" IsChecked="{Binding HagsOn}" OnContent="" OffContent=""/>
+
+                            <StackPanel Grid.Row="2">
+                                <TextBlock Text="Hibernation" FontWeight="Bold" Foreground="#E8F0FF" FontSize="12"/>
+                                <TextBlock Foreground="#6A8AAF" FontSize="10" TextWrapping="Wrap">
+                                    <Run Text="Turning it off deletes hiberfil.sys (frees GBs) and disables Fast Startup. "/>
+                                    <Run Text="{Binding HibernationStatus}" Foreground="#FBBF24"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <ToggleSwitch Grid.Row="2" Grid.Column="1" IsChecked="{Binding HibernationOn}" OnContent="" OffContent=""/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- ═════ LIVE CONSOLE ═════ -->
+        <Border Grid.Column="1" Classes="tile" Padding="12" Background="#050B14">
+            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                    <TextBlock Text="{Binding ConsoleTitle}" FontWeight="Black" FontSize="13" Foreground="#E8F0FF" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <Button Grid.Column="1" Content="⏹ Cancel" Command="{Binding CancelCommand}" Classes="danger" Padding="10,4" IsVisible="{Binding IsRunning}"/>
+                    <Button Grid.Column="2" Content="Clear" Command="{Binding ClearLogCommand}" Classes="ghost" Padding="10,4"/>
+                </Grid>
+                <ProgressBar Grid.Row="1" Classes="thin" Value="{Binding ProgressPercent}" IsIndeterminate="{Binding ProgressIndeterminate}" IsVisible="{Binding IsRunning}"/>
+                <TextBlock Grid.Row="2" Text="{Binding ConsoleStatus}" FontSize="11" Foreground="#93C5FD" TextWrapping="Wrap"/>
+                <Border Grid.Row="3" Background="#02060C" CornerRadius="8" Padding="8" BorderBrush="#1A2845" BorderThickness="1">
+                    <ScrollViewer x:Name="ConsoleScroll" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding LogLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <SelectableTextBlock Text="{Binding}" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11" Foreground="#A7C4E8"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+                <TextBlock Grid.Row="4" Text="{Binding LastResult}" FontSize="11" FontWeight="Bold" TextWrapping="Wrap"
+                           Foreground="#22C55E" IsVisible="{Binding LastResultOk}"/>
+                <TextBlock Grid.Row="4" Text="{Binding LastResult}" FontSize="11" FontWeight="Bold" TextWrapping="Wrap"
+                           Foreground="#F87171" IsVisible="{Binding !LastResultOk}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

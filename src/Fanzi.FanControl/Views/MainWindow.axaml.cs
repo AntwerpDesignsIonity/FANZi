@@ -128,6 +128,10 @@ public partial class MainWindow : Window
 
     private void OnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
+        // Thermal frame: rounded like the Windows 11 corners, square when maximised / full screen.
+        if (e.Property == WindowStateProperty && this.FindControl<Fanzi.FanControl.Controls.ThermalFrame>("ThermalFrame") is { } frame)
+            frame.FrameRadius = WindowState is WindowState.Maximized or WindowState.FullScreen ? 0 : 8;
+
         if (e.Property == WindowStateProperty && DataContext is MainWindowViewModel vm)
         {
             vm.SetWindowMinimized(WindowState == WindowState.Minimized);

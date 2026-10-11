@@ -170,5 +170,8 @@ sealed class Program
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
+            // 4.1: the running ThermalFrame line redraws only the thin window-border strips every frame;
+            // region dirty rects keep that from repainting the whole dashboard behind it.
+            .With(new Avalonia.Rendering.Composition.CompositionOptions { UseRegionDirtyRectClipping = true })
             .LogToTrace();
 }

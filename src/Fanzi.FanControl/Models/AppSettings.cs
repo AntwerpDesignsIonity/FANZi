@@ -29,6 +29,8 @@ public sealed class AppSettings
     public bool ShowNetworkManagerTab { get; set; } = true;
     public bool ShowPowerMonitorTab { get; set; } = true;
     public bool ShowSystemCleanerTab { get; set; } = true;
+    /// <summary>v4.1.0 Tools tab (disk optimiser, drive health, repair, power &amp; gaming).</summary>
+    public bool ShowToolsTab { get; set; } = true;
 
     // Overlay
     public bool OverlayTransparent { get; set; } = false;
@@ -72,6 +74,12 @@ public sealed class AppSettings
 
     /// <summary>Overlay layout: compact = header + gauges only, expanded = gauges + bars + sparkline; added in v5, default expanded.</summary>
     public bool OverlayCompact { get; set; }
+
+    /// <summary>
+    /// Running temperature line around the main window frame (blue cold, green stable, red hot); added in 4.1,
+    /// default on. Older settings files lack the field, so they pick up the default without a migration step.
+    /// </summary>
+    public bool ThermalFrameEnabled { get; set; } = true;
 
     /// <summary>Settings schema version written by this build.</summary>
     public const int CurrentVersion = 6;

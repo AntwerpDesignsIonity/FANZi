@@ -142,6 +142,7 @@ public partial class ThermalGauge : UserControl
         PART_Track.StrokeThickness = thickness;
         PART_Value.StrokeThickness = thickness;
         PART_Glow.Margin = new Thickness(-thickness * 1.5);
+        PART_Aura.Margin = new Thickness(-thickness * 0.9);
 
         PART_ValueText.FontSize = Math.Max(10, size * 0.22);
         PART_UnitText.FontSize = Math.Max(7, size * 0.085);
@@ -208,11 +209,44 @@ public partial class ThermalGauge : UserControl
             },
         };
         PART_Glow.Opacity = value.HasValue ? 1 : 0.35;
+        UpdateAura(glowColor, animate);
 
         PART_ValueText.Foreground = value.HasValue
             ? TemperatureToGradientConverter.CreateGradient(glowColor)
             : MutedValueBrush;
     }
+
+    private static readonly Color AuraViolet = Color.FromRgb(0x8B, 0x5C, 0xF6);
+    private static readonly Color AuraBlue = Color.FromRgb(0x38, 0xBD, 0xF8);
+    private Color? _auraColor;
+
+    /// <summary>
+    /// Living gradient behind the dial: a conic ring of the reading's colour flowing through brand violet and
+    /// blue. It turns and breathes (class <c>living</c>) unless Reduce motion is on.
+    /// </summary>
+    private void UpdateAura(Color valueColor, bool animate)
+    {
+        PART_Aura.Classes.Set("living", animate);
+        if (_auraColor == valueColor && PART_Aura.Fill is not null) return;
+        _auraColor = valueColor;
+        PART_Aura.Fill = BuildAuraBrush(valueColor);
+    }
+
+    /// <summary>Conic aura brush for <paramref name="valueColor"/> (seamless: first stop = last stop). Exposed for tests.</summary>
+    internal static ConicGradientBrush BuildAuraBrush(Color valueColor) => new()
+    {
+        GradientStops =
+        {
+            new GradientStop(TemperatureColorScale.WithAlpha(valueColor, 0.85), 0),
+            new GradientStop(TemperatureColorScale.WithAlpha(AuraViolet, 0.55), 0.25),
+            new GradientStop(TemperatureColorScale.WithAlpha(valueColor, 0.20), 0.5),
+            new GradientStop(TemperatureColorScale.WithAlpha(AuraBlue, 0.55), 0.75),
+            new GradientStop(TemperatureColorScale.WithAlpha(valueColor, 0.85), 1),
+        },
+    };
+
+    /// <summary>True while the aura ring is animating (Reduce motion off). Exposed for tests.</summary>
+    internal bool IsAuraLiving => PART_Aura.Classes.Contains("living");
 
     private void UpdateTexts()
     {

@@ -21,7 +21,7 @@ namespace Fanzi.FanControl.RenderTests;
 [Trait("Category", "Render")]
 public sealed class ScreenshotTests
 {
-    private const int TabDashboard = 0, TabFans = 1, TabSensors = 2, TabSettings = 9;
+    private const int TabDashboard = 0, TabFans = 1, TabSensors = 2, TabSettings = 10;
 
     [RenderFact]
     public void MainWindow_NormalState_RendersDashboardAndTabs()
@@ -42,10 +42,14 @@ public sealed class ScreenshotTests
             AssertHistoryChartsDrawn(window, "CpuHistoryChart", "GpuHistoryChart");
             AssertGaugesNamedForScreenReaders(window);
 
-            // Lower dashboard: the CPU stat cards sit at the top of the row instead of stretching to the fan card.
+            // 4.1 thermal frame: four edge strips hug the window, the line is the frame-scale colour of max(CPU, GPU).
+            AssertThermalFrame(window, scope.Vm);
+
+            // 4.1 layout: CPU | GPU panels with aligned rows, then history and the full-width cooling bar.
+            AssertHardwarePanelsAligned(window);
             ScrollDashboardToEnd(window);
             Capture(window, "dashboard-stats.png", 1400, 960);
-            AssertCpuStatCardsTopAligned(window);
+            AssertCoolingCardFullWidth(window);
             ScrollDashboardToEnd(window, toTop: true);
 
             // Hover on the first temperature-reactive card: lift + stronger temperature-tinted glow.
@@ -61,9 +65,11 @@ public sealed class ScreenshotTests
             // Same dashboard at the window's MinWidth — checks nothing clips or overlaps when narrow.
             window.Width = window.MinWidth;
             Capture(window, "dashboard-1100.png", 1100, 960);
+            AssertHardwarePanelsAligned(window);
+            AssertThermalFrame(window, scope.Vm);
+            AssertTextNotTrimmed(window, [.. HardwareNameCaptions, "ThermalHistoryTitleText", "ThermalFrameChipText"]);
             AssertTabsOnOneRow(window);
             AssertStatusMessageReadableOrHidden(window, expectVisible: false);
-            AssertTextNotTrimmed(window, [.. HardwareNameCaptions, "ThermalHistoryTitleText"]);
             AssertHistoryChartsDrawn(window, "CpuHistoryChart", "GpuHistoryChart");
             window.Width = 1400;
 
@@ -94,12 +100,37 @@ public sealed class ScreenshotTests
             Capture(window, "rgb.png", 1400, 960);
             AssertRgbStudio(window, scope);
 
+            // v4.1.0 Tools tab: real drives / power plans are read the first time the tab opens (read-only queries).
+            scope.Vm.SelectedTabIndex = MainWindowViewModel.ToolsTabIndex;
+            var toolsClock = System.Diagnostics.Stopwatch.StartNew();
+            while (scope.Vm.ToolsVm.Volumes.Count == 0 && toolsClock.Elapsed < TimeSpan.FromSeconds(20))
+            {
+                Dispatcher.UIThread.RunJobs();
+                Thread.Sleep(50);
+            }
+            Assert.NotEmpty(scope.Vm.ToolsVm.Volumes);
+            Assert.NotEmpty(scope.Vm.ToolsVm.RepairActions);
+            Capture(window, "tools.png", 1400, 960);
+            var toolsScroll = window.GetVisualDescendants().OfType<ToolsView>().Single()
+                .GetVisualDescendants().OfType<ScrollViewer>().First();
+            toolsScroll.Offset = new Vector(0, 900);
+            Dispatcher.UIThread.RunJobs();
+            Capture(window, "tools-repair-power.png", 1400, 960);
+            toolsScroll.Offset = new Vector(0, 0);
+            window.Width = window.MinWidth;
+            Capture(window, "tools-1100.png", 1100, 960);
+            window.Width = 1400;
+
             scope.Vm.SelectedTabIndex = TabSettings;
             Capture(window, "settings.png", 1400, 960);
             window.FindControl<Border>("OverlayStudioCard")!.BringIntoView();
             Dispatcher.UIThread.RunJobs();
             Capture(window, "settings-overlay-studio.png", 1400, 960);
             Assert.True(window.FindControl<WrapPanel>("OverlayStudioToggles")!.Children.Count >= 10, "overlay studio lists every row");
+            // Back to the top of Settings (4.1 adds the Thermal frame row, so the studio scroll moves further down).
+            window.FindControl<Border>("OverlayStudioCard")!.FindAncestorOfType<ScrollViewer>()!.Offset = default;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(window.FindControl<ToggleSwitch>("ThermalFrameToggle")!.IsChecked, "thermal frame is on by default");
             AssertToastSettingShown(window, scope);
             AssertReduceMotionSettingShown(window, scope);
             window.Width = window.MinWidth;
@@ -132,6 +163,8 @@ public sealed class ScreenshotTests
             Assert.True(scope.Vm.IsGameMode, "hot sample runs a game, so the Game Mode tile is populated");
             Capture(window, "dashboard-hot.png", 1400, 960);
             AssertHeroTextNotTrimmed(window);
+            AssertThermalFrame(window, scope.Vm);
+            Assert.Equal(Fanzi.FanControl.Controls.ThermalState.Critical, scope.Vm.FrameThermalState);
 
             // Hot state at MinWidth: the Game Mode tile is narrowest here.
             window.Width = window.MinWidth;
@@ -274,11 +307,11 @@ public sealed class ScreenshotTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    /// <summary>All ten tab headers share one row (no orphaned tab wrapping onto a second line).</summary>
+    /// <summary>All eleven tab headers (v4.1.0 adds Tools) share one row (no orphaned tab wrapping onto a second line).</summary>
     private static void AssertTabsOnOneRow(Window window)
     {
         var tabs = window.GetVisualDescendants().OfType<TabItem>().Where(t => t.IsEffectivelyVisible).ToList();
-        Assert.Equal(10, tabs.Count);
+        Assert.Equal(11, tabs.Count);
         var rows = tabs.Select(t => Math.Round(t.TranslatePoint(default, window)!.Value.Y)).Distinct().ToList();
         Assert.True(rows.Count == 1, $"tab strip wraps onto {rows.Count} rows at width {window.Width}");
     }
@@ -423,6 +456,11 @@ public sealed class ScreenshotTests
     {
         var toggle = window.FindControl<ToggleSwitch>("ToastNotificationsToggle")!;
         Assert.True(toggle.IsEffectivelyVisible, "toast toggle should be visible on the Settings tab");
+        // v4.1.0: Settings grew (Tools / Thermal Frame toggles) — scroll the toggle into view like a user would.
+        toggle.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
         var origin = toggle.TranslatePoint(default, window)!.Value;
         Assert.True(origin.Y >= 0 && origin.Y + toggle.Bounds.Height <= window.Height, $"toast toggle at {origin} is off screen");
         Assert.Equal(scope.Vm.ToastNotificationsEnabled, toggle.IsChecked);
@@ -443,6 +481,10 @@ public sealed class ScreenshotTests
     {
         var toggle = window.FindControl<ToggleSwitch>("ReduceMotionToggle")!;
         Assert.True(toggle.IsEffectivelyVisible, "reduce-motion toggle should be visible on the Settings tab");
+        toggle.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
         var origin = toggle.TranslatePoint(default, window)!.Value;
         Assert.True(origin.Y >= 0 && origin.Y + toggle.Bounds.Height <= window.Height, $"reduce-motion toggle at {origin} is off screen");
         Assert.Equal(scope.Vm.ReduceMotion, toggle.IsChecked);
@@ -583,20 +625,107 @@ public sealed class ScreenshotTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    /// <summary>The CPU stat cards keep their own (shorter) height at the top of the row, beside the taller fan card.</summary>
-    private static void AssertCpuStatCardsTopAligned(Window window)
+    private static Rect RectIn(Visual visual, Visual root) => new(visual.TranslatePoint(default, root)!.Value, visual.Bounds.Size);
+
+    /// <summary>
+    /// 4.1 layout: the CPU and GPU panels sit side by side with the same top and height; their stat grids start at the
+    /// same y (shared row sizes), every stat tile in a panel has one height and each panel holds 4 tiles.
+    /// </summary>
+    private static void AssertHardwarePanelsAligned(Window window)
     {
-        var stats = window.FindControl<Grid>("CpuStatCards")!;
-        var row = (Grid)stats.Parent!;
-        var fanCard = row.Children.OfType<Border>().Single();
-        var statsRect = new Rect(stats.TranslatePoint(default, window)!.Value, stats.Bounds.Size);
-        var fanRect = new Rect(fanCard.TranslatePoint(default, window)!.Value, fanCard.Bounds.Size);
-        Assert.Equal(fanRect.Top, statsRect.Top, 1);
-        Assert.True(statsRect.Height < fanRect.Height - 20, $"stat cards ({statsRect.Height:F0}px) still stretch to the fan card ({fanRect.Height:F0}px)");
-        Assert.True(statsRect.Bottom <= window.Height, "stat cards should be on screen in dashboard-stats.png");
-        var cards = stats.Children.OfType<Border>().ToList();
-        Assert.Equal(4, cards.Count);
-        Assert.Single(cards.Select(c => Math.Round(c.Bounds.Height)).Distinct()); // equal heights among themselves
+        var cpu = RectIn(window.FindControl<Border>("CpuPanel")!, window);
+        var gpu = RectIn(window.FindControl<Border>("GpuPanel")!, window);
+        Assert.Equal(cpu.Top, gpu.Top, 1);
+        Assert.Equal(cpu.Height, gpu.Height, 1);
+        Assert.True(cpu.Right < gpu.Left, $"CPU panel {cpu} overlaps GPU panel {gpu}");
+        Assert.Equal(cpu.Width, gpu.Width, 1);
+
+        var cpuStats = window.FindControl<Grid>("CpuStatCards")!;
+        var gpuStats = window.FindControl<Grid>("GpuStatCards")!;
+        Assert.Equal(RectIn(cpuStats, window).Top, RectIn(gpuStats, window).Top, 1);
+        foreach (var stats in new[] { cpuStats, gpuStats })
+        {
+            var tiles = stats.Children.OfType<Border>().ToList();
+            Assert.Equal(4, tiles.Count);
+            Assert.All(tiles, t => Assert.Contains("stat-tile", t.Classes));
+            Assert.Single(tiles.Select(t => Math.Round(t.Bounds.Height)).Distinct()); // equal heights
+            foreach (var text in stats.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible))
+                Assert.False(text.TextLayout.TextLines.Any(l => l.HasCollapsed), $"stat text '{text.Text}' is trimmed at width {window.Width}");
+        }
+
+        // Temperature cards of one panel share a height, and both panels' temperature rows match.
+        var temps = window.FindControl<Border>("CpuPanel")!.GetVisualDescendants().OfType<Border>()
+            .Concat(window.FindControl<Border>("GpuPanel")!.GetVisualDescendants().OfType<Border>())
+            .Where(b => b.Classes.Contains("temp-card")).ToList();
+        Assert.Equal(5, temps.Count);
+        Assert.Single(temps.Select(t => Math.Round(t.Bounds.Height)).Distinct());
+    }
+
+    /// <summary>The cooling bar spans the panels' full width and is on screen in dashboard-stats.png.</summary>
+    private static void AssertCoolingCardFullWidth(Window window)
+    {
+        var panels = RectIn(window.FindControl<Grid>("HardwarePanels")!, window);
+        var cooling = RectIn(window.FindControl<Border>("CoolingCard")!, window);
+        Assert.Equal(panels.Width, cooling.Width, 1);
+        Assert.Equal(panels.Left, cooling.Left, 1);
+        Assert.True(cooling.Bottom <= window.Height, $"cooling card {cooling} should be on screen in dashboard-stats.png");
+        Assert.True(cooling.Height < 140, $"cooling bar should be one compact row ({cooling.Height:F0}px)");
+    }
+
+    /// <summary>
+    /// 4.1 thermal frame: four strips hugging the window edges, the shown temperature equal to max(CPU, GPU) (the first
+    /// reading snaps), and the drawn line pixels on the window edge carry the frame-scale colour of that temperature.
+    /// </summary>
+    private static void AssertThermalFrame(Window window, MainWindowViewModel vm)
+    {
+        var frame = window.FindControl<ThermalFrame>("ThermalFrame")!;
+        Assert.True(frame.IsEffectivelyVisible, "thermal frame should be visible");
+        Assert.False(frame.IsHitTestVisible, "thermal frame must not block clicks or the resize border");
+        Assert.Equal(new Size(window.Width, window.Height), frame.Bounds.Size);
+        var strips = frame.Edges.Select(e => e.Bounds).ToList();
+        Assert.Equal(4, strips.Count);
+        Assert.Equal(0, strips[0].Top);                                  // top
+        Assert.Equal(window.Width, strips[1].Right, 1);                  // right
+        Assert.Equal(window.Height, strips[2].Bottom, 1);                // bottom
+        Assert.Equal(0, strips[3].Left);                                 // left
+        Assert.All(strips, s => Assert.True(Math.Min(s.Width, s.Height) <= 12, $"edge strip {s} should be thin"));
+
+        var expected = vm.FrameTemperatureValue!.Value;
+        Assert.Equal(Math.Max(vm.CpuGaugeTempValue!.Value, vm.GpuCoreTempValue!.Value), expected, 6);
+        Assert.Equal(expected, frame.ShownTemperature, 1);
+        Assert.Equal(ThermalFrameMath.ColorFor(expected), frame.CurrentColor);
+        Assert.Equal(ThermalFrameMath.StateLabel(vm.FrameThermalState), vm.FrameTemperatureText.Split('·')[^1].Trim());
+
+        // Real pixels: the outermost row in the middle of the top edge has the scale's dominant channel.
+        var bitmap = window.CaptureRenderedFrame()!;
+        using (bitmap)
+        {
+            var color = PixelAt(bitmap, bitmap.PixelSize.Width / 2, 0);
+            var target = ThermalFrameMath.ColorFor(expected);
+            static int Dominant(Color c) => c.R >= c.G && c.R >= c.B ? 0 : c.G >= c.B ? 1 : 2;
+            Assert.True(Dominant(color) == Dominant(target),
+                $"frame pixel {color} does not carry the {ThermalFrameMath.StateLabel(vm.FrameThermalState)} colour {target}");
+        }
+    }
+
+    private static Color PixelAt(Avalonia.Media.Imaging.Bitmap bitmap, int x, int y)
+    {
+        var buffer = new byte[4];
+        nint native = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+        try
+        {
+            bitmap.CopyPixels(new PixelRect(x, y, 1, 1), native, 4, 4);
+            System.Runtime.InteropServices.Marshal.Copy(native, buffer, 0, 4);
+        }
+        finally
+        {
+            System.Runtime.InteropServices.Marshal.FreeHGlobal(native);
+        }
+        // Byte order follows the frame's pixel format (headless captures are RGBA; BGRA elsewhere).
+        bool rgba = bitmap.Format is { } format && format == Avalonia.Platform.PixelFormat.Rgba8888;
+        return rgba
+            ? Color.FromArgb(buffer[3], buffer[0], buffer[1], buffer[2])
+            : Color.FromArgb(buffer[3], buffer[2], buffer[1], buffer[0]);
     }
 
     /// <summary>A themed toast card is on screen (inside the window) with its title and message laid out.</summary>

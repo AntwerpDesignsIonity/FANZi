@@ -36,3 +36,7 @@ Thumbs.db
 *.log
 
 .agents/
+
+# Google OAuth client (Download JSON from the Google Cloud console) - never commit
+google_oauth.json
+client_secret*.json

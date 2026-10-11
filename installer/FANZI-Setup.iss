@@ -3,7 +3,7 @@
 ; Requires: Inno Setup 6.x (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "FANZI"
-#define MyAppVersion "4.0.3"
+#define MyAppVersion "4.1.0"
 #define MyAppPublisher "Antwerp Designs — Johan Wilhelm van Antwerp"
 #define MyAppURL "https://www.ionity.today"
 #define MyAppExeName "Fanzi.FanControl.exe"
@@ -24,7 +24,7 @@ AllowNoIcons=yes
 LicenseFile=..\LICENSE
 OutputDir=..\publish\installer
 OutputBaseFilename=FANZI-Setup-{#MyAppVersion}-x64
-SetupIconFile=..\src\Fanzi.FanControl\Assets\ionity-logo.ico
+SetupIconFile=..\src\Fanzi.FanControl\Assets\ionity-logo-rounded.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
 SolidCompression=yes

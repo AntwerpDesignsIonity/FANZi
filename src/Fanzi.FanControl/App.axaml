@@ -18,7 +18,7 @@
 
     <TrayIcon.Icons>
         <TrayIcons>
-            <TrayIcon Icon="/Assets/ionity-logo.ico"
+            <TrayIcon Icon="/Assets/ionity-logo-rounded.ico"
                       ToolTipText="{Binding TrayTooltip}"
                       Command="{Binding ShowWindowCommand}">
                 <TrayIcon.Menu>

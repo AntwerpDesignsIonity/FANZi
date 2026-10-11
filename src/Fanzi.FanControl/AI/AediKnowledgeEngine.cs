@@ -84,6 +84,9 @@ public sealed class AediKnowledgeEngine
             "network" or "net" or "bandwidth" or "download" or "upload" or "port" => "Network",
             "power" or "watt" or "energy" or "drive" => "Power",
             "clean" or "cleaner" or "cache" or "temp" or "ram" or "dns" => "System Cleaner",
+            "tools" or "tool" or "defrag" or "trim" or "optimise" or "optimize" or "maintenance" => "Disk optimiser, repair & tweaks",
+            "repair" or "sfc" or "dism" or "chkdsk" => "SFC, DISM, CHKDSK",
+            "smart" or "disk health" or "drive health" => "S.M.A.R.T. status",
             "alert" or "warning" or "email" or "notify" => "Alerts",
             "settings" or "config" or "option" => "Settings",
             "health" or "score" or "grade" => "Dashboard",
@@ -228,38 +231,68 @@ public sealed class AediKnowledgeEngine
             new[] { "deep", "registry", "startup", "uninstall", "programs", "privacy", "disk analyzer", "duplicate", "orphan" },
             7, "Deep Cleaner in System Cleaner"));
 
+        // v4.1.0 Tools
+        _entries.Add(new AediEntry("Tools", "Disk optimiser, repair & tweaks",
+            "Disk Optimizer (analyse, optimise, defragment HDD, ReTrim SSD per drive), Drive Health (S.M.A.R.T. temperature, wear, power-on hours, errors), System Repair (restore point, SFC, DISM, component store clean-up, CHKDSK scan), network fixes, quick fixes and Power & Gaming.",
+            new[] { "tools", "tool", "maintenance", "defrag", "defragment", "optimise", "optimize", "trim", "retrim", "ssd", "hdd", "disk", "drive" },
+            8, "Go to Tools tab"));
+        _entries.Add(new AediEntry("Disk Optimizer", "Defrag & TRIM",
+            "Tools tab: per-drive Analyse / Optimise (Windows picks TRIM for SSD, defrag for HDD) / Defrag / ReTrim, or Optimise all. Live progress from defrag.exe.",
+            new[] { "defrag", "defragment", "fragmentation", "trim", "retrim", "optimise drive", "optimize drive", "slow disk", "hdd", "ssd" },
+            8, "Disk Optimizer in Tools tab"));
+        _entries.Add(new AediEntry("Drive Health", "S.M.A.R.T. status",
+            "Tools tab: Windows health status, temperature, wear %, power-on hours and read/write errors per disk (Administrator).",
+            new[] { "smart", "s.m.a.r.t", "health", "drive health", "disk health", "wear", "nvme", "ssd life", "failing", "temperature" },
+            8, "Drive Health in Tools tab"));
+        _entries.Add(new AediEntry("System Repair", "SFC, DISM, CHKDSK",
+            "Tools tab: create a restore point, SFC /scannow, DISM CheckHealth / ScanHealth / RestoreHealth, WinSxS component clean-up, CHKDSK online scan.",
+            new[] { "repair", "sfc", "scannow", "dism", "restorehealth", "corrupt", "chkdsk", "restore point", "winsxs", "fix windows" },
+            8, "System Repair in Tools tab"));
+        _entries.Add(new AediEntry("Network Fixes", "DNS, Winsock, TCP/IP",
+            "Tools tab: flush DNS, release & renew IP, reset Winsock, reset TCP/IP, sync clock.",
+            new[] { "winsock", "tcp", "ip", "renew", "release", "no internet", "network reset", "dns", "clock", "time sync" },
+            8, "Network fixes in Tools tab"));
+        _entries.Add(new AediEntry("Power & Gaming", "Power plans & GPU scheduling",
+            "Tools tab: switch power plan, unlock Ultimate Performance, Game Mode, hardware-accelerated GPU scheduling, hibernation on/off.",
+            new[] { "power plan", "ultimate performance", "high performance", "game mode", "hags", "gpu scheduling", "hibernate", "hibernation", "fps boost", "latency" },
+            8, "Power & Gaming in Tools tab"));
+        _entries.Add(new AediEntry("Quick Fixes", "Explorer, audio, Windows Update",
+            "Tools tab: restart Explorer, refresh icon cache, restart audio, reset Windows Update, memory diagnostic.",
+            new[] { "explorer", "taskbar", "frozen", "icon", "audio", "sound", "no sound", "windows update", "stuck update", "memory test", "ram test" },
+            8, "Quick fixes in Tools tab"));
+
         // Alerts
         _entries.Add(new AediEntry("Email Alerts", "Thermal notification emails",
             "SMTP email alerts when CPU temperature exceeds threshold. Configure SMTP host, port, credentials. Test email button. 10-minute cooldown.",
             new[] { "email", "alert", "notification", "smtp", "warning", "thermal", "threshold", "gmail", "outlook" },
-            8, "Go to Alerts tab"));
+            9, "Go to Alerts tab"));
 
         // Settings
         _entries.Add(new AediEntry("Settings", "Application configuration",
             "Start with Windows, minimize to tray, close to tray, polling interval, AI auto-fan, anomaly detection, overlay transparency, tab visibility.",
             new[] { "settings", "config", "startup", "tray", "polling", "overlay", "transparent", "tab", "visibility" },
-            9, "Go to Settings tab"));
+            10, "Go to Settings tab"));
 
         _entries.Add(new AediEntry("Overlay", "Mini overlay & Overlay Studio",
             "Always-on-top mini window: CPU/GPU gauges, CPU history, fan, CPU/GPU load, RAM, network down/up, health, clock. Toggle with the ▣ Overlay title-bar button or Ctrl+O. Right-click it (or Settings → Overlay Studio) to switch rows, size 80–160 %, accent (incl. RGB Sync) and snap to a corner.",
             new[] { "overlay", "mini", "small", "transparent", "opacity", "always on top", "floating", "widget", "studio", "network", "ram", "accent", "snap", "osd", "hud" },
-            9, "Overlay Studio in Settings tab"));
+            10, "Overlay Studio in Settings tab"));
 
         // v4 RGB studio + AEDi lighting
         _entries.Add(new AediEntry("RGB Control", "AEDi Lighting AI",
             "RGB tab → AEDi Lighting AI: describe a mood (\"calm ocean\", \"fast cyberpunk party\"), Smart Ambient (follows idle / work / gaming / heat), Thermal Guardian (red alert at 92 °C CPU / 86 °C GPU), Night dimming, AEDi suggest and AI colour harmony.",
             new[] { "mood", "ambient", "guardian", "night", "dim", "suggest", "harmony", "ai lighting", "smart", "scene" },
-            8, "RGB tab → AEDi Lighting AI"));
+            3, "RGB tab → AEDi Lighting AI"));
         _entries.Add(new AediEntry("RGB Control", "Deep hardware scan",
             "RGB tab → Deep scan: compares OpenRGB with Windows — RAM sticks vs RGB RAM controllers, fan headers vs ARGB controllers, motherboard, GPU, USB RGB devices and the PawnIO driver — and explains anything missing.",
             new[] { "deep scan", "scan", "missing", "fans", "fan rgb", "argb", "ram rgb", "not detected", "detect", "pawnio", "identify" },
-            8, "RGB tab → Deep scan"));
+            3, "RGB tab → Deep scan"));
 
         // About
         _entries.Add(new AediEntry("About FANZi IO-nity", "Ionity Global",
             "FANZi IO-nity by Ionity Global (Pty) Ltd. AI Thermal Intelligence powered by AEDi (Antwerp Ecosystems Designs Ionity). www.ionity.co.za",
             new[] { "about", "ionity", "aedi", "antwerp", "ecosystems", "designs", "website", "www", "pty", "ltd", "johan", "van antwerp" },
-            9, "About — www.ionity.co.za"));
+            10, "About — www.ionity.co.za"));
 
         // Help
         _entries.Add(new AediEntry("Getting Started", "Quick start guide",

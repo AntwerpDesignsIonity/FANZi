@@ -56,7 +56,7 @@ public partial class MainWindowViewModel
     internal IReadOnlyList<bool> TabVisibility => new[]
     {
         true, true, true, true,
-        ShowTaskManagerTab, ShowNetworkManagerTab, ShowPowerMonitorTab, ShowSystemCleanerTab,
+        ShowTaskManagerTab, ShowNetworkManagerTab, ShowPowerMonitorTab, ShowSystemCleanerTab, ShowToolsTab,
         true, true,
     };
 

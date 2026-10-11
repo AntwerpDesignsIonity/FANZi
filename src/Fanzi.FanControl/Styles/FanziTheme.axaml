@@ -238,6 +238,80 @@
         <Setter Property="BoxShadow" Value="0 8 32 0 #66000000, inset 0 1 0 0 #14FFFFFF"/>
     </Style>
 
+    <!-- ═══ 4.1 DASHBOARD: CPU | GPU hardware panels ═══ -->
+    <Style Selector="Border.hw-panel">
+        <Setter Property="CornerRadius" Value="18"/>
+        <Setter Property="Padding" Value="18,16"/>
+        <Setter Property="Background" Value="{StaticResource PanelBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderGradient}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BoxShadow" Value="0 8 28 0 #59000000, inset 0 1 0 0 #14FFFFFF"/>
+    </Style>
+    <!-- "CPU" / "GPU" badge in a panel header -->
+    <Style Selector="Border.hw-badge">
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="MinWidth" Value="46"/>
+        <Setter Property="Background" Value="{StaticResource AccentGradient}"/>
+        <Setter Property="BoxShadow" Value="0 0 14 1 #402563EB"/>
+    </Style>
+    <Style Selector="Border.hw-badge.gpu">
+        <Setter Property="Background">
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#059669" Offset="0"/>
+                <GradientStop Color="#0EA5E9" Offset="1"/>
+            </LinearGradientBrush>
+        </Setter>
+        <Setter Property="BoxShadow" Value="0 0 14 1 #40059669"/>
+    </Style>
+    <Style Selector="Border.hw-badge > TextBlock">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="LetterSpacing" Value="1"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="TextBlock.hw-name">
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource FanziTextPrimaryBrush}"/>
+    </Style>
+    <!-- Compact temperature card inside a hardware panel -->
+    <Style Selector="Border.card.compact">
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="14,14,14,12"/>
+    </Style>
+    <!-- Stat tile (load / clock / power …) inside a hardware panel: quieter than a card, equal heights per row -->
+    <Style Selector="Border.stat-tile">
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="14,12"/>
+        <Setter Property="Background" Value="#B30A1422"/>
+        <Setter Property="BorderBrush" Value="#16243C"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.2"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.stat-tile:pointerover">
+        <Setter Property="BorderBrush" Value="#2A4875"/>
+    </Style>
+    <Style Selector="TextBlock.metric-value.stat">
+        <Setter Property="FontSize" Value="24"/>
+    </Style>
+    <!-- Same footer height for a load bar and a caption, so every stat tile in a panel is the same height -->
+    <Style Selector="Panel.stat-footer, TextBlock.stat-footer">
+        <Setter Property="Height" Value="16"/>
+    </Style>
+    <Style Selector="TextBlock.stat-footer">
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <!-- Fixed value line: a long value ("4725 MHz") shrinks to fit the width without making its tile shorter -->
+    <Style Selector="Border.stat-tile Viewbox">
+        <Setter Property="Height" Value="32"/>
+    </Style>
+
     <!-- Inner tile (sub-cards, table hosts, bars) -->
     <Style Selector="Border.tile">
         <Setter Property="CornerRadius" Value="12"/>
@@ -518,8 +592,8 @@
         <Setter Property="Foreground" Value="{StaticResource FanziTextDimBrush}"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontWeight" Value="Bold"/>
-        <!-- Content-sized outlined tabs: all ten still fit on one row down to the window's 1100 px MinWidth -->
-        <Setter Property="Padding" Value="10,7"/>
+        <!-- Content-sized outlined tabs: all eleven (4.1 adds Tools) still fit on one row down to the window's 1100 px MinWidth -->
+        <Setter Property="Padding" Value="8,7"/>
         <Setter Property="Margin" Value="0,0,4,6"/>
         <Setter Property="MinWidth" Value="0"/>
         <Setter Property="MinHeight" Value="0"/>

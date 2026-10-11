@@ -11,7 +11,7 @@
         mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="960"
         x:Class="Fanzi.FanControl.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/ionity-logo.ico"
+        Icon="/Assets/ionity-logo-rounded.ico"
         Title="FANZi IO-nity — AI Thermal Intelligence &amp; RGB | Ionity Global"
         MinWidth="1100"
         MinHeight="780"
@@ -48,6 +48,26 @@
                 </StackPanel>
                 <TextBlock Grid.Column="1" Text="AI Thermal Intelligence" FontSize="11" Foreground="#3A5070" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="0" Margin="0,0,4,0" VerticalAlignment="Center">
+                    <!-- 4.1: names the colour of the running thermal frame (blue cold · green stable · red hot) -->
+                    <Border x:Name="ThermalFrameChip" IsVisible="{Binding ThermalFrameEnabled}"
+                            CornerRadius="9" Padding="8,2" Margin="0,0,12,0" BorderThickness="1" VerticalAlignment="Center"
+                            Background="{Binding FrameTemperatureValue, Converter={x:Static conv:ThermalFrameColorConverter.Instance}, ConverterParameter=soft}"
+                            BorderBrush="{Binding FrameTemperatureValue, Converter={x:Static conv:ThermalFrameColorConverter.Instance}, ConverterParameter=edge}"
+                            ToolTip.Tip="{Binding FrameTemperatureTooltip}">
+                        <Border.Transitions>
+                            <Transitions>
+                                <BrushTransition Property="Background" Duration="0:0:0.6"/>
+                                <BrushTransition Property="BorderBrush" Duration="0:0:0.6"/>
+                            </Transitions>
+                        </Border.Transitions>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                     Fill="{Binding FrameTemperatureValue, Converter={x:Static conv:ThermalFrameColorConverter.Instance}}"/>
+                            <TextBlock x:Name="ThermalFrameChipText" Text="{Binding FrameTemperatureText}" FontSize="10" FontWeight="Bold"
+                                       Foreground="{Binding FrameTemperatureValue, Converter={x:Static conv:ThermalFrameColorConverter.Instance}}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
                     <TextBlock Text="{Binding LastUpdated}" FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
                     <!-- v4: one-click mini overlay (also Ctrl+O, tray menu and Settings → Overlay Studio) -->
                     <Button x:Name="OverlayTitleButton" Command="{Binding ToggleMiniOverlayCommand}"
@@ -220,6 +240,11 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- Temp Warning -->
+                                <Border IsVisible="{Binding HasCpuTempWarning}" CornerRadius="12" Background="#1C1000" BorderBrush="#92400E" BorderThickness="1" Padding="14,10">
+                                    <TextBlock Text="{Binding CpuTempWarningMessage}" Foreground="#FDE68A" FontSize="12" FontWeight="SemiBold"/>
+                                </Border>
+
                                 <!-- IO-nity AI HERO: health gauge · CPU/GPU gauges · Game Mode + AI Coach -->
                                 <Border CornerRadius="20" BorderThickness="1.5"
                                         BorderBrush="{StaticResource AccentGradientSoft}"
@@ -327,6 +352,234 @@
                                     </Panel>
                                 </Border>
 
+                                <!-- Coach Recommendations -->
+                                <Border IsVisible="{Binding HasCoachRecommendations}" Classes="tile" BorderBrush="{StaticResource CardBorderGradient}" Padding="16,10">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="🧠 AI COACH RECOMMENDATIONS" Classes="label-caps"/>
+                                        <TextBlock Text="{Binding CoachRecommendations}" FontSize="11" Foreground="#A0C0E0" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- CPU | GPU: side-by-side panels; header, temperature and stat rows line up across both
+                                     (shared size groups), every card in a row has the same height. -->
+                                <Grid x:Name="HardwarePanels" ColumnDefinitions="*,*" ColumnSpacing="14" Grid.IsSharedSizeScope="True">
+                                    <Border x:Name="CpuPanel" Grid.Column="0" Classes="hw-panel">
+                                        <Grid RowSpacing="14">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" SharedSizeGroup="HwHeader"/>
+                                                <RowDefinition Height="Auto" SharedSizeGroup="HwTemps"/>
+                                                <RowDefinition Height="Auto" SharedSizeGroup="HwStats"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                                <Border Classes="hw-badge cpu" VerticalAlignment="Center">
+                                                    <TextBlock Text="CPU"/>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                                    <!-- Wraps to 2 lines so long model names stay readable at MinWidth; full name in the tooltip -->
+                                                    <TextBlock x:Name="CpuPackageNameText" Text="{Binding CpuName}" Classes="hw-name"
+                                                               TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CpuName}"/>
+                                                    <TextBlock Text="Processor · live sensors" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Grid>
+                                            <Grid Grid.Row="1" ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                                                <Border Grid.Column="0" Classes="card temp-card compact"
+                                                        BorderBrush="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                                    <Border.BoxShadow>
+                                                        <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                            <Binding Path="CpuPackageTempValue"/>
+                                                            <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                                        </MultiBinding>
+                                                    </Border.BoxShadow>
+                                                    <StackPanel Spacing="4">
+                                                        <Border Classes="temp-bar" Background="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
+                                                        <TextBlock Text="PACKAGE" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuPackageTemperature}" Classes="metric-value"
+                                                                       Foreground="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="CPU package" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Column="1" Classes="card temp-card compact"
+                                                        BorderBrush="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                                    <Border.BoxShadow>
+                                                        <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                            <Binding Path="CpuAverageTempValue"/>
+                                                            <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                                        </MultiBinding>
+                                                    </Border.BoxShadow>
+                                                    <StackPanel Spacing="4">
+                                                        <Border Classes="temp-bar" Background="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
+                                                        <TextBlock Text="AVERAGE" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuAverageTemperature}" Classes="metric-value"
+                                                                       Foreground="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Across cores" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Column="2" Classes="card temp-card compact"
+                                                        BorderBrush="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                                    <Border.BoxShadow>
+                                                        <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                            <Binding Path="CpuHotspotTempValue"/>
+                                                            <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                                        </MultiBinding>
+                                                    </Border.BoxShadow>
+                                                    <StackPanel Spacing="4">
+                                                        <Border Classes="temp-bar" Background="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
+                                                        <TextBlock Text="HOTSPOT" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuHotspotTemperature}" Classes="metric-value"
+                                                                       Foreground="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Hottest" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+                                            <Grid x:Name="CpuStatCards" Grid.Row="2" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+                                                <Border Grid.Row="0" Grid.Column="0" Classes="stat-tile">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="LOAD" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuTotalLoad}" Classes="metric-value stat"/>
+                                                        </Viewbox>
+                                                        <Panel Classes="stat-footer"><ProgressBar Classes="thin" Value="{Binding CpuLoadValue}" VerticalAlignment="Center"/></Panel>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Row="0" Grid.Column="1" Classes="stat-tile">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="AVG CLOCK" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuAverageClock}" Classes="metric-value stat"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Core frequency" Classes="metric-caption stat-footer" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Row="1" Grid.Column="0" Classes="stat-tile">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="PKG POWER" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuPackagePower}" Classes="metric-value stat"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Package draw" Classes="metric-caption stat-footer" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Row="1" Grid.Column="1" Classes="stat-tile">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="VOLTAGE" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuCoreVoltage}" Classes="metric-value stat"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Vcore" Classes="metric-caption stat-footer" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+                                    <Border x:Name="GpuPanel" Grid.Column="1" Classes="hw-panel">
+                                        <Grid RowSpacing="14">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" SharedSizeGroup="HwHeader"/>
+                                                <RowDefinition Height="Auto" SharedSizeGroup="HwTemps"/>
+                                                <RowDefinition Height="Auto" SharedSizeGroup="HwStats"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                                <Border Classes="hw-badge gpu" VerticalAlignment="Center">
+                                                    <TextBlock Text="GPU"/>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                                    <!-- Wraps to 2 lines so long model names stay readable at MinWidth; full name in the tooltip -->
+                                                    <TextBlock x:Name="GpuTempNameText" Text="{Binding GpuName}" Classes="hw-name"
+                                                               TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding GpuName}"/>
+                                                    <TextBlock Text="Graphics · live sensors" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Grid>
+                                            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="10">
+                                                <Border Grid.Column="0" Classes="card temp-card compact"
+                                                        BorderBrush="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                                    <Border.BoxShadow>
+                                                        <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                            <Binding Path="GpuCoreTempValue"/>
+                                                            <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                                        </MultiBinding>
+                                                    </Border.BoxShadow>
+                                                    <StackPanel Spacing="4">
+                                                        <Border Classes="temp-bar" Background="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
+                                                        <TextBlock Text="CORE" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding GpuCoreTemperature}" Classes="metric-value"
+                                                                       Foreground="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="GPU core" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Column="1" Classes="card temp-card compact"
+                                                        BorderBrush="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
+                                                    <Border.BoxShadow>
+                                                        <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
+                                                            <Binding Path="GpuHotspotTempValue"/>
+                                                            <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
+                                                        </MultiBinding>
+                                                    </Border.BoxShadow>
+                                                    <StackPanel Spacing="4">
+                                                        <Border Classes="temp-bar" Background="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
+                                                        <TextBlock Text="HOTSPOT" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding GpuHotspotTemperature}" Classes="metric-value"
+                                                                       Foreground="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Junction" Classes="metric-caption" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+                                            <Grid x:Name="GpuStatCards" Grid.Row="2" ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+                                                <Border Grid.Row="0" Grid.Column="0" Classes="stat-tile">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="LOAD" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding GpuLoad}" Classes="metric-value stat"/>
+                                                        </Viewbox>
+                                                        <Panel Classes="stat-footer"><ProgressBar Classes="thin" Value="{Binding GpuLoadValue}" VerticalAlignment="Center"/></Panel>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Row="0" Grid.Column="1" Classes="stat-tile">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="CLOCK" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding GpuClock}" Classes="metric-value stat"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Core clock" Classes="metric-caption stat-footer" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Row="1" Grid.Column="0" Classes="stat-tile">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="POWER" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock controls:AnimatedNumber.Text="{Binding GpuPower}" Classes="metric-value stat"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Board power" Classes="metric-caption stat-footer" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Grid.Row="1" Grid.Column="1" Classes="stat-tile">
+                                                    <StackPanel Spacing="4">
+                                                        <TextBlock Text="VRAM" Classes="section-title" TextTrimming="CharacterEllipsis"/>
+                                                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                                            <TextBlock Text="{Binding GpuVram, TargetNullValue='—'}" Classes="metric-value stat"/>
+                                                        </Viewbox>
+                                                        <TextBlock Text="Used / total" Classes="metric-caption stat-footer" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+
                                 <!-- Live thermal history: CPU + GPU temperature over the selected window (1 / 5 / 15 min) -->
                                 <Border x:Name="ThermalHistoryPanel" Classes="card" Padding="20,16">
                                     <StackPanel Spacing="12">
@@ -364,216 +617,31 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Coach Recommendations -->
-                                <Border IsVisible="{Binding HasCoachRecommendations}" Classes="tile" BorderBrush="{StaticResource CardBorderGradient}" Padding="16,10">
-                                    <StackPanel Spacing="6">
-                                        <TextBlock Text="🧠 AI COACH RECOMMENDATIONS" Classes="label-caps"/>
-                                        <TextBlock Text="{Binding CoachRecommendations}" FontSize="11" Foreground="#A0C0E0" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- CPU Temperatures -->
-                                <!-- Temperature-reactive cards: border, glow, top accent bar and value gradient follow TemperatureColorScale -->
-                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="12">
-                                    <Border Grid.Column="0" Classes="card temp-card"
-                                            BorderBrush="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
-                                        <Border.BoxShadow>
-                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
-                                                <Binding Path="CpuPackageTempValue"/>
-                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
-                                            </MultiBinding>
-                                        </Border.BoxShadow>
-                                        <StackPanel Spacing="4">
-                                            <Border Classes="temp-bar" Background="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
-                                            <TextBlock Text="CPU PACKAGE" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuPackageTemperature}" Classes="metric-value"
-                                                           Foreground="{Binding CpuPackageTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
-                                            </Viewbox>
-                                            <TextBlock x:Name="CpuPackageNameText" Text="{Binding CpuName}" Classes="metric-caption"
-                                                       TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CpuName}"/>
+                                <!-- Cooling: CPU fan reading, manual duty slider and Apply / Auto on one full-width bar -->
+                                <Border x:Name="CoolingCard" Classes="card-glow" Padding="20,16">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="24">
+                                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center" MinWidth="170">
+                                            <TextBlock Text="CPU COOLING" Classes="label-caps"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuFanSpeed}" FontSize="26" FontWeight="Black" Foreground="#E8F0FF"/>
+                                                <TextBlock Text="{Binding CpuFanControl}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource FanziAccentHoverBrush}"
+                                                           VerticalAlignment="Bottom" Margin="0,0,0,4"/>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding CpuFanName}" Classes="metric-caption" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CpuFanName}"/>
                                         </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="1" Classes="card temp-card"
-                                            BorderBrush="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
-                                        <Border.BoxShadow>
-                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
-                                                <Binding Path="CpuAverageTempValue"/>
-                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
-                                            </MultiBinding>
-                                        </Border.BoxShadow>
-                                        <StackPanel Spacing="4">
-                                            <Border Classes="temp-bar" Background="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
-                                            <TextBlock Text="AVERAGE CORE" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuAverageTemperature}" Classes="metric-value"
-                                                           Foreground="{Binding CpuAverageTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
-                                            </Viewbox>
-                                            <TextBlock Text="Average across cores" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="2" Classes="card temp-card"
-                                            BorderBrush="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
-                                        <Border.BoxShadow>
-                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
-                                                <Binding Path="CpuHotspotTempValue"/>
-                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
-                                            </MultiBinding>
-                                        </Border.BoxShadow>
-                                        <StackPanel Spacing="4">
-                                            <Border Classes="temp-bar" Background="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
-                                            <TextBlock Text="HOTSPOT" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuHotspotTemperature}" Classes="metric-value"
-                                                           Foreground="{Binding CpuHotspotTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
-                                            </Viewbox>
-                                            <TextBlock Text="Hottest sensor" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
-
-                                <!-- CPU Stats + Fan -->
-                                <!-- The fan card is taller (slider + buttons); the four stat cards keep their own height,
-                                     top-aligned and equal to each other, instead of stretching into empty space. -->
-                                <Grid ColumnDefinitions="1.4*,4*" ColumnSpacing="12">
-                                    <Border Grid.Column="0" Classes="card-glow">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="{Binding CpuFanName}" Classes="section-title"/>
-                                            <TextBlock controls:AnimatedNumber.Text="{Binding CpuFanSpeed}" FontSize="26" FontWeight="Black" Foreground="#E8F0FF" TextWrapping="Wrap"/>
-                                            <TextBlock Text="{Binding CpuFanControl}" FontSize="16" FontWeight="Bold" Foreground="#2563EB"/>
-                                            <Slider Minimum="0" Maximum="100" Value="{Binding CpuFanDesiredPercent, Mode=TwoWay}" IsEnabled="{Binding CpuFanCanControl}" Margin="0,4"/>
-                                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-                                                <TextBlock Grid.Column="0" Text="{Binding CpuFanDesiredLabel}" Foreground="#4A6A8F" FontSize="11" VerticalAlignment="Center"/>
-                                                <Button Grid.Column="1" Content="Apply" Classes="primary" Command="{Binding ApplyCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="0" Padding="10,5" FontSize="11"/>
-                                                <Button Grid.Column="2" Content="Auto" Command="{Binding AutoCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="0" Padding="10,5" FontSize="11"/>
+                                        <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="MANUAL DUTY" Classes="label-caps" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding CpuFanDesiredLabel}" Classes="muted" FontSize="11" VerticalAlignment="Center"/>
                                             </Grid>
+                                            <Slider Minimum="0" Maximum="100" Value="{Binding CpuFanDesiredPercent, Mode=TwoWay}" IsEnabled="{Binding CpuFanCanControl}"
+                                                    AutomationProperties.Name="CPU fan manual duty"/>
                                         </StackPanel>
-                                    </Border>
-                                    <Grid x:Name="CpuStatCards" Grid.Column="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="12" VerticalAlignment="Top">
-                                    <Border Grid.Column="0" Classes="card">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="CPU LOAD" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuTotalLoad}" Classes="metric-value"/>
-                                            </Viewbox>
-                                            <ProgressBar Classes="thin" Value="{Binding CpuLoadValue}" Margin="0,2,0,2"/>
-                                            <TextBlock Text="Utilization" Classes="metric-caption"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <Button Content="Apply" Classes="primary" Command="{Binding ApplyCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="72"/>
+                                            <Button Content="Auto" Command="{Binding AutoCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="64"/>
                                         </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="1" Classes="card">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="AVG CLOCK" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuAverageClock}" Classes="metric-value"/>
-                                            </Viewbox>
-                                            <TextBlock Text="Core frequency" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="2" Classes="card">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="PKG POWER" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuPackagePower}" Classes="metric-value"/>
-                                            </Viewbox>
-                                            <TextBlock Text="Package draw" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="3" Classes="card">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="VOLTAGE" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding CpuCoreVoltage}" Classes="metric-value"/>
-                                            </Viewbox>
-                                            <TextBlock Text="Vcore" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
                                     </Grid>
-                                </Grid>
-
-                                <!-- GPU Row -->
-                                <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="12">
-                                    <Border Grid.Column="0" Classes="card temp-card"
-                                            BorderBrush="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
-                                        <Border.BoxShadow>
-                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
-                                                <Binding Path="GpuCoreTempValue"/>
-                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
-                                            </MultiBinding>
-                                        </Border.BoxShadow>
-                                        <StackPanel Spacing="4">
-                                            <Border Classes="temp-bar" Background="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
-                                            <TextBlock Text="GPU TEMP" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuCoreTemperature}" Classes="metric-value"
-                                                           Foreground="{Binding GpuCoreTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
-                                            </Viewbox>
-                                            <TextBlock x:Name="GpuTempNameText" Text="{Binding GpuName}" Classes="metric-caption"
-                                                       TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding GpuName}"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="1" Classes="card temp-card"
-                                            BorderBrush="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}">
-                                        <Border.BoxShadow>
-                                            <MultiBinding Converter="{x:Static conv:TemperatureToBoxShadowConverter.Instance}">
-                                                <Binding Path="GpuHotspotTempValue"/>
-                                                <Binding Path="IsPointerOver" RelativeSource="{RelativeSource Self}"/>
-                                            </MultiBinding>
-                                        </Border.BoxShadow>
-                                        <StackPanel Spacing="4">
-                                            <Border Classes="temp-bar" Background="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToBrushConverter.Instance}}"/>
-                                            <TextBlock Text="GPU HOTSPOT" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuHotspotTemperature}" Classes="metric-value"
-                                                           Foreground="{Binding GpuHotspotTempValue, Converter={x:Static conv:TemperatureToGradientConverter.Instance}}"/>
-                                            </Viewbox>
-                                            <TextBlock Text="Junction" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="2" Classes="card">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="GPU LOAD" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuLoad}" Classes="metric-value"/>
-                                            </Viewbox>
-                                            <ProgressBar Classes="thin" Value="{Binding GpuLoadValue}" Margin="0,2,0,2"/>
-                                            <TextBlock Text="Utilization" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="3" Classes="card">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="GPU CLOCK" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuClock}" Classes="metric-value"/>
-                                            </Viewbox>
-                                            <TextBlock Text="Core clock" Classes="metric-caption"/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="4" Classes="card">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="GPU POWER" Classes="section-title"/>
-                                            <!-- Scales down instead of clipping in narrow cards (MinWidth 1100) -->
-                                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left">
-                                                <TextBlock controls:AnimatedNumber.Text="{Binding GpuPower}" Classes="metric-value"/>
-                                            </Viewbox>
-                                            <TextBlock Text="{Binding GpuVram}" Classes="metric-caption" IsVisible="{Binding GpuVram, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
-
-                                <!-- Temp Warning -->
-                                <Border IsVisible="{Binding HasCpuTempWarning}" CornerRadius="12" Background="#1C1000" BorderBrush="#92400E" BorderThickness="1" Padding="14,10">
-                                    <TextBlock Text="{Binding CpuTempWarningMessage}" Foreground="#FDE68A" FontSize="12" FontWeight="SemiBold"/>
                                 </Border>
 
                             </StackPanel>
@@ -836,6 +904,11 @@
                         <views:SystemCleanerView DataContext="{Binding SystemCleanerVm}" Margin="0,12,0,0"/>
                     </TabItem>
 
+                    <!-- v4.1.0 TAB: TOOLS (disk optimiser, drive health, repair, network / quick fixes, power & gaming) -->
+                    <TabItem Header="Tools" IsVisible="{Binding ShowToolsTab}">
+                        <views:ToolsView DataContext="{Binding ToolsVm}" Margin="0,12,0,0"/>
+                    </TabItem>
+
                     <!-- ══ TAB: NOTIFICATIONS ═════════════════════ -->
                     <TabItem Header="Alerts">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -929,6 +1002,16 @@
                                             <ToggleSwitch Grid.Column="1" x:Name="ReduceMotionToggle" IsChecked="{Binding ReduceMotion}"
                                                           HorizontalAlignment="Right" VerticalAlignment="Center"
                                                           AutomationProperties.Name="Reduce motion"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="Thermal frame" Foreground="#A0C0E0" FontSize="13"/>
+                                                <TextBlock x:Name="ThermalFrameHelpText" Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                           Text="A running line around the window shows the hotter of CPU and GPU: blue = cold, green = stable, amber / orange = warm, red = hot. It runs faster as it gets hotter and stands still with Reduce motion."/>
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" x:Name="ThermalFrameToggle" IsChecked="{Binding ThermalFrameEnabled}"
+                                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                          AutomationProperties.Name="Thermal frame"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
@@ -1089,6 +1172,10 @@
                                             <TextBlock Grid.Row="0" Grid.Column="0" Text="System Cleaner tab (cache + RAM cleaner)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center"/>
                                             <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding ShowSystemCleanerTab}" HorizontalAlignment="Right"/>
                                         </Grid>
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Tools tab (disk optimiser, drive health, repair, power &amp; gaming)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                            <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding ShowToolsTab}" HorizontalAlignment="Right"/>
+                                        </Grid>
                                     </StackPanel>
                                 </Border>
 
@@ -1202,8 +1289,9 @@
                                     <Button Content="Network" Command="{Binding AediNavigateCommand}" CommandParameter="5" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
                                     <Button Content="Power" Command="{Binding AediNavigateCommand}" CommandParameter="6" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
                                     <Button Content="Clean" Command="{Binding AediNavigateCommand}" CommandParameter="7" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
-                                    <Button Content="Alerts" Command="{Binding AediNavigateCommand}" CommandParameter="8" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
-                                    <Button Content="Settings" Command="{Binding AediNavigateCommand}" CommandParameter="9" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Tools" Command="{Binding AediNavigateCommand}" CommandParameter="8" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Alerts" Command="{Binding AediNavigateCommand}" CommandParameter="9" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Settings" Command="{Binding AediNavigateCommand}" CommandParameter="10" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
                                 </WrapPanel>
                             </StackPanel>
                         </StackPanel>
@@ -1285,6 +1373,15 @@
                 </Grid>
             </Border>
         </Panel>
+
+        <!-- ═══════════════ THERMAL FRAME (4.1) ═══════════════ -->
+        <!-- Running temperature line around the whole window: blue cold · green stable · red hot.
+             Not hit-testable; corner radius follows the window state (square when maximised, see code-behind). -->
+        <controls:ThermalFrame x:Name="ThermalFrame" ZIndex="300"
+                               IsVisible="{Binding ThermalFrameEnabled}"
+                               Temperature="{Binding FrameTemperatureValue}"
+                               IsAnimated="{Binding !ReduceMotion}"
+                               FrameRadius="8" StrokeThickness="3"/>
     </Panel>
 
 </Window>
