@@ -3,7 +3,7 @@
 ; Requires: Inno Setup 6.x (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "FANZI"
-#define MyAppVersion "4.0.1"
+#define MyAppVersion "4.0.2"
 #define MyAppPublisher "Antwerp Designs — Johan Wilhelm van Antwerp"
 #define MyAppURL "https://www.ionity.today"
 #define MyAppExeName "Fanzi.FanControl.exe"

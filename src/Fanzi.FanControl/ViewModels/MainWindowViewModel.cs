@@ -767,6 +767,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         try
         {
+            // Panels (Tasks / Network / Power / RAM) sync on their own 0.5 s cadence, independent of the
+            // hardware poll, so lists move in small smooth steps instead of jumps every 2–3 s.
+            _ = RunLiveSyncLoopAsync();
             await RunRefreshLoopAsync();
         }
         catch (Exception ex)
@@ -1072,11 +1075,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             while (!_disposeTokenSource.IsCancellationRequested)
             {
-                // v4 live sync: Tasks / Network / Power / RAM collect in the background, in parallel with the
-                // hardware poll; finished results are applied in the same UI pass as the dashboard values. The
-                // dashboard never waits for a slow panel — an unfinished collection lands on the next tick.
-                if (_liveCollect is null)
-                    _liveCollect = LiveSyncHub.Shared.CollectAsync(_disposeTokenSource.Token);
+                // Live-sync panels run on their own 0.5 s loop (RunLiveSyncLoopAsync); a collection that is
+                // finished when the hardware poll lands is still committed in the same UI pass (RefreshAsync).
                 var tickStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 await RefreshAsync();
 
@@ -1090,6 +1090,48 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    /// <summary>Tasks / Network / Power / RAM panel cadence while the window is visible (2 updates per second).</summary>
+    internal static readonly TimeSpan LiveSyncInterval = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>Panel cadence while the main window is hidden (overlay RAM still updates).</summary>
+    internal static readonly TimeSpan LiveSyncHiddenInterval = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// v4.0.2 live-sync loop: every 0.5 s start one background collection of all registered panels (never two
+    /// at once), wait at most one interval for it, and apply finished results on the UI thread in one pass
+    /// (keyed in-place diffs via CollectionSync — no Clear()+Add()). A slow collection simply lands on a later
+    /// tick; the hardware poll and the UI thread never wait for it.
+    /// </summary>
+    private async Task RunLiveSyncLoopAsync()
+    {
+        var token = _disposeTokenSource.Token;
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                var tickStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                var interval = _isWindowVisible ? LiveSyncInterval : LiveSyncHiddenInterval;
+
+                _liveCollect ??= LiveSyncHub.Shared.CollectAsync(token);
+                var pending = _liveCollect;
+                if (!pending.IsCompleted)
+                    await Task.WhenAny(pending, Task.Delay(interval, token));
+                token.ThrowIfCancellationRequested();
+
+                if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+                    CommitLiveSyncIfReady();
+                else
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(CommitLiveSyncIfReady);
+
+                var remaining = interval - System.Diagnostics.Stopwatch.GetElapsedTime(tickStart);
+                await Task.Delay(remaining > TimeSpan.FromMilliseconds(50) ? remaining : TimeSpan.FromMilliseconds(50), token);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) when (_disposed) { }
+        catch (Exception ex) { AppLog.Error("Live sync loop stopped", ex); }
     }
 
     private static readonly TimeSpan GameScanInterval = TimeSpan.FromSeconds(5);

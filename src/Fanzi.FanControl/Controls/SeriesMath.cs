@@ -11,6 +11,9 @@ internal readonly record struct AxisRange(double Min, double Max, double Step);
 /// <summary>Lowest, highest and newest value of a series window.</summary>
 internal readonly record struct SeriesStats(double Min, double Max, double Current);
 
+/// <summary>Highest sample of a window; <see cref="IsNew"/> when the newest sample just set it.</summary>
+internal readonly record struct SeriesPeak(DateTime TimeUtc, double Value, bool IsNew);
+
 /// <summary>Pure geometry for <see cref="ThermalHistoryChart"/>: axis range, downsampling, projection, smoothing.</summary>
 internal static class SeriesMath
 {
@@ -47,6 +50,28 @@ internal static class SeriesMath
             if (s.Value > max) max = s.Value;
         }
         return new SeriesStats(min, max, samples[^1].Value);
+    }
+
+    /// <summary>
+    /// The highest sample of <paramref name="samples"/> (latest one wins ties) and whether the newest sample
+    /// is a NEW peak: it strictly exceeds every earlier sample in the window by at least
+    /// <paramref name="epsilon"/>. Needs two samples and a non-flat series; null otherwise.
+    /// </summary>
+    public static SeriesPeak? ComputePeak(IReadOnlyList<HistorySample> samples, double epsilon = 0.05)
+    {
+        if (samples.Count < 2) return null;
+        int peak = 0;
+        double min = samples[0].Value, priorMax = double.NegativeInfinity;
+        for (int i = 0; i < samples.Count; i++)
+        {
+            double v = samples[i].Value;
+            if (v >= samples[peak].Value) peak = i;
+            if (v < min) min = v;
+            if (i < samples.Count - 1 && v > priorMax) priorMax = v;
+        }
+        if (samples[peak].Value - min < epsilon) return null; // flat line: no meaningful peak
+        bool isNew = samples[^1].Value >= priorMax + epsilon;
+        return new SeriesPeak(samples[peak].TimeUtc, samples[peak].Value, isNew);
     }
 
     /// <summary>

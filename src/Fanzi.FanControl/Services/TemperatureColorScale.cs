@@ -55,12 +55,53 @@ public static class TemperatureColorScale
         return ForTemperature(MaxStop - s * (MaxStop - MinStop));
     }
 
-    /// <summary>Colour for a 0..100 % load: 0 % → cool blue, 100 % → red.</summary>
+    /// <summary>
+    /// Heat scale for graphs and load bars: LOW 0 % cool blue → royal blue → violet → crimson → HOT 100 % red.
+    /// It deliberately contains no orange, so <see cref="PeakColor"/> always stands out as the peak marker.
+    /// </summary>
+    private static readonly (double At, Color Color)[] HeatStops =
+    {
+        (0.00, Color.FromRgb(0x38, 0xBD, 0xF8)), //   0 %  cool blue (LOW)
+        (0.30, Color.FromRgb(0x3B, 0x82, 0xF6)), //  30 %  blue
+        (0.55, Color.FromRgb(0x8B, 0x5C, 0xF6)), //  55 %  violet
+        (0.80, Color.FromRgb(0xDB, 0x27, 0x77)), //  80 %  crimson
+        (1.00, Color.FromRgb(0xEF, 0x44, 0x44)), // 100 %  red (HOT)
+    };
+
+    /// <summary>Peak / new-peak marker colour (orange) used by charts and the overlay.</summary>
+    public static readonly Color PeakColor = Color.FromRgb(0xF9, 0x73, 0x16);
+
+    /// <summary>The heat-scale stops (fraction 0..1, colour) — for building bar / legend gradients.</summary>
+    public static ReadOnlySpan<(double At, Color Color)> HeatScaleStops => HeatStops;
+
+    /// <summary>Colour on the heat scale for a 0..1 fraction (clamped; NaN → LOW blue).</summary>
+    public static Color ForHeat(double fraction)
+    {
+        if (double.IsNaN(fraction) || fraction <= HeatStops[0].At) return HeatStops[0].Color;
+        if (fraction >= HeatStops[^1].At) return HeatStops[^1].Color;
+
+        for (int i = 1; i < HeatStops.Length; i++)
+        {
+            if (fraction <= HeatStops[i].At)
+            {
+                var (a, ca) = HeatStops[i - 1];
+                var (b, cb) = HeatStops[i];
+                return Lerp(ca, cb, (fraction - a) / (b - a));
+            }
+        }
+
+        return HeatStops[^1].Color;
+    }
+
+    /// <summary>Heat-scale colour for <paramref name="value"/> within [<paramref name="low"/>, <paramref name="high"/>].</summary>
+    public static Color ForHeat(double value, double low, double high)
+        => high > low ? ForHeat((value - low) / (high - low)) : ForHeat(double.IsNaN(value) ? 0 : 0.5);
+
+    /// <summary>Colour for a 0..100 % load on the heat scale: 0 % → LOW blue, 100 % → HOT red.</summary>
     public static Color ForLoad(double percent)
     {
         if (double.IsNaN(percent)) percent = 0;
-        double p = Math.Clamp(percent, 0, 100) / 100.0;
-        return ForTemperature(MinStop + p * (MaxStop - MinStop));
+        return ForHeat(Math.Clamp(percent, 0, 100) / 100.0);
     }
 
     /// <summary>Blends <paramref name="color"/> toward white by <paramref name="amount"/> (0..1).</summary>

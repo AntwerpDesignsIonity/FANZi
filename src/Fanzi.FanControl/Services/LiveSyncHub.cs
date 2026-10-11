@@ -24,6 +24,12 @@ public sealed class LiveSyncHub
     /// <summary>Process-wide hub the dashboard loop drives.</summary>
     public static LiveSyncHub Shared { get; } = new();
 
+    /// <summary>
+    /// Cadence of the Tasks / Network / Power panels (v4.0.2: 0.5 s, was 2 s / every poll / 3 s). Their lists
+    /// are updated in place by <see cref="CollectionSync"/> keyed diffs, so 2 Hz moves rows smoothly.
+    /// </summary>
+    public static readonly TimeSpan PanelInterval = TimeSpan.FromMilliseconds(500);
+
     /// <summary>A collector slower than this is skipped for the cycle (its previous data stays on screen).</summary>
     internal static readonly TimeSpan CollectorTimeout = TimeSpan.FromSeconds(2.5);
 

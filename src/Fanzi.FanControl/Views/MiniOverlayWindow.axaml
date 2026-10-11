@@ -54,11 +54,14 @@
         <Style Selector="Button.overlay-close:pressed /template/ ContentPresenter">
             <Setter Property="Background" Value="#55EF4444"/>
         </Style>
+        <!-- Network bars keep their identity colours (↓ cyan, ↑ violet): heat fill off (their max is already the peak) -->
         <Style Selector="ProgressBar.net-down">
             <Setter Property="Foreground" Value="#22D3EE"/>
+            <Setter Property="controls:HeatBar.IsEnabled" Value="False"/>
         </Style>
         <Style Selector="ProgressBar.net-up">
             <Setter Property="Foreground" Value="#A78BFA"/>
+            <Setter Property="controls:HeatBar.IsEnabled" Value="False"/>
         </Style>
     </Window.Styles>
 

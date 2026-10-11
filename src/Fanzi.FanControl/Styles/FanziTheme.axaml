@@ -105,11 +105,15 @@
                 <GradientStop Color="#06B6D4" Offset="0.75"/>
                 <GradientStop Color="#0006B6D4" Offset="1"/>
             </ConicGradientBrush>
+            <!-- Heat scale (TemperatureColorScale.ForHeat): LOW 0 % blue → HOT 100 % red; no orange (orange = peak) -->
             <LinearGradientBrush x:Key="LoadBarGradient" StartPoint="0%,0%" EndPoint="100%,0%">
                 <GradientStop Color="#38BDF8" Offset="0"/>
-                <GradientStop Color="#2563EB" Offset="0.5"/>
-                <GradientStop Color="#7C3AED" Offset="1"/>
+                <GradientStop Color="#3B82F6" Offset="0.30"/>
+                <GradientStop Color="#8B5CF6" Offset="0.55"/>
+                <GradientStop Color="#DB2777" Offset="0.80"/>
+                <GradientStop Color="#EF4444" Offset="1"/>
             </LinearGradientBrush>
+            <SolidColorBrush x:Key="PeakBrush" Color="#F97316"/>
 
             <!-- TemperatureColorScale stops 30 / 45 / 60 / 75 / 85 / 95 °C, left to right — heatmap legend -->
             <LinearGradientBrush x:Key="TemperatureScaleGradient" StartPoint="0%,0%" EndPoint="100%,0%">
@@ -480,6 +484,8 @@
         <Setter Property="Foreground" Value="{StaticResource LoadBarGradient}"/>
         <Setter Property="Minimum" Value="0"/>
         <Setter Property="Maximum" Value="100"/>
+        <!-- Heat fill (tip = heat colour of the value), orange rolling-peak tick, orange tip on a NEW peak -->
+        <Setter Property="controls:HeatBar.IsEnabled" Value="True"/>
     </Style>
 
     <!-- ═══ PROFILE TABS ═══ -->

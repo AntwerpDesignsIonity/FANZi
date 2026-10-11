@@ -71,8 +71,41 @@ public class TemperatureColorScaleTests
         => Assert.Equal(Hex(expected), TemperatureColorScale.ForLoad(percent));
 
     [Fact]
-    public void ForLoad_MidpointMapsToMiddleOfScale()
-        => Assert.Equal(TemperatureColorScale.ForTemperature(62.5), TemperatureColorScale.ForLoad(50));
+    public void ForLoad_MidpointMapsToMiddleOfHeatScale()
+        => Assert.Equal(TemperatureColorScale.ForHeat(0.5), TemperatureColorScale.ForLoad(50));
+
+    [Theory]
+    [InlineData(0.00, "#38BDF8")]
+    [InlineData(0.30, "#3B82F6")]
+    [InlineData(0.55, "#8B5CF6")]
+    [InlineData(0.80, "#DB2777")]
+    [InlineData(1.00, "#EF4444")]
+    [InlineData(-1, "#38BDF8")]
+    [InlineData(2, "#EF4444")]
+    [InlineData(double.NaN, "#38BDF8")]
+    public void ForHeat_StopsLowBlueToHotRed(double fraction, string expected)
+        => Assert.Equal(Hex(expected), TemperatureColorScale.ForHeat(fraction));
+
+    [Fact]
+    public void ForHeat_RangeOverload_MapsLowAndHigh()
+    {
+        Assert.Equal(Hex("#38BDF8"), TemperatureColorScale.ForHeat(30, 30, 95));
+        Assert.Equal(Hex("#EF4444"), TemperatureColorScale.ForHeat(95, 30, 95));
+        Assert.Equal(TemperatureColorScale.ForHeat(0.5), TemperatureColorScale.ForHeat(62.5, 30, 95));
+    }
+
+    [Fact]
+    public void HeatScale_NeverHitsPeakOrange()
+    {
+        // The peak marker must stay distinguishable from every heat colour.
+        var peak = TemperatureColorScale.PeakColor;
+        for (double f = 0; f <= 1.0001; f += 0.01)
+        {
+            var c = TemperatureColorScale.ForHeat(f);
+            int distance = Math.Abs(c.R - peak.R) + Math.Abs(c.G - peak.G) + Math.Abs(c.B - peak.B);
+            Assert.True(distance > 90, $"heat colour at {f:P0} ({c}) is too close to the peak orange");
+        }
+    }
 
     [Fact]
     public void WithAlpha_And_Lighten()

@@ -11,11 +11,14 @@ using System.Globalization;
 namespace Fanzi.FanControl.Controls;
 
 /// <summary>
-/// Rolling temperature chart for a <see cref="MetricHistory"/>: a smooth monotone curve stroked with a
-/// vertical <see cref="TemperatureColorScale"/> gradient (colour follows the value on the Y axis), a
+/// Rolling temperature / load chart for a <see cref="MetricHistory"/>: a smooth monotone curve stroked with a
+/// vertical heat gradient (<see cref="TemperatureColorScale.ForHeat(double, double, double)"/>: LOW
+/// <see cref="HeatLow"/> = blue → HOT <see cref="HeatHigh"/> = red, colour follows the value on the Y axis), a
 /// gradient area fill fading to transparent, faint grid lines, min / max / now labels and a pulsing
-/// "now" dot. Drawn directly in <see cref="Render"/>; the dot is two child ellipses so the theme can
-/// animate them (<c>Ellipse.history-now-glow</c>).
+/// "now" dot. The window's highest sample gets an orange peak marker (dot, dashed guide, "▲ value" label);
+/// when the live value sets a NEW peak the now-dot turns orange and the header shows "▲ NEW PEAK".
+/// Drawn directly in <see cref="Render"/>; the dot is two child ellipses so the theme can
+/// animate them (<c>Ellipse.history-now-glow</c>, plus <c>.new-peak</c>).
 /// <para>The history object is mutated in place, so bind <see cref="Revision"/> to a counter that
 /// changes after every recorded poll.</para>
 /// </summary>
@@ -56,6 +59,18 @@ public sealed class ThermalHistoryChart : Control
     public static readonly StyledProperty<IBrush?> GridBrushProperty =
         AvaloniaProperty.Register<ThermalHistoryChart, IBrush?>(nameof(GridBrush));
 
+    /// <summary>Value drawn LOW blue (0 % of the heat scale). Default 30 °C; use 0 for a % load chart.</summary>
+    public static readonly StyledProperty<double> HeatLowProperty =
+        AvaloniaProperty.Register<ThermalHistoryChart, double>(nameof(HeatLow), TemperatureColorScale.MinStop);
+
+    /// <summary>Value drawn HOT red (100 % of the heat scale). Default 95 °C; use 100 for a % load chart.</summary>
+    public static readonly StyledProperty<double> HeatHighProperty =
+        AvaloniaProperty.Register<ThermalHistoryChart, double>(nameof(HeatHigh), TemperatureColorScale.MaxStop);
+
+    /// <summary>Show the orange peak marker (dot, guide line and label) for the window's highest sample.</summary>
+    public static readonly StyledProperty<bool> ShowPeakProperty =
+        AvaloniaProperty.Register<ThermalHistoryChart, bool>(nameof(ShowPeak), true);
+
     // Fallbacks when the theme style isn't applied (FanziTextMuted / TextPrimary / Border).
     private static readonly IBrush DefaultLabelBrush = new SolidColorBrush(Color.Parse("#6A8AAF"));
     private static readonly IBrush DefaultTitleBrush = new SolidColorBrush(Color.Parse("#E8F0FF"));
@@ -74,10 +89,10 @@ public sealed class ThermalHistoryChart : Control
     static ThermalHistoryChart()
     {
         AffectsArrange<ThermalHistoryChart>(HistoryProperty, TimeWindowProperty, RevisionProperty,
-            ShowLabelsProperty, MinimumSpanProperty);
+            ShowLabelsProperty, MinimumSpanProperty, HeatLowProperty, HeatHighProperty, ShowPeakProperty);
         AffectsRender<ThermalHistoryChart>(HistoryProperty, TimeWindowProperty, RevisionProperty, TitleProperty,
             UnitProperty, ShowLabelsProperty, MinimumSpanProperty, StrokeThicknessProperty,
-            LabelBrushProperty, TitleBrushProperty, GridBrushProperty);
+            LabelBrushProperty, TitleBrushProperty, GridBrushProperty, HeatLowProperty, HeatHighProperty, ShowPeakProperty);
     }
 
     public ThermalHistoryChart()
@@ -104,6 +119,9 @@ public sealed class ThermalHistoryChart : Control
     public IBrush? LabelBrush { get => GetValue(LabelBrushProperty); set => SetValue(LabelBrushProperty, value); }
     public IBrush? TitleBrush { get => GetValue(TitleBrushProperty); set => SetValue(TitleBrushProperty, value); }
     public IBrush? GridBrush { get => GetValue(GridBrushProperty); set => SetValue(GridBrushProperty, value); }
+    public double HeatLow { get => GetValue(HeatLowProperty); set => SetValue(HeatLowProperty, value); }
+    public double HeatHigh { get => GetValue(HeatHighProperty); set => SetValue(HeatHighProperty, value); }
+    public bool ShowPeak { get => GetValue(ShowPeakProperty); set => SetValue(ShowPeakProperty, value); }
 
     /// <summary>Position of the "now" dot in local coordinates (null until two samples exist). Exposed for tests.</summary>
     internal Point? NowPoint => _layout?.Points is { Length: > 0 } p ? p[^1] : null;
@@ -111,9 +129,22 @@ public sealed class ThermalHistoryChart : Control
     /// <summary>Min / max / now of the visible window (null when empty). Exposed for tests.</summary>
     internal SeriesStats? Stats => _layout?.Stats;
 
+    /// <summary>Highest sample of the visible window and whether the live value just set it. Exposed for tests.</summary>
+    internal SeriesPeak? Peak => _layout?.Peak;
+
+    /// <summary>Where the orange peak marker is drawn (null when there is no peak). Exposed for tests.</summary>
+    internal Point? PeakPoint => _layout?.PeakPoint;
+
+    /// <summary>Fill colour of the "now" dot: orange on a NEW peak, otherwise the heat colour of the live value.</summary>
+    internal Color NowDotColor => _dotColor;
+
+    /// <summary>Heat-scale colour (LOW blue → HOT red) of <paramref name="value"/> for this chart's range.</summary>
+    internal Color HeatColor(double value) => TemperatureColorScale.ForHeat(value, HeatLow, HeatHigh);
+
     // ── Layout ────────────────────────────────────────────────────────────────
 
-    private sealed record Layout(Rect Plot, AxisRange Axis, Point[] Points, SeriesStats? Stats, DateTime Start, DateTime End);
+    private sealed record Layout(Rect Plot, AxisRange Axis, Point[] Points, SeriesStats? Stats, DateTime Start, DateTime End,
+        SeriesPeak? Peak, Point? PeakPoint);
 
     /// <summary>Plot area inside <paramref name="size"/>: room for the header row and axis labels when shown.</summary>
     internal static Rect PlotRect(Size size, bool showLabels)
@@ -139,7 +170,13 @@ public sealed class ThermalHistoryChart : Control
         var points = window.Count >= 2
             ? SeriesMath.Project(SeriesMath.Downsample(window, (int)(plot.Width / 2)), start, end, plot, axis)
             : Array.Empty<Point>();
-        return new Layout(plot, axis, points, stats, start, end);
+
+        // Peak from the raw window (not the downsampled curve) so the true maximum is marked.
+        var peak = ShowPeak && points.Length >= 2 ? SeriesMath.ComputePeak(window) : null;
+        Point? peakPoint = peak is { } pk
+            ? SeriesMath.Project(new[] { new HistorySample(pk.TimeUtc, pk.Value) }, start, end, plot, axis)[0]
+            : null;
+        return new Layout(plot, axis, points, stats, start, end, peak, peakPoint);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -157,7 +194,12 @@ public sealed class ThermalHistoryChart : Control
         double dotSize = ShowLabels ? 7 : 5;
         if (NowPoint is { } now && _layout.Stats is { } stats)
         {
-            var color = TemperatureColorScale.ForTemperature(stats.Current);
+            // NEW peak → the live dot turns orange; otherwise it carries the heat colour of the live value.
+            bool newPeak = _layout.Peak is { IsNew: true };
+            var color = newPeak ? TemperatureColorScale.PeakColor : HeatColor(stats.Current);
+            _dot.Classes.Set("new-peak", newPeak);
+            _glow.Classes.Set("new-peak", newPeak);
+            if (newPeak) { glowSize *= 1.35; dotSize += 1; }
             if (color != _dotColor || _dot.Fill is null)
             {
                 _dotColor = color;
@@ -283,13 +325,58 @@ public sealed class ThermalHistoryChart : Control
             lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         context.DrawGeometry(null, glowPen, line);
         context.DrawGeometry(null, linePen, line);
+
+        if (layout.PeakPoint is { } peakAt && layout.Peak is { } peak)
+            DrawPeakMarker(context, layout, peakAt, peak);
+    }
+
+    private static readonly IBrush PeakBrush = new SolidColorBrush(TemperatureColorScale.PeakColor);
+    private static readonly IPen PeakRingPen = new Pen(new SolidColorBrush(Color.FromArgb(0xF0, 0xFF, 0xFF, 0xFF)), 1.25);
+
+    /// <summary>
+    /// Orange peak marker: a faint dashed guide line at the peak level, a glowing orange dot on the highest
+    /// sample and (full chart only) a "▲ 78°" label. Skipped on the dot itself when the live value IS the
+    /// new peak — the orange live dot already says so.
+    /// </summary>
+    private void DrawPeakMarker(DrawingContext context, Layout layout, Point at, SeriesPeak peak)
+    {
+        var plot = layout.Plot;
+        var orange = TemperatureColorScale.PeakColor;
+
+        if (ShowLabels)
+        {
+            var guide = new Pen(new SolidColorBrush(TemperatureColorScale.WithAlpha(orange, 0.45)), 1,
+                new DashStyle(new double[] { 3, 3 }, 0));
+            double y = Math.Round(at.Y) + 0.5;
+            context.DrawLine(guide, new Point(plot.Left, y), new Point(plot.Right, y));
+        }
+
+        if (!peak.IsNew)
+        {
+            double r = ShowLabels ? 3.5 : 2.5;
+            context.DrawEllipse(new SolidColorBrush(TemperatureColorScale.WithAlpha(orange, 0.30)), null, at, r * 2.2, r * 2.2);
+            context.DrawEllipse(PeakBrush, PeakRingPen, at, r, r);
+        }
+
+        if (!ShowLabels) return;
+
+        var typeface = new Typeface(TextElement.GetFontFamily(this), FontStyle.Normal, FontWeight.Bold);
+        var label = Text("▲ " + Format(peak.Value), LabelFontSize, typeface, PeakBrush);
+        double lx = Math.Clamp(at.X - label.Width / 2, plot.Left, Math.Max(plot.Left, plot.Right - label.Width));
+        double ly = at.Y - label.Height - 5;
+        if (ly < plot.Top - 2) ly = at.Y + 6; // no room above: put it under the marker
+        var pill = new Rect(lx - 3, ly - 1, label.Width + 6, label.Height + 2);
+        context.DrawRectangle(new SolidColorBrush(Color.FromArgb(0xCC, 0x0B, 0x12, 0x20)),
+            new Pen(new SolidColorBrush(TemperatureColorScale.WithAlpha(orange, 0.6)), 1), pill, 4, 4);
+        context.DrawText(label, new Point(lx, ly));
     }
 
     /// <summary>
     /// Vertical gradient between rows <paramref name="top"/> and <paramref name="bottom"/>: each stop takes the
-    /// temperature colour of the value drawn at that row, with alpha from <paramref name="alphaAt"/>(0 = top … 1 = bottom).
+    /// heat colour (LOW blue → HOT red) of the value drawn at that row, with alpha from
+    /// <paramref name="alphaAt"/>(0 = top … 1 = bottom).
     /// </summary>
-    private static LinearGradientBrush VerticalScaleBrush(double top, double bottom, Layout layout, Func<double, double> alphaAt)
+    private LinearGradientBrush VerticalScaleBrush(double top, double bottom, Layout layout, Func<double, double> alphaAt)
     {
         if (bottom - top < 1) top = bottom - 1;
         var brush = new LinearGradientBrush
@@ -302,7 +389,7 @@ public sealed class ThermalHistoryChart : Control
             double t = (double)i / GradientSamples;
             double value = SeriesMath.ValueAtY(top + t * (bottom - top), layout.Plot, layout.Axis);
             brush.GradientStops.Add(new GradientStop(
-                TemperatureColorScale.WithAlpha(TemperatureColorScale.ForTemperature(value), alphaAt(t)), t));
+                TemperatureColorScale.WithAlpha(HeatColor(value), alphaAt(t)), t));
         }
         return brush;
     }
@@ -321,16 +408,18 @@ public sealed class ThermalHistoryChart : Control
         if (layout.Stats is not { } stats) return;
 
         var boldTypeface = new Typeface(typeface.FontFamily, FontStyle.Normal, FontWeight.Bold);
-        var nowBrush = new SolidColorBrush(TemperatureColorScale.ForTemperature(stats.Current));
-        var segments = new List<FormattedText>
-        {
-            Text("min ", StatsFontSize, typeface, labelBrush),
-            Text(Format(stats.Min), StatsFontSize, boldTypeface, TitleBrush ?? DefaultTitleBrush),
-            Text("   max ", StatsFontSize, typeface, labelBrush),
-            Text(Format(stats.Max), StatsFontSize, boldTypeface, TitleBrush ?? DefaultTitleBrush),
-            Text("   now ", StatsFontSize, typeface, labelBrush),
-            Text(Format(stats.Current), StatsFontSize, boldTypeface, nowBrush),
-        };
+        bool newPeak = layout.Peak is { IsNew: true };
+        var nowBrush = newPeak ? PeakBrush : new SolidColorBrush(HeatColor(stats.Current));
+        var segments = new List<FormattedText>();
+        if (newPeak)
+            segments.Add(Text("▲ NEW PEAK   ", LabelFontSize, boldTypeface, PeakBrush));
+        segments.Add(Text("min ", StatsFontSize, typeface, labelBrush));
+        segments.Add(Text(Format(stats.Min), StatsFontSize, boldTypeface, new SolidColorBrush(HeatColor(stats.Min))));
+        segments.Add(Text("   max ", StatsFontSize, typeface, labelBrush));
+        segments.Add(Text(Format(stats.Max), StatsFontSize, boldTypeface,
+            layout.Peak is not null ? PeakBrush : TitleBrush ?? DefaultTitleBrush));
+        segments.Add(Text("   now ", StatsFontSize, typeface, labelBrush));
+        segments.Add(Text(Format(stats.Current), StatsFontSize, boldTypeface, nowBrush));
 
         double x = Bounds.Width;
         foreach (var s in segments) x -= s.WidthIncludingTrailingWhitespace;

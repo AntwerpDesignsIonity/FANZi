@@ -85,7 +85,7 @@ public sealed partial class NetworkManagerViewModel : ViewModelBase, IDisposable
         ProcessGroups.Add(new ProcessGroup("Communication", "teams.exe;zoom.exe;discord.exe;slack.exe", 2000, 1000));
 
         // v4: one heartbeat with the dashboard (LiveSyncHub); the timer is only a fallback.
-        _liveSync = LiveSyncHub.Shared.Register("Network", CollectAsync);
+        _liveSync = LiveSyncHub.Shared.Register("Network", CollectAsync, LiveSyncHub.PanelInterval);
         _timer = new System.Timers.Timer(4000) { AutoReset = true };
         _timer.Elapsed += (_, _) => { if (!LiveSyncHub.Shared.IsDriven) _ = RefreshAsync(); };
         _timer.Start();
@@ -104,11 +104,11 @@ public sealed partial class NetworkManagerViewModel : ViewModelBase, IDisposable
     /// <summary>Highest combined rate seen this session (bytes/s) — scales the overlay's network bars.</summary>
     [ObservableProperty] private double _peakBps = 1024 * 1024;
 
-    /// <summary>Last ~60 samples of the receive rate (bytes/s), newest last.</summary>
-    public RingBuffer<double> DownloadHistory { get; } = new(60);
+    /// <summary>Last 120 samples (60 s) of the receive rate (bytes/s), newest last.</summary>
+    public RingBuffer<double> DownloadHistory { get; } = new(120); // 60 s at the 0.5 s panel cadence
 
-    /// <summary>Last ~60 samples of the send rate (bytes/s), newest last.</summary>
-    public RingBuffer<double> UploadHistory { get; } = new(60);
+    /// <summary>Last 120 samples (60 s) of the send rate (bytes/s), newest last.</summary>
+    public RingBuffer<double> UploadHistory { get; } = new(120); // 60 s at the 0.5 s panel cadence
 
     private async Task<Action?> CollectAsync(CancellationToken token)
     {
