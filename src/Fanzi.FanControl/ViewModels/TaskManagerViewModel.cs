@@ -50,7 +50,7 @@ public sealed partial class TaskManagerViewModel : ViewModelBase, IDisposable
 
         // v4: refreshed by the shared live-sync heartbeat (same frame as the dashboard); the timer only
         // takes over when nothing drives the hub (tests, dashboard loop paused).
-        _liveSync = LiveSyncHub.Shared.Register("Tasks", CollectAsync);
+        _liveSync = LiveSyncHub.Shared.Register("Tasks", CollectAsync, TimeSpan.FromSeconds(2));
         _timer = new System.Timers.Timer(4000) { AutoReset = true };
         _timer.Elapsed += (_, _) => { if (!LiveSyncHub.Shared.IsDriven) _ = RefreshAsync(); };
         _timer.Start();

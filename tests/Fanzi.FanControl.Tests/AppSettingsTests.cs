@@ -182,8 +182,8 @@ public sealed class AppSettingsTests
 
         settings.Migrate();
 
-        Assert.Equal(5, AppSettings.CurrentVersion);
-        Assert.Equal(5, settings.SettingsVersion);
+        Assert.Equal(6, AppSettings.CurrentVersion);
+        Assert.Equal(6, settings.SettingsVersion);
         Assert.False(settings.ReduceMotion);    // upgraded installs keep their animations
         Assert.False(settings.OverlayCompact);  // ...and the expanded overlay, the only layout before v5
         Assert.False(settings.ToastNotificationsEnabled);
@@ -207,9 +207,34 @@ public sealed class AppSettingsTests
         settings.Migrate();
         settings.Migrate();
 
-        Assert.Equal(5, settings.SettingsVersion);
+        Assert.Equal(6, settings.SettingsVersion);
         Assert.True(settings.ReduceMotion);
         Assert.True(settings.OverlayCompact);
+    }
+
+    [Theory]
+    [InlineData(3, 1)]  // the old default moves to the 1 s real-time dashboard
+    [InlineData(5, 5)]  // a value the user picked is kept
+    [InlineData(1, 1)]
+    public void Migrate_V5ToV6_MovesOldDefaultPollingToRealtime(int before, int after)
+    {
+        var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+            $$"""{ "SettingsVersion": 5, "PollingIntervalSeconds": {{before}} }""")!;
+
+        settings.Migrate();
+        settings.Migrate();
+
+        Assert.Equal(after, settings.PollingIntervalSeconds);
+        Assert.Equal(6, settings.SettingsVersion);
+    }
+
+    [Fact]
+    public void Migrate_V6_KeepsAChosen3SecondInterval()
+    {
+        var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+            """{ "SettingsVersion": 6, "PollingIntervalSeconds": 3 }""")!;
+        settings.Migrate();
+        Assert.Equal(3, settings.PollingIntervalSeconds);
     }
 
     [Fact]

@@ -90,9 +90,10 @@ public sealed class GameModeDetector
 
         return await Task.Run(() =>
         {
+            Process[] processes = Array.Empty<Process>();
             try
             {
-                var processes = Process.GetProcesses();
+                processes = Process.GetProcesses();
                 foreach (var p in processes)
                 {
                     try
@@ -110,10 +111,14 @@ public sealed class GameModeDetector
                             return (true, name);
                     }
                     catch { }
-                    finally { p.Dispose(); }
                 }
             }
             catch { }
+            finally
+            {
+                // v4.0.1: dispose every Process (an early "game found" return used to leak the rest's handles).
+                foreach (var p in processes) p.Dispose();
+            }
 
             return (false, "");
         }, ct);

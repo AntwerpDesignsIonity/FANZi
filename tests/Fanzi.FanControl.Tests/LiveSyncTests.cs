@@ -93,6 +93,45 @@ public sealed class LiveSyncTests
     }
 
     [Fact]
+    public async Task Hub_RespectsPerCollectorMinimumInterval()
+    {
+        var hub = new LiveSyncHub();
+        int fast = 0, slow = 0;
+        using var a = hub.Register("fast", _ => Task.FromResult<Action?>(() => fast++));
+        using var b = hub.Register("slow", _ => Task.FromResult<Action?>(() => slow++), TimeSpan.FromMinutes(1));
+
+        hub.Commit(await hub.CollectAsync(CancellationToken.None));
+        hub.Commit(await hub.CollectAsync(CancellationToken.None));
+        hub.Commit(await hub.CollectAsync(CancellationToken.None));
+
+        Assert.Equal(3, fast);
+        Assert.Equal(1, slow); // runs on the first cycle, then waits for its interval
+    }
+
+    [Fact]
+    public void PortProbe_SeesListenerInstantly_WithoutConnecting()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        try
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Assert.True(OpenRgbServerManager.IsPortListening(port));
+            Assert.True(sw.ElapsedMilliseconds < 500, $"probe took {sw.ElapsedMilliseconds} ms");
+            Assert.False(listener.Pending(), "the table probe must not open a connection");
+        }
+        finally
+        {
+            listener.Stop();
+        }
+        var closed = System.Diagnostics.Stopwatch.StartNew();
+        Assert.False(OpenRgbServerManager.IsPortListening(port));
+        Assert.True(closed.ElapsedMilliseconds < 500, "no 2 s refused-loopback retry delay");
+    }
+
+    [Fact]
     public void SystemMemory_ReadsPlausibleValues()
     {
         if (!OperatingSystem.IsWindows()) return;

@@ -35,7 +35,7 @@ public sealed partial class PowerMonitorViewModel : ViewModelBase, IDisposable
         OpenPowerOptionsCommand = new RelayCommand(PowerMonitorService.OpenPowerOptions);
 
         // v4: one heartbeat with the dashboard (LiveSyncHub); the timer is only a fallback.
-        _liveSync = LiveSyncHub.Shared.Register("Power", CollectAsync);
+        _liveSync = LiveSyncHub.Shared.Register("Power", CollectAsync, TimeSpan.FromSeconds(3));
         _timer = new System.Timers.Timer(5000) { AutoReset = true };
         _timer.Elapsed += (_, _) => { if (!LiveSyncHub.Shared.IsDriven) _ = RefreshAsync(); };
         _timer.Start();

@@ -78,6 +78,7 @@ public sealed class NetworkMonitorService
 
             foreach (var p in Process.GetProcesses())
             {
+                using var _ = p; // v4.0.1: release the OS handle every sample
                 try
                 {
                     if (p.HasExited) continue;

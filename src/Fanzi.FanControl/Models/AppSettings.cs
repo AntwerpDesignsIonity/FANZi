@@ -17,7 +17,7 @@ public sealed class AppSettings
     public bool CloseToTray { get; set; } = true;
     public bool AiAutoFanEnabled { get; set; }
     public bool AiAnomalyDetection { get; set; } = true;
-    public int PollingIntervalSeconds { get; set; } = 3;
+    public int PollingIntervalSeconds { get; set; } = 1;
     public int ReducedPollingIntervalSeconds { get; set; } = 10;
     public string? LastExportPath { get; set; }
 
@@ -74,7 +74,7 @@ public sealed class AppSettings
     public bool OverlayCompact { get; set; }
 
     /// <summary>Settings schema version written by this build.</summary>
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
     /// <summary>
     /// Applies one-time migrations for settings created by older builds.
@@ -96,6 +96,11 @@ public sealed class AppSettings
 
         if (SettingsVersion < 4)
             ToastNotificationsEnabled = true;
+
+        // v5 → v6 (FANZi 4.0.1): real-time dashboard. Installs still on the old 3 s default move to 1 s;
+        // a value the user picked themselves (anything but 3) is kept.
+        if (SettingsVersion < 6 && PollingIntervalSeconds == 3)
+            PollingIntervalSeconds = 1;
 
         SettingsVersion = Math.Max(SettingsVersion, CurrentVersion);
     }

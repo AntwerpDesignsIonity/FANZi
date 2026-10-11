@@ -31,7 +31,7 @@ public sealed class SettingsServiceTests : IDisposable
     {
         var settings = await new SettingsService(SettingsPath).LoadAsync();
 
-        Assert.Equal(3, settings.PollingIntervalSeconds);
+        Assert.Equal(1, settings.PollingIntervalSeconds);
         Assert.False(Directory.Exists(_dir) && Directory.GetFiles(_dir).Length > 0);
     }
 
@@ -56,7 +56,7 @@ public sealed class SettingsServiceTests : IDisposable
 
         var settings = await new SettingsService(SettingsPath).LoadAsync();
 
-        Assert.Equal(3, settings.PollingIntervalSeconds); // defaults
+        Assert.Equal(1, settings.PollingIntervalSeconds); // defaults
         string backup = Assert.Single(Directory.GetFiles(_dir, "settings.corrupt-*.json"));
         Assert.Equal(corrupt, await File.ReadAllTextAsync(backup));
         Assert.Equal(corrupt, await File.ReadAllTextAsync(SettingsPath)); // not touched by Load
@@ -75,7 +75,7 @@ public sealed class SettingsServiceTests : IDisposable
 
         string backup = Assert.Single(Directory.GetFiles(_dir, "settings.corrupt-*.json"));
         Assert.Equal("not json at all", await File.ReadAllTextAsync(backup));
-        Assert.Equal(3, (await service.LoadAsync()).PollingIntervalSeconds);
+        Assert.Equal(1, (await service.LoadAsync()).PollingIntervalSeconds);
     }
 
     [Fact]

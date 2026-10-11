@@ -212,6 +212,11 @@ public sealed class OpenRgbServerManager : IDisposable
             // trust the port probe above. If a GUI instance is holding the hardware, our
             // own --server launch below will surface a clear, actionable status.
 
+            // Nothing serves the SDK port: any OpenRGB still running is a zombie / GUI without the SDK that would
+            // hold the hardware (and, being single-instance, swallow our --server launch). Stop it first.
+            int zombies = StopOrphanedServers(port);
+            if (zombies > 0) Thread.Sleep(500);
+
             if (DetectedPath is null)
             {
                 DetectInstallation();
@@ -260,6 +265,7 @@ public sealed class OpenRgbServerManager : IDisposable
                 // scan devices (SMBus/PawnIO probing can be slow) before binding the socket.
                 if (WaitForPortOpen("127.0.0.1", port, PortWaitTimeout))
                 {
+                    StopOrphanedServers(port);
                     Status = $"Server running on port {port} (PID {_serverProcess?.Id})";
                     return true;
                 }
@@ -398,45 +404,92 @@ public sealed class OpenRgbServerManager : IDisposable
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (TryConnectOnce(host, port, 500)) return true;
+            bool local = host is "127.0.0.1" or "localhost";
+            if (local ? IsPortListening(port) : TryConnectOnce(host, port, 500)) return true;
             Thread.Sleep(250);
         }
         return false;
     }
 
     /// <summary>True if a TCP probe succeeds against the SDK port right now.</summary>
-    public static bool IsPortListening(int port) => TryConnectOnce("127.0.0.1", port, 300);
+    public static bool IsPortListening(int port)
+        => OpenRgb.TcpPortOwner.IsListening(port) ?? TryConnectOnce("127.0.0.1", port, 1000);
 
     /// <summary>
-    /// Single non-leaking TCP probe. The connect task is always observed via ContinueWith
-    /// so a timeout-disposal can never escape as an UnobservedTaskException.
+    /// Single TCP probe. v4: loopback probes use a plain blocking connect on the calling thread. The old
+    /// probe waited on ConnectAsync, whose completion needs a free thread-pool thread — when the pool was
+    /// busy (RGB frames queued behind a slow OpenRGB call) every probe "timed out" although the server was
+    /// listening, so FANZi never reconnected after "Restart OpenRGB". A loopback connect is answered by
+    /// the kernel at once (accepted, or refused when nothing listens), so blocking is safe and bounded.
     /// </summary>
     private static bool TryConnectOnce(string host, int port, int timeoutMs)
     {
-        var client = new System.Net.Sockets.TcpClient();
-        var task = client.ConnectAsync(host, port);
-
-        // ALWAYS attach a continuation that observes any exception, even if we time out
-        // and dispose the client below. This is the fix for the crash.
-        task.ContinueWith(t =>
-        {
-            _ = t.Exception;            // mark exception as observed
-            try { client.Dispose(); } catch { }
-        }, System.Threading.Tasks.TaskScheduler.Default);
-
         try
         {
-            if (task.Wait(timeoutMs) && client.Connected)
+            using var socket = new System.Net.Sockets.Socket(
+                System.Net.Sockets.AddressFamily.InterNetwork,
+                System.Net.Sockets.SocketType.Stream,
+                System.Net.Sockets.ProtocolType.Tcp)
             {
-                try { client.Dispose(); } catch { }
-                return true;
+                NoDelay = true,
+                LingerState = new System.Net.Sockets.LingerOption(true, 0), // RST on close: no TIME_WAIT pile-up
+            };
+
+            var address = host is "localhost" or "127.0.0.1"
+                ? System.Net.IPAddress.Loopback
+                : System.Net.IPAddress.Parse(host);
+
+            if (System.Net.IPAddress.IsLoopback(address))
+            {
+                socket.Connect(new System.Net.IPEndPoint(address, port));
+                return socket.Connected;
             }
+
+            // Remote hosts: bounded wait without depending on a pool thread for the result.
+            var result = socket.BeginConnect(new System.Net.IPEndPoint(address, port), null, null);
+            bool done = result.AsyncWaitHandle.WaitOne(timeoutMs);
+            if (!done) return false;
+            socket.EndConnect(result);
+            return socket.Connected;
         }
         catch
         {
-            // probe failed — observation is handled by the continuation above
+            return false;
         }
-        return false;
+    }
+
+    /// <summary>
+    /// Stops OpenRGB processes that are not the SDK server FANZi talks to: zombies left by an older FANZi
+    /// (v3 → v4 handover), a second server whose port bind failed, or a GUI instance without the SDK. Two
+    /// OpenRGB instances fight over the SMBus / USB devices (flicker, missed detections, slow start-up).
+    /// The process listening on <paramref name="port"/> and FANZi's own server are kept.
+    /// </summary>
+    public int StopOrphanedServers(int port)
+    {
+        int? owner = OpenRgb.TcpPortOwner.GetListeningPid(port);
+        int? ours = null;
+        try { ours = _serverProcess is { HasExited: false } sp ? sp.Id : null; } catch { }
+
+        int stopped = 0;
+        foreach (var p in SafeGetOpenRgbProcesses())
+        {
+            using (p)
+            {
+                try
+                {
+                    if (p.Id == owner || p.Id == ours) continue;
+                    p.Kill(entireProcessTree: true);
+                    p.WaitForExit(3000);
+                    stopped++;
+                    AppLog.Info($"OpenRGB: stopped orphaned OpenRGB instance (PID {p.Id}) — the SDK server is PID {owner?.ToString() ?? "none"}");
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Warn($"OpenRGB: could not stop orphaned instance PID {p.Id}", ex);
+                }
+            }
+        }
+        return stopped;
     }
 
     /// <summary>

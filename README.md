@@ -13,7 +13,7 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-blue?logo=windows"/>
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet"/>
   <img alt="License" src="https://img.shields.io/badge/license-Proprietary-red"/>
-  <img alt="Version" src="https://img.shields.io/badge/version-4.0.0-green"/>
+  <img alt="Version" src="https://img.shields.io/badge/version-4.0.1-green"/>
 </p>
 
 ---

@@ -47,6 +47,9 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     // Frame counter for throttling hardware sends.
     private int _frameCounter;
 
+    // 1 while a hardware frame is being written (see OnTimerTick).
+    private int _frameInFlight;
+
     // Current device list (populated after connect).
     private int _deviceCount = 1;
 
@@ -436,6 +439,14 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
             ConnectionStatus = "AEDi: Server running — connecting to RGB devices...";
             bool connectedWithoutDevices = false;
+            // v4: wait up to 60 s for the SDK port before counting connect attempts — OpenRGB opens it only
+            // after its hardware detection, which takes far longer than the old 18 s with PawnIO SMBus scans.
+            for (int wait = 1; wait <= 40 && !OpenRgbServerManager.IsPortListening(OpenRgbPort) && !_cts.Token.IsCancellationRequested; wait++)
+            {
+                ConnectionStatus = $"AEDi: OpenRGB is detecting hardware… ({wait * 1.5:F0} s)";
+                await Task.Delay(1500, _cts.Token);
+            }
+
             for (int attempt = 1; attempt <= 12 && !_cts.Token.IsCancellationRequested; attempt++)
             {
                 if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
@@ -843,14 +854,16 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         if (++_frameCounter >= HardwareSendEveryNth)
         {
             _frameCounter = 0;
-            if (RgbEnabled && _rgbService.IsConnected)
+            // v4: one frame in flight at most. v3 queued a new frame task every 100 ms even when OpenRGB was
+            // slow; they piled up on the service lock, starved the thread pool and lagged the whole app.
+            if (RgbEnabled && _rgbService.IsConnected && Interlocked.CompareExchange(ref _frameInFlight, 1, 0) == 0)
             {
                 // Fire-and-forget; errors are swallowed inside the service.
                 // An active AEDi scene (e.g. the Thermal Guardian alert) paints every device the same way.
-                if (ZoneModeEnabled && HasZones && _aiOverride is null)
-                    _ = SendZoneFrameToHardwareAsync(elapsed);
-                else
-                    _ = SendFrameToHardwareAsync(elapsed, color);
+                var send = ZoneModeEnabled && HasZones && _aiOverride is null
+                    ? SendZoneFrameToHardwareAsync(elapsed)
+                    : SendFrameToHardwareAsync(elapsed, color);
+                _ = send.ContinueWith(_ => Interlocked.Exchange(ref _frameInFlight, 0), TaskScheduler.Default);
             }
         }
     }
@@ -1169,10 +1182,17 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     private async Task RestartServerAsync()
     {
         ServerStatus = "Restarting OpenRGB server...";
+        LastOpenRgbError = null;
         DisconnectFromServer();
-        _serverManager.StopServer();
-        await Task.Delay(800, _cts.Token);
-        await AutoStartOpenRgbAsync();
+        // v4: stop *every* OpenRGB instance (zombies from an older FANZi included), relaunch FANZi's own
+        // server and wait for its SDK port — OpenRGB only opens it after device detection.
+        bool ok = await RestartServerForCompatibilityAsync(force: true);
+        if (!ok) await AutoStartOpenRgbAsync(userInitiated: true);
+        else if (_watchdogCts is null || _watchdogCts.IsCancellationRequested)
+        {
+            _watchdogCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+            _ = ConnectionWatchdogAsync(_watchdogCts.Token);
+        }
     }
 
     private async Task InstallOpenRgbAsync()

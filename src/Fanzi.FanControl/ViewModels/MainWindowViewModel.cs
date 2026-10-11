@@ -1072,45 +1072,47 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             while (!_disposeTokenSource.IsCancellationRequested)
             {
-                // v4 live sync: Tasks / Network / Power collect in parallel with the hardware poll and are
-                // applied in the same UI pass as the dashboard values (see RefreshAsync).
-                _liveCollect = LiveSyncHub.Shared.CollectAsync(_disposeTokenSource.Token);
+                // v4 live sync: Tasks / Network / Power / RAM collect in the background, in parallel with the
+                // hardware poll; finished results are applied in the same UI pass as the dashboard values. The
+                // dashboard never waits for a slow panel — an unfinished collection lands on the next tick.
+                if (_liveCollect is null)
+                    _liveCollect = LiveSyncHub.Shared.CollectAsync(_disposeTokenSource.Token);
+                var tickStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 await RefreshAsync();
-                await CommitLiveSyncAsync();
 
                 int intervalMs = _isWindowVisible
                     ? _appSettings.PollingIntervalSeconds * 1000
                     : _appSettings.ReducedPollingIntervalSeconds * 1000;
 
-                await Task.Delay(intervalMs, _disposeTokenSource.Token);
+                // Fixed cadence: subtract the time the poll itself took, so 1 s means one update per second.
+                int elapsedMs = (int)System.Diagnostics.Stopwatch.GetElapsedTime(tickStart).TotalMilliseconds;
+                await Task.Delay(Math.Max(100, intervalMs - elapsedMs), _disposeTokenSource.Token);
             }
         }
         catch (OperationCanceledException) { }
     }
 
+    private static readonly TimeSpan GameScanInterval = TimeSpan.FromSeconds(5);
+    private long _lastGameScanTicks;
+    private (bool IsGameRunning, string GameName) _lastGameScan = (false, "");
+
     /// <summary>Pending live-sync collection for the current cycle (null once committed).</summary>
     private Task<IReadOnlyList<Action>>? _liveCollect;
 
-    /// <summary>Waits for this cycle's panel collectors and applies them on the UI thread (once per cycle).</summary>
-    private async Task CommitLiveSyncAsync()
+    /// <summary>
+    /// Applies the panel collection if it has finished (UI thread, same pass as the dashboard values). Never
+    /// waits: a collection still running stays pending and is applied on the next tick.
+    /// </summary>
+    private void CommitLiveSyncIfReady()
     {
-        var pending = Interlocked.Exchange(ref _liveCollect, null);
-        if (pending is null) return;
-
-        IReadOnlyList<Action> applies;
-        try { applies = await pending; }
-        catch (OperationCanceledException) { return; }
-        catch (Exception ex)
-        {
-            AppLog.Warn("Live sync collection failed", ex);
-            applies = Array.Empty<Action>();
-        }
-
+        var pending = _liveCollect;
+        if (pending is null || !pending.IsCompleted) return;
+        _liveCollect = null;
         if (_disposed) return;
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
-            LiveSyncHub.Shared.Commit(applies);
-        else
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => LiveSyncHub.Shared.Commit(applies));
+
+        IReadOnlyList<Action> applies = pending.Status == TaskStatus.RanToCompletion ? pending.Result : Array.Empty<Action>();
+        if (pending.IsFaulted) AppLog.Warn("Live sync collection failed", pending.Exception);
+        LiveSyncHub.Shared.Commit(applies);
     }
 
     private async Task RefreshAsync()
@@ -1132,8 +1134,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             IsRefreshing = true;
             var snapshot = await _hardwareMonitorService.GetSnapshotAsync(_disposeTokenSource.Token);
 
-            // Same frame: the panels' results are committed right before the dashboard values below.
-            await CommitLiveSyncAsync();
+            // Same frame: finished panel results are committed right before the dashboard values below.
+            CommitLiveSyncIfReady();
 
             CpuPackageTemperature = FormatTemperature(snapshot.CpuPackageTemperature);
             CpuAverageTemperature = FormatTemperature(snapshot.CpuAverageTemperature);
@@ -1298,7 +1300,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
             // ── IO-nity AI: Game Mode Detection ───────────────────────
             _gameModeDetector.Update(snapshot.GpuLoadPercent ?? 0, hottest ?? 0);
-            var gameDetection = await _gameModeDetector.DetectAsync(_disposeTokenSource.Token);
+            // The process scan is the slowest part of a poll: with the 1 s real-time cadence it runs every 5 s.
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(_lastGameScanTicks) >= GameScanInterval || _lastGameScanTicks == 0)
+            {
+                _lastGameScan = await _gameModeDetector.DetectAsync(_disposeTokenSource.Token);
+                _lastGameScanTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+            }
+            var gameDetection = _lastGameScan;
             if (gameDetection.IsGameRunning)
                 _gameModeDetector.SetDetectedGame(gameDetection.GameName);
             IsGameMode = _gameModeDetector.IsGameModeActive;

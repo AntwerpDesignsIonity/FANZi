@@ -153,7 +153,7 @@ public sealed class OpenRgbService : IRgbService
 
                 try
                 {
-                    var devices = _client.GetAllControllerData();
+                    var devices = QueryControllersWithTimeout(_client);
                     _deviceCache = devices;
                     _lastModeColor.Clear();
                     _modeColorActivated.Clear();
@@ -375,13 +375,46 @@ public sealed class OpenRgbService : IRgbService
         return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            lock (_lock)
+            // v4: never park a pool thread behind a slow OpenRGB call (device query, mode switch). The next
+            // frame comes 100 ms later anyway, so a busy service simply skips this one.
+            bool taken = false;
+            try
             {
+                Monitor.TryEnter(_lock, WriteLockTimeout, ref taken);
+                if (!taken) return;
                 if (_client is null || !IsConnected) return;
                 try { write(); }
                 catch (Exception ex) { HandleWriteFailure(ex); }
             }
+            finally
+            {
+                if (taken) Monitor.Exit(_lock);
+            }
         }, cancellationToken);
+    }
+
+    /// <summary>Longest a colour write waits for the service lock before the frame is dropped.</summary>
+    internal static readonly TimeSpan WriteLockTimeout = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>A device query that takes longer than this is abandoned (socket closed) instead of hanging FANZi.</summary>
+    internal static readonly TimeSpan DeviceQueryTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// GetAllControllerData on a dedicated thread with a deadline. OpenRGB answers late (or never) while it is
+    /// still detecting hardware; the SDK client has no read timeout, so v3 could hold the service lock forever.
+    /// On timeout the client is disposed, which unblocks the read. Caller holds _lock.
+    /// </summary>
+    private OpenRGB.NET.Device[] QueryControllersWithTimeout(OpenRgbClient client)
+    {
+        var query = Task.Factory.StartNew(client.GetAllControllerData, CancellationToken.None,
+            TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        if (query.Wait(DeviceQueryTimeout)) return query.Result;
+
+        _ = query.ContinueWith(t => _ = t.Exception, TaskScheduler.Default);
+        try { client.Dispose(); } catch { }
+        _client = null;
+        IsConnected = false;
+        throw new TimeoutException($"OpenRGB did not return its device list within {DeviceQueryTimeout.TotalSeconds:F0} s (still detecting hardware?)");
     }
 
     /// <summary>
@@ -497,7 +530,7 @@ public sealed class OpenRgbService : IRgbService
     {
         if (_deviceCache is null)
         {
-            _deviceCache = _client!.GetAllControllerData();
+            _deviceCache = QueryControllersWithTimeout(_client!);
             _controls = _deviceCache.Select(d => RgbControlPlanner.Plan(Describe(d), d.Leds.Length)).ToArray();
         }
         return _deviceCache;

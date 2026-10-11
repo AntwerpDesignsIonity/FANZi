@@ -56,10 +56,10 @@ public sealed class LiveSyncHub
     /// pool and returns the action that pushes its data into bound properties (run on the UI thread), or null
     /// when there is nothing to apply.
     /// </summary>
-    public IDisposable Register(string name, Func<CancellationToken, Task<Action?>> collect)
+    public IDisposable Register(string name, Func<CancellationToken, Task<Action?>> collect, TimeSpan? minInterval = null)
     {
         ArgumentNullException.ThrowIfNull(collect);
-        var registration = new Registration(this, name, collect);
+        var registration = new Registration(this, name, collect) { MinInterval = minInterval ?? TimeSpan.Zero };
         lock (_sync) _registrations.Add(registration);
         return registration;
     }
@@ -71,8 +71,9 @@ public sealed class LiveSyncHub
     public async Task<IReadOnlyList<Action>> CollectAsync(CancellationToken cancellationToken)
     {
         Registration[] regs;
-        lock (_sync) regs = _registrations.ToArray();
+        lock (_sync) regs = _registrations.Where(r => r.IsDue).ToArray();
         if (regs.Length == 0) return Array.Empty<Action>();
+        foreach (var r in regs) r.LastRunTicks = Stopwatch.GetTimestamp();
 
         var tasks = regs.Select(r => RunOneAsync(r, cancellationToken)).ToArray();
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
@@ -143,6 +144,14 @@ public sealed class LiveSyncHub
         public string Name { get; }
         public Func<CancellationToken, Task<Action?>> Collect { get; }
         public bool FailureLogged { get; set; }
+
+        /// <summary>Heavier panels (process list, power) refresh less often than the 1 s dashboard tick.</summary>
+        public TimeSpan MinInterval { get; init; }
+        public long LastRunTicks { get; set; }
+
+        // 50 ms slack so a 2 s collector is not skipped by timer jitter on a 1 s tick.
+        public bool IsDue => LastRunTicks == 0
+            || Stopwatch.GetElapsedTime(LastRunTicks) >= MinInterval - TimeSpan.FromMilliseconds(50);
 
         public void Dispose() => _owner.Unregister(this);
     }
