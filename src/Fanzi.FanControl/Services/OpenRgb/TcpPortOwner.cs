@@ -23,6 +23,39 @@ internal static class TcpPortOwner
         return ok ? pid is not null : null;
     }
 
+    /// <summary>4.1: every local IPv4 TCP port <paramref name="pid"/> listens on (empty off Windows / on error).</summary>
+    public static System.Collections.Generic.IReadOnlyList<int> ListeningPorts(int pid)
+    {
+        var ports = new System.Collections.Generic.List<int>();
+        Scan((port, owner) => { if (owner == pid) ports.Add(port); return false; });
+        return ports;
+    }
+
+    /// <summary>Walks the IPv4 listener table; <paramref name="visit"/> returns true to stop. False when the table could not be read.</summary>
+    private static bool Scan(Func<int, int, bool> visit)
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        int size = 0;
+        _ = GetExtendedTcpTable(IntPtr.Zero, ref size, false, AfInet, TcpTableOwnerPidListener, 0);
+        if (size <= 0) return false;
+        IntPtr buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            if (GetExtendedTcpTable(buffer, ref size, false, AfInet, TcpTableOwnerPidListener, 0) != 0) return false;
+            int count = Marshal.ReadInt32(buffer);
+            const int rowSize = 24;
+            for (int i = 0; i < count; i++)
+            {
+                IntPtr row = buffer + 4 + i * rowSize;
+                int localPort = BinaryPrimitives.ReverseEndianness((ushort)(Marshal.ReadInt32(row + 8) & 0xFFFF));
+                if (visit(localPort, Marshal.ReadInt32(row + 20))) break;
+            }
+            return true;
+        }
+        catch (Exception) { return false; }
+        finally { Marshal.FreeHGlobal(buffer); }
+    }
+
     private static int? Query(int port, out bool ok)
     {
         ok = false;

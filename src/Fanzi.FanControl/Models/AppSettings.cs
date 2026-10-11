@@ -24,6 +24,12 @@ public sealed class AppSettings
     /// <summary>User-selected OpenRGB.exe ("Locate OpenRGB.exe…"); null = auto-detect.</summary>
     public string? OpenRgbPath { get; set; }
 
+    /// <summary>4.1: OpenRGB SDK endpoint host (null = this PC, 127.0.0.1). Another PC's address drives its OpenRGB.</summary>
+    public string? OpenRgbHost { get; set; }
+
+    /// <summary>4.1: OpenRGB SDK endpoint port (null = 6742).</summary>
+    public int? OpenRgbPort { get; set; }
+
     // Modular tab visibility — let the user disable sections they don't need
     public bool ShowTaskManagerTab { get; set; } = true;
     public bool ShowNetworkManagerTab { get; set; } = true;

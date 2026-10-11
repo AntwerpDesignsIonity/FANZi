@@ -111,6 +111,13 @@ public partial class RgbControlViewModel
     /// </summary>
     private async Task<bool> RestartServerForCompatibilityAsync(bool force = false)
     {
+        // 4.1: never stop or relaunch OpenRGB for a remote endpoint — that PC owns its server.
+        if (!EndpointIsLocal)
+        {
+            ConnectionStatus = $"AEDi: OpenRGB at {EndpointLabel} must be restarted on that PC";
+            return false;
+        }
+
         if (!force)
         {
             if (_compatRestartTried || !_rgbService.ModeChangesRejected) return false;

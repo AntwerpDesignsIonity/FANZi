@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=FANZi IO-nity
+GenericName=Fan control & thermal monitor
+Comment=AI thermal intelligence, fan control and RGB — Ionity Global
+Exec=fanzi
+Icon=fanzi-io-nity
+Terminal=false
+Categories=System;Monitor;Utility;
+Keywords=fan;temperature;cpu;gpu;rgb;openrgb;sensors;
+StartupWMClass=Fanzi.FanControl

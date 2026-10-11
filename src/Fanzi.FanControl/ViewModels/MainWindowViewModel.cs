@@ -544,6 +544,19 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ExportHardwareReport()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            // The full report is built on LibreHardwareMonitor, which only ships for Windows.
+            HardwareReportStatus = "The hardware report is available on Windows; Linux and macOS show live sensors on the Sensors tab.";
+            return;
+        }
+        ExportHardwareReportWindows();
+    }
+
+    // Separate, non-inlined: JIT-compiling a method that constructs HardwareReportService loads LibreHardwareMonitor.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private void ExportHardwareReportWindows()
+    {
         try
         {
             using var svc = new HardwareReportService();
@@ -761,6 +774,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _appSettings.Migrate();
             _appSettings.Normalize();
             ApplySettingsToVm();
+            // 4.1: saved OpenRGB SDK endpoint first — the auto-start waits for ApplyOpenRgbSettings below.
+            RgbControl.ApplyEndpointSettings(_appSettings.OpenRgbHost, _appSettings.OpenRgbPort, (host, port) =>
+            {
+                _appSettings.OpenRgbHost = RgbControlViewModel.IsLocalHost(host) && host == "127.0.0.1" ? null : host;
+                _appSettings.OpenRgbPort = port == RgbControlViewModel.DefaultOpenRgbPort ? null : port;
+                _ = SaveSettingsAsync();
+            });
             RgbControl.ApplyOpenRgbSettings(_appSettings.OpenRgbPath, path =>
             {
                 _appSettings.OpenRgbPath = path;

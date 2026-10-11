@@ -16,13 +16,21 @@ namespace Fanzi.FanControl.Services;
 /// </summary>
 public sealed class PowerMonitorService
 {
-    private readonly Computer? _computer;
+    // LibreHardwareMonitor Computer, typed as object: its assembly only ships for Windows, so every LHM type
+    // lives in the NoInlining helpers below that Linux / macOS never call (4.1 cross-platform builds).
+    private readonly object? _computer;
 
     public PowerMonitorService()
     {
         if (!OperatingSystem.IsWindows()) return;
+        try { _computer = LhmOpen(); }
+        catch (Exception ex) { AppLog.Error("Power monitor: LibreHardwareMonitor failed to open", ex); }
+    }
 
-        _computer = new Computer
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static object LhmOpen()
+    {
+        var computer = new Computer
         {
             IsCpuEnabled = true,
             IsGpuEnabled = true,
@@ -35,7 +43,8 @@ public sealed class PowerMonitorService
             IsNetworkEnabled = false,
             IsPowerMonitorEnabled = true,
         };
-        _computer.Open();
+        computer.Open();
+        return computer;
     }
 
     public Task<PowerSnapshot> GetSnapshotAsync(CancellationToken ct = default)
@@ -50,49 +59,7 @@ public sealed class PowerMonitorService
             int hddCount = 0;
 
             if (_computer is not null)
-            {
-                foreach (var hw in _computer.Hardware)
-                {
-                    hw.Update();
-                    foreach (var sub in hw.SubHardware) sub.Update();
-
-                    // Sum ALL power sensors for this component (not just pick one)
-                    double componentWatts = 0;
-                    bool hasPowerSensor = false;
-
-                    foreach (var sensor in hw.Sensors.Where(s => s.SensorType == SensorType.Power && s.Value.HasValue))
-                    {
-                        // Prefer aggregate sensors (Package/Total) but sum all
-                        if (sensor.Name.Contains("Package", StringComparison.OrdinalIgnoreCase) ||
-                            sensor.Name.Contains("Total", StringComparison.OrdinalIgnoreCase) ||
-                            sensor.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase))
-                        {
-                            componentWatts = sensor.Value!.Value;
-                            hasPowerSensor = true;
-                            break;
-                        }
-                    }
-
-                    // If no aggregate sensor, sum all power sensors for this component
-                    if (!hasPowerSensor)
-                    {
-                        foreach (var sensor in hw.Sensors.Where(s => s.SensorType == SensorType.Power && s.Value.HasValue))
-                        {
-                            componentWatts += sensor.Value!.Value;
-                            hasPowerSensor = true;
-                        }
-                    }
-
-                    if (hasPowerSensor && componentWatts > 0)
-                    {
-                        components.Add(new ComponentPower(
-                            Category: HwTypeToCategory(hw.HardwareType),
-                            Name: hw.Name,
-                            Watts: componentWatts));
-                        measuredTotal += componentWatts;
-                    }
-                }
-            }
+                measuredTotal += ReadLhmComponents(_computer, components);
 
             // Drives — enumerate and estimate power
             var drives = new List<DriveInfoStats>();
@@ -209,6 +176,56 @@ public sealed class PowerMonitorService
         catch { }
     }
 
+
+    /// <summary>Per-component power from LibreHardwareMonitor (Windows only); returns the measured total.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static double ReadLhmComponents(object computer, List<ComponentPower> components)
+    {
+        double measuredTotal = 0;
+        foreach (var hw in ((Computer)computer).Hardware)
+        {
+            hw.Update();
+            foreach (var sub in hw.SubHardware) sub.Update();
+
+            // Sum ALL power sensors for this component (not just pick one)
+            double componentWatts = 0;
+            bool hasPowerSensor = false;
+
+            foreach (var sensor in hw.Sensors.Where(s => s.SensorType == SensorType.Power && s.Value.HasValue))
+            {
+                // Prefer aggregate sensors (Package/Total) but sum all
+                if (sensor.Name.Contains("Package", StringComparison.OrdinalIgnoreCase) ||
+                    sensor.Name.Contains("Total", StringComparison.OrdinalIgnoreCase) ||
+                    sensor.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase))
+                {
+                    componentWatts = sensor.Value!.Value;
+                    hasPowerSensor = true;
+                    break;
+                }
+            }
+
+            // If no aggregate sensor, sum all power sensors for this component
+            if (!hasPowerSensor)
+            {
+                foreach (var sensor in hw.Sensors.Where(s => s.SensorType == SensorType.Power && s.Value.HasValue))
+                {
+                    componentWatts += sensor.Value!.Value;
+                    hasPowerSensor = true;
+                }
+            }
+
+            if (hasPowerSensor && componentWatts > 0)
+            {
+                components.Add(new ComponentPower(
+                    Category: HwTypeToCategory(hw.HardwareType),
+                    Name: hw.Name,
+                    Watts: componentWatts));
+                measuredTotal += componentWatts;
+            }
+        }
+        return measuredTotal;
+    }
+
     private static string HwTypeToCategory(HardwareType t) => t switch
     {
         HardwareType.Cpu => "CPU",
@@ -221,7 +238,13 @@ public sealed class PowerMonitorService
         _ => t.ToString(),
     };
 
-    public void Dispose() => _computer?.Close();
+    public void Dispose()
+    {
+        if (_computer is not null) LhmClose(_computer);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void LhmClose(object computer) => ((Computer)computer).Close();
 }
 
 public sealed record ComponentPower(string Category, string Name, double Watts);

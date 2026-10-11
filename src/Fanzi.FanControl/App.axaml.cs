@@ -37,8 +37,9 @@ public partial class App : Application
         {
             DisableAvaloniaDataAnnotationValidation();
 
-            // HardwareMonitorService guards its own driver start-up (InitializationError).
-            _hardwareMonitorService = new HardwareMonitorService();
+            // Windows: LibreHardwareMonitor (guards its own driver start-up via InitializationError);
+            // Linux / macOS: hwmon / SMC readers (4.1) — see HardwareMonitorFactory.
+            _hardwareMonitorService = HardwareMonitorFactory.Create();
             _rgbService = new OpenRgbService();
             _settingsService = new SettingsService();
             var viewModel = new MainWindowViewModel(_hardwareMonitorService, _rgbService, _settingsService);

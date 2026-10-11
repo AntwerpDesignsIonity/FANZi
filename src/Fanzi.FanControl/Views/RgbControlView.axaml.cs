@@ -24,7 +24,15 @@ public partial class RgbControlView : UserControl
     private void AttachFilePicker()
     {
         if (DataContext is RgbControlViewModel vm)
+        {
             vm.PickOpenRgbExecutable = PickOpenRgbExecutableAsync;
+            // 4.1: "Copy diagnostics" writes to the system clipboard.
+            vm.CopyToClipboard = async text =>
+            {
+                if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+                    await clipboard.SetTextAsync(text);
+            };
+        }
     }
 
     private async Task<string?> PickOpenRgbExecutableAsync()

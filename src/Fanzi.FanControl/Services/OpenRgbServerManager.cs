@@ -411,6 +411,24 @@ public sealed class OpenRgbServerManager : IDisposable
         return false;
     }
 
+    /// <summary>4.1: TCP probe of any SDK endpoint (local or another PC); false when unreachable or unresolvable.</summary>
+    public static bool IsReachable(string host, int port, int timeoutMs) => TryConnectOnce(host, port, timeoutMs);
+
+    /// <summary>4.1: local TCP ports that running OpenRGB processes listen on (Windows listener table; empty elsewhere).</summary>
+    public static IReadOnlyList<int> ListOpenRgbListeningPorts()
+    {
+        var ports = new List<int>();
+        foreach (var p in SafeGetOpenRgbProcesses())
+        {
+            using (p)
+            {
+                try { ports.AddRange(OpenRgb.TcpPortOwner.ListeningPorts(p.Id)); }
+                catch { }
+            }
+        }
+        return ports.Distinct().OrderBy(x => x).ToList();
+    }
+
     /// <summary>True if a TCP probe succeeds against the SDK port right now.</summary>
     public static bool IsPortListening(int port)
         => OpenRgb.TcpPortOwner.IsListening(port) ?? TryConnectOnce("127.0.0.1", port, 1000);
@@ -435,9 +453,13 @@ public sealed class OpenRgbServerManager : IDisposable
                 LingerState = new System.Net.Sockets.LingerOption(true, 0), // RST on close: no TIME_WAIT pile-up
             };
 
+            // 4.1: host names (another PC on the LAN) resolve via DNS; IPv4 first, the socket is IPv4.
             var address = host is "localhost" or "127.0.0.1"
                 ? System.Net.IPAddress.Loopback
-                : System.Net.IPAddress.Parse(host);
+                : System.Net.IPAddress.TryParse(host, out var literal)
+                    ? literal
+                    : System.Net.Dns.GetHostAddresses(host).First(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+            if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) return false;
 
             if (System.Net.IPAddress.IsLoopback(address))
             {

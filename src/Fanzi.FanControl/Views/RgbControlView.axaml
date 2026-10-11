@@ -286,6 +286,36 @@
                     </StackPanel>
                     <ToggleSwitch Grid.Column="2" IsChecked="{Binding RgbEnabled}" OnContent="RGB Enabled" OffContent="RGB Disabled" VerticalAlignment="Center"/>
                 </Grid>
+                <!-- 4.1: OpenRGB SDK endpoint (saved), take-control and diagnostics — makes RGB work on any PC -->
+                <Border x:Name="OpenRgbEndpointPanel" Classes="tile" Padding="12,10">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                            <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                                <TextBlock Text="SDK ENDPOINT" Classes="rgb-caption"/>
+                                <TextBlock Text="{Binding EndpointLabel}" FontSize="10" Classes="muted"/>
+                            </StackPanel>
+                            <TextBox x:Name="EndpointHostBox" Grid.Column="1" Text="{Binding EndpointHostInput}" Watermark="127.0.0.1 (this PC) or another PC's IP"
+                                     MinWidth="150" VerticalAlignment="Center" AutomationProperties.Name="OpenRGB host"/>
+                            <NumericUpDown x:Name="EndpointPortBox" Grid.Column="2" Value="{Binding EndpointPortInput}" Minimum="1" Maximum="65535" Increment="1"
+                                           FormatString="0" Width="130" VerticalAlignment="Center" AutomationProperties.Name="OpenRGB port"/>
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <Button Classes="rgb-solid" Content="Apply &amp; connect" Command="{Binding ApplyEndpointCommand}"
+                                        ToolTip.Tip="Save this host / port and connect to the OpenRGB SDK server there"/>
+                                <Button Classes="rgb-outline" Content="Auto-detect" Command="{Binding DetectEndpointCommand}"
+                                        ToolTip.Tip="Find the port a running OpenRGB listens on (this PC)"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock x:Name="EndpointStatusText" Text="{Binding EndpointStatus}" FontSize="11" Classes="muted" TextWrapping="Wrap"/>
+                        <WrapPanel>
+                            <Button Classes="rgb-solid" Content="✓ Take control" Command="{Binding TakeControlCommand}" Margin="0,0,8,0"
+                                    ToolTip.Tip="Switch every device into FANZi's control mode (Direct / Custom / Static) and apply the current lighting now"/>
+                            <Button Classes="rgb-outline" Content="⧉ Copy diagnostics" Command="{Binding CopyDiagnosticsCommand}"
+                                    ToolTip.Tip="Copy endpoint, server, devices and errors — paste it when asking for help"/>
+                        </WrapPanel>
+                        <SelectableTextBlock x:Name="ControlReportText" Text="{Binding ControlReport}" FontSize="11" Foreground="#A5F3FC" TextWrapping="Wrap"
+                                             IsVisible="{Binding ControlReport, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
 

@@ -418,6 +418,14 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                     ServerStatus = msg;
                 }));
 
+            // 4.1: a remote SDK endpoint is only connected to — never installed, launched or restarted from here.
+            if (!EndpointIsLocal)
+            {
+                ConnectionStatus = $"AEDi: Connecting to the OpenRGB SDK server at {EndpointLabel}...";
+                await ConnectRemoteAsync();
+                return;
+            }
+
             ConnectionStatus = "AEDi: Starting OpenRGB server...";
             bool serverOk = await _serverManager.EnsureRunningAsync(
                 OpenRgbPort, progress, _cts.Token, allowInstall: () => AllowDownload(userInitiated));
@@ -441,7 +449,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             bool connectedWithoutDevices = false;
             // v4: wait up to 60 s for the SDK port before counting connect attempts — OpenRGB opens it only
             // after its hardware detection, which takes far longer than the old 18 s with PawnIO SMBus scans.
-            for (int wait = 1; wait <= 40 && !OpenRgbServerManager.IsPortListening(OpenRgbPort) && !_cts.Token.IsCancellationRequested; wait++)
+            for (int wait = 1; wait <= 40 && !IsEndpointReachable() && !_cts.Token.IsCancellationRequested; wait++)
             {
                 ConnectionStatus = $"AEDi: OpenRGB is detecting hardware… ({wait * 1.5:F0} s)";
                 await Task.Delay(1500, _cts.Token);
@@ -449,7 +457,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
             for (int attempt = 1; attempt <= 12 && !_cts.Token.IsCancellationRequested; attempt++)
             {
-                if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                if (!IsEndpointReachable())
                 {
                     ConnectionStatus = $"AEDi: Waiting for server port... ({attempt}/12)";
                     await Task.Delay(1500, _cts.Token);
@@ -712,7 +720,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 await Task.Delay(15000, token);
                 if (!RgbEnabled || _autoStartInProgress) continue;
 
-                if (!_rgbService.IsConnected && OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                if (!_rgbService.IsConnected && IsEndpointReachable())
                 {
                     // Properly dispose the old client BEFORE reconnecting —
                     // prevents socket leak and TIME_WAIT accumulation.
@@ -722,7 +730,11 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                     if (IsConnected)
                         ConnectionStatus = $"AEDi: Reconnected — {Devices.Count} device(s)";
                 }
-                else if (!OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                else if (!IsEndpointReachable() && !EndpointIsLocal)
+                {
+                    ConnectionStatus = $"AEDi: {EndpointLabel} is not reachable — retrying every 15 s";
+                }
+                else if (!IsEndpointReachable())
                 {
                     bool ok = await _serverManager.EnsureRunningAsync(
                         OpenRgbPort, null, token, allowInstall: () => AllowDownload(userInitiated: false));
@@ -735,7 +747,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                     {
                         LastOpenRgbError = DescribeServerFailure();
                     }
-                    else if (OpenRgbServerManager.IsPortListening(OpenRgbPort))
+                    else if (IsEndpointReachable())
                     {
                         ConnectionStatus = "AEDi: Server restarted — reconnecting...";
                         await ConnectAsync();
@@ -904,7 +916,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             }
         }
         catch (OperationCanceledException) { }
-        catch { /* swallow — connection may have dropped */ }
+        catch (Exception ex) { LogFrameFailure(ex); /* connection may have dropped; the watchdog reconnects */ }
     }
 
     /// <summary>
@@ -958,7 +970,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             });
         }
         catch (OperationCanceledException) { }
-        catch { /* swallow — connection may have dropped */ }
+        catch (Exception ex) { LogFrameFailure(ex); /* connection may have dropped; the watchdog reconnects */ }
     }
 
     // ── Commands ──────────────────────────────────────────────────────────────
