@@ -1,0 +1,107 @@
+name: Cross-platform packages (macOS + Linux)
+
+# Builds FANZi IO-nity for macOS (Apple silicon + Intel) on GitHub's macOS runners and for Linux (x64 + arm64) on
+# Ubuntu, packages them (.dmg / .zip, .AppImage / .deb / .tar.gz), launches each native build for a smoke test, and
+# on a v* tag attaches every package to the GitHub release of that tag.
+
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  PROJECT: src/Fanzi.FanControl/Fanzi.FanControl.csproj
+  ICON: src/Fanzi.FanControl/Assets/ionity-logo.png
+
+jobs:
+  linux:
+    name: Linux (${{ matrix.rid }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [ linux-x64, linux-arm64 ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Version
+        id: v
+        run: echo "version=$(grep -oPm1 '(?<=<Version>)[^<]+' $PROJECT)" >> "$GITHUB_OUTPUT"
+      - name: Publish (self-contained single file)
+        run: dotnet publish $PROJECT -c Release -r ${{ matrix.rid }} --self-contained -p:PublishSingleFile=true -o publish/${{ matrix.rid }}
+      - name: Smoke test (launch under Xvfb, must still run after 25 s)
+        if: matrix.rid == 'linux-x64'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libice6 libsm6 libfontconfig1 >/dev/null
+          Xvfb :99 -screen 0 1400x900x24 & sleep 1
+          DISPLAY=:99 ./publish/linux-x64/Fanzi.FanControl > smoke.log 2>&1 & APP=$!
+          sleep 25
+          if ! kill -0 $APP; then echo "FANZi exited early:"; cat smoke.log; exit 1; fi
+          if grep -qi "unhandled exception" smoke.log; then cat smoke.log; exit 1; fi
+          kill $APP; echo "FANZi ran for 25 s on Linux"
+      - name: Package (.tar.gz, .deb, .AppImage)
+        run: bash packaging/linux/package-linux.sh "${{ steps.v.outputs.version }}" ${{ matrix.rid }} publish/${{ matrix.rid }} dist $ICON
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fanzi-${{ matrix.rid }}
+          path: dist/*
+
+  macos:
+    name: macOS (${{ matrix.rid }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [ osx-arm64, osx-x64 ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Version
+        id: v
+        run: echo "version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' $PROJECT | head -1)" >> "$GITHUB_OUTPUT"
+      - name: Publish (self-contained single file)
+        run: dotnet publish $PROJECT -c Release -r ${{ matrix.rid }} --self-contained -p:PublishSingleFile=true -o publish/${{ matrix.rid }}
+      - name: Package (.app → .dmg / .zip)
+        run: bash packaging/macos/package-macos.sh "${{ steps.v.outputs.version }}" ${{ matrix.rid }} publish/${{ matrix.rid }} dist $ICON
+      - name: Smoke test (launch the signed .app, must still run after 25 s)
+        if: matrix.rid == 'osx-arm64'
+        run: |
+          ditto -x -k dist/*.zip smoke
+          "smoke/FANZi IO-nity.app/Contents/MacOS/Fanzi.FanControl" > smoke.log 2>&1 & APP=$!
+          sleep 25
+          if ! kill -0 $APP; then echo "FANZi exited early:"; cat smoke.log; exit 1; fi
+          if grep -qi "unhandled exception" smoke.log; then cat smoke.log; exit 1; fi
+          kill $APP; echo "FANZi ran for 25 s on macOS"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fanzi-${{ matrix.rid }}
+          path: dist/*
+
+  release:
+    name: Attach to release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ linux, macos ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS-macos-linux.txt && cat SHA256SUMS-macos-linux.txt
+      - name: Upload to the tag's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "${GITHUB_REF_NAME}" --repo "$GITHUB_REPOSITORY" --title "FANZi IO-nity ${GITHUB_REF_NAME}" --notes "macOS and Linux packages."
+          gh release upload "${GITHUB_REF_NAME}" dist/* --repo "$GITHUB_REPOSITORY" --clobber
