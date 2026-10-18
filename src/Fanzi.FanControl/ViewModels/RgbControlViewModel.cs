@@ -72,7 +72,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     private bool _isConnecting;
 
     /// <summary>Dashboard RGB chip dot: green connected, amber connecting/starting, red offline.</summary>
-    public string ConnectionDotColor => DotColorFor(IsConnected, IsConnecting || _autoStartInProgress);
+    public string ConnectionDotColor => HasRgbConflicts ? "#EF4444" : DotColorFor(IsConnected, IsConnecting || _autoStartInProgress);
 
     internal static string DotColorFor(bool connected, bool connecting)
         => connected ? "#22C55E" : connecting ? "#FBBF24" : "#EF4444";
@@ -89,7 +89,15 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     partial void OnDeviceSummaryChanged(string value) => OnPropertyChanged(nameof(ConnectionChipText));
 
     /// <summary>Short dashboard chip label ("Connected · 3 devices"); the full <see cref="ConnectionStatus"/> is its tooltip.</summary>
-    public string ConnectionChipText => ChipTextFor(IsConnected, IsConnecting || _autoStartInProgress, Devices.Count);
+    public string ConnectionChipText => HasRgbConflicts && !string.IsNullOrEmpty(RgbConflictTitle)
+        ? "Blocked · " + RgbConflictTitle.Replace(" is controlling your lights", "").Replace(" are controlling your lights", "") + " overrides FANZi"
+        : ChipTextFor(IsConnected, IsConnecting || _autoStartInProgress, Devices.Count);
+
+    partial void OnHasRgbConflictsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ConnectionDotColor));
+        OnPropertyChanged(nameof(ConnectionChipText));
+    }
 
     internal static string ChipTextFor(bool connected, bool connecting, int deviceCount)
     {
@@ -354,7 +362,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
         ConnectCommand    = new AsyncRelayCommand(ConnectAsync);
         DisconnectCommand = new RelayCommand(DisconnectFromServer);
-        ApplyThemeCommand = new RelayCommand<RgbThemePreset>(ApplyTheme);
+        ApplyThemeCommand = new RelayCommand<RgbThemePreset>(p => { TakeManualControl(); ApplyTheme(p); });
         StartServerCommand = new AsyncRelayCommand(StartServerAsync);
         StopServerCommand  = new RelayCommand(StopServer);
         InstallOpenRgbCommand = new AsyncRelayCommand(InstallOpenRgbAsync);
@@ -720,6 +728,10 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 await Task.Delay(15000, token);
                 if (!RgbEnabled || _autoStartInProgress) continue;
 
+                // 4.2: another RGB app (SignalRGB, iCUE, …) can start at any time and silently take the
+                // lighting back — keep the conflict banner current instead of only checking at connect.
+                RefreshHardwareAdvisories();
+
                 if (!_rgbService.IsConnected && IsEndpointReachable())
                 {
                     // Properly dispose the old client BEFORE reconnecting —
@@ -752,6 +764,12 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                         ConnectionStatus = "AEDi: Server restarted — reconnecting...";
                         await ConnectAsync();
                     }
+                }
+                else if (_rgbService.IsConnected && Devices.Count > 0
+                         && await _rgbService.GetDeviceCountAsync(token) is int n && n != Devices.Count)
+                {
+                    // Hot-plugged / late-detected devices (USB hubs, keyboards, a restarted OpenRGB).
+                    await RefreshDevicesAsync();
                 }
                 else if (_rgbService.IsConnected && Devices.Count == 0)
                 {
@@ -975,6 +993,47 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
+    private bool _autoDeepScanDone;
+    private int _followingLateDevices;
+
+    /// <summary>How long after connecting FANZi keeps checking for devices OpenRGB detects late.</summary>
+    internal static readonly TimeSpan LateDeviceWindow = TimeSpan.FromSeconds(60);
+
+    private async Task FollowLateDevicesAsync(CancellationToken token)
+    {
+        if (Interlocked.Exchange(ref _followingLateDevices, 1) == 1) return;
+        try
+        {
+            var until = DateTime.UtcNow + LateDeviceWindow;
+            int stable = 0;
+            while (DateTime.UtcNow < until && !token.IsCancellationRequested && _rgbService.IsConnected)
+            {
+                await Task.Delay(2500, token);
+                int? count = await _rgbService.GetDeviceCountAsync(token);
+                if (count is null) return;              // service cannot tell — nothing to follow
+                // A per-LED device that still reports 0 LEDs (OpenRGB sized its zones late) gets no colour:
+                // re-read the layout until every device has its LEDs.
+                bool emptyDevice = Devices.Any(d => d.IsControllable && d.LedCount == 0);
+                if (count.Value != Devices.Count || emptyDevice)
+                {
+                    stable = 0;
+                    int got = await RefreshDevicesAsync();
+                    AppLog.Info($"RGB: OpenRGB detected more hardware — now {got} device(s)");
+                    try { await _rgbService.SetAllDevicesColorAsync(PrimaryColor, token); } catch { }
+                }
+                else if (count.Value > 0 && ++stable >= 6)
+                {
+                    // Unchanged for ~15 s: detection finished. One last full re-read picks up late zone sizes.
+                    await RefreshDevicesAsync();
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { AppLog.Warn("RGB: late-device follow failed", ex); }
+        finally { Interlocked.Exchange(ref _followingLateDevices, 0); }
+    }
+
     private async Task ConnectAsync()
     {
         if (IsConnecting) return;
@@ -989,6 +1048,16 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             IsConnected      = true;
             ConnectionStatus = $"Connected — {_rgbService.ServerVersion}";
             await RefreshDevicesAsync();
+            // 4.2: OpenRGB opens its SDK port before detection finishes and keeps adding devices (RAM, GPU,
+            // USB) for up to ~30 s. v4.1 kept the first, partial list forever, so on many PCs some or all
+            // devices never received colours. Follow the count until it settles.
+            _ = FollowLateDevicesAsync(_cts.Token);
+            // 4.2: run the hardware scan once per session so detection results are there without a click.
+            if (!_autoDeepScanDone && OperatingSystem.IsWindows())
+            {
+                _autoDeepScanDone = true;
+                _ = DeepScanCommand.ExecuteAsync(null);
+            }
         }
         else
         {
@@ -1094,6 +1163,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         if (_updatingPrimary) return;
         if (RgbColor.TryParseHex(hex, out var c))
         {
+            if (c != PrimaryColor) TakeManualControl();
             _updatingPrimary = true;
             PrimaryColor     = c;
             PrimaryR         = c.R;

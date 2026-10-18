@@ -80,6 +80,12 @@ public interface IRgbService : IDisposable
         RgbColor[] zoneColors,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Cheap device-count query (no controller data). OpenRGB keeps adding devices for several seconds
+    /// after its SDK port opens, so FANZi polls this to pick up late devices. Null when unsupported.
+    /// </summary>
+    Task<int?> GetDeviceCountAsync(CancellationToken cancellationToken = default) => Task.FromResult<int?>(null);
+
     /// <summary>Closes the OpenRGB connection.</summary>
     void Disconnect();
 }

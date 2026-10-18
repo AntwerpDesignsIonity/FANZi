@@ -37,6 +37,23 @@ public sealed class RgbControlViewModelOpenRgbTests : IDisposable
     }
 
     [Fact]
+    public void Picking_a_colour_or_effect_pauses_Smart_Ambient()
+    {
+        using var vm = CreateVm();
+        vm.SmartAmbientEnabled = true;
+
+        vm.SetPrimarySwatchCommand.Execute(Fanzi.FanControl.Models.RgbColor.Red);
+
+        Assert.False(vm.SmartAmbientEnabled);
+        Assert.Equal(Fanzi.FanControl.Models.RgbColor.Red, vm.PrimaryColor);
+        Assert.Contains("Smart Ambient paused", vm.AiLightingStatus);
+
+        vm.SmartAmbientEnabled = true;
+        vm.SelectEffectCommand.Execute(Fanzi.FanControl.Models.RgbEffectType.Static);
+        Assert.False(vm.SmartAmbientEnabled);
+    }
+
+    [Fact]
     public void AllowDownload_AutomaticThrottled_UserActionsBypassAndRestartWindow()
     {
         using var vm = CreateVm();

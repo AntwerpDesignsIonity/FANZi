@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Nodes;
 using Fanzi.FanControl.Services;
 using Fanzi.FanControl.Services.Rgb;
@@ -231,6 +232,78 @@ public class RgbHardwareCoverageTests
     public void No_known_processes_means_no_conflicts()
     {
         Assert.Empty(RgbConflictDetector.Classify(new[] { ("explorer", 1), ("Fanzi.FanControl", 2) }));
+    }
+
+    // ── 4.2: services, native detection ─────────────────────────────────────
+
+    [Fact]
+    public void Conflict_services_are_grouped_with_their_product()
+    {
+        var conflicts = RgbConflictDetector.Classify(new[] { ("SignalRgbService", 4900) }, new[] { "SignalRgb.Service", "Spooler" });
+        var c = Assert.Single(conflicts);
+        Assert.Equal("SignalRGB", c.Product);
+        Assert.Equal(new[] { 4900 }, c.ProcessIds);
+        Assert.Equal(new[] { "SignalRgb.Service" }, c.ServiceNames);
+    }
+
+    [Fact]
+    public void A_running_service_alone_is_a_conflict()
+    {
+        var c = Assert.Single(RgbConflictDetector.Classify(Array.Empty<(string, int)>(), new[] { "LightingService" }));
+        Assert.Equal("ASUS Aura (LightingService)", c.Product);
+        Assert.Empty(c.ProcessIds);
+    }
+
+    [Fact]
+    public void Conflict_message_names_the_relaunching_service()
+    {
+        var msg = Fanzi.FanControl.ViewModels.RgbControlViewModel.BuildConflictMessage(new[]
+        {
+            new RgbConflictDetector.Conflict("SignalRGB", new[] { 1 }) { ServiceNames = new[] { "SignalRgb.Service" } },
+        });
+        Assert.Contains("SignalRgb.Service", msg);
+        Assert.Contains("overwritten", msg);
+    }
+
+    [Theory]
+    [InlineData(@"PCI\VEN_10DE&DEV_2216&SUBSYS_361219DA&REV_A1\4&4188C91&0&0009", "ZOTAC", "yes")]
+    [InlineData(@"PCI\VEN_10DE&DEV_2684&SUBSYS_88E21043&REV_A1", "ASUS", "yes")]
+    [InlineData(@"PCI\VEN_1002&DEV_13C0&SUBSYS_07606688&REV_E6", "Vendor 6688", "unknown")]
+    [InlineData("garbage", "Unknown", "unknown")]
+    public void Gpu_board_partner_comes_from_the_pci_subsystem_vendor(string pnp, string partner, string support)
+    {
+        var (p, s, _) = RgbHardwareInventory.PartnerFromPnpId(pnp);
+        Assert.Equal(partner, p);
+        Assert.Equal(support, s);
+    }
+
+    [Theory]
+    [InlineData("ASUSTeK COMPUTER INC. ROG STRIX X670E-F GAMING WIFI", true)]
+    [InlineData("Micro-Star International Co., Ltd. MAG B650", true)]
+    [InlineData("MAXSUN MS-iCraft X870M", false)]
+    public void Board_rgb_family_is_known_only_for_supported_makers(string board, bool supported)
+    {
+        Assert.Equal(supported, RgbHardwareInventory.BoardFamilyFor(board) is not null);
+    }
+
+    [Fact]
+    public void Deep_scan_reports_running_rgb_software_and_unsupported_board()
+    {
+        var system = new SystemRgbInventory("MAXSUN MS-iCraft X870M", new[] { "DIMM 1: Patriot (16 GB)" }, new[] { "NVIDIA GeForce RTX 3080" },
+            Array.Empty<(string, string, string)>(), true)
+        {
+            RunningConflicts = new[] { new RgbConflictDetector.Conflict("SignalRGB", new[] { 1 }) { ServiceNames = new[] { "SignalRgb.Service" } } },
+            KernelDrivers = new[] { new KernelDriver("WinRing0_1_2_0", false, @"\??\C:\Program Files (x86)\MAXSUN_View\WinRing0x64.sys") },
+            SmBusControllers = new[] { "AMD SMBus (1022:790B)" },
+            GpuBoards = new[] { new GpuBoard("NVIDIA GeForce RTX 3080", "ZOTAC", "19DA", "10DE:2216") },
+        };
+        var findings = RgbHardwareInventory.Analyse(Array.Empty<Fanzi.FanControl.Models.RgbDeviceInfo>(), system, 2, openRgbConnected: true);
+
+        Assert.Contains(findings, f => f.Category == "Software" && f.Title.Contains("SignalRGB") && f.Status == DeepScanStatus.Missing);
+        Assert.Contains(findings, f => f.Category == "Driver" && f.Title.StartsWith("WinRing0"));
+        Assert.Contains(findings, f => f.Category == "SMBus" && f.Status == DeepScanStatus.Ok);
+        Assert.Contains(findings, f => f.Category == "Motherboard" && f.Title.Contains("not supported"));
+        Assert.Contains(findings, f => f.Category == "GPU" && f.Title.Contains("ZOTAC") && f.Status == DeepScanStatus.Warning);
     }
 
     // ── PawnIO ───────────────────────────────────────────────────────────────

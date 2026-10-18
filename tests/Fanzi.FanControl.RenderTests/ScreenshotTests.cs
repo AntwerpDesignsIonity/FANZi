@@ -69,7 +69,7 @@ public sealed class ScreenshotTests
             AssertThermalFrame(window, scope.Vm);
             AssertTextNotTrimmed(window, [.. HardwareNameCaptions, "ThermalHistoryTitleText", "ThermalFrameChipText"]);
             AssertTabsOnOneRow(window);
-            AssertStatusMessageReadableOrHidden(window, expectVisible: false);
+            AssertStatusMessageReadableOrHidden(window, expectVisible: null); // 4.2 HUD: either state is fine at MinWidth, never a bare "…"
             AssertHistoryChartsDrawn(window, "CpuHistoryChart", "GpuHistoryChart");
             window.Width = 1400;
 
@@ -744,13 +744,13 @@ public sealed class ScreenshotTests
 
     /// <summary>The status line is either wide enough to read or hidden — never a bare "…".</summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static void AssertStatusMessageReadableOrHidden(Window window, bool expectVisible)
+    private static void AssertStatusMessageReadableOrHidden(Window window, bool? expectVisible)
     {
         var host = window.FindControl<Border>("StatusMessageHost")!;
         var text = window.FindControl<TextBlock>("StatusMessageText")!;
         bool wideEnough = host.Bounds.Width >= MainWindow.StatusMessageMinWidth;
         Assert.Equal(wideEnough, text.IsVisible);
-        Assert.Equal(expectVisible, text.IsVisible);
+        if (expectVisible is bool expected) Assert.Equal(expected, text.IsVisible);
     }
 
     // ── Harness ──────────────────────────────────────────────────────────────

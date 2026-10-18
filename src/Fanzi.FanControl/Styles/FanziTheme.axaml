@@ -582,6 +582,74 @@
         <Setter Property="BoxShadow" Value="0 0 12 1 #1D4ED8"/>
     </Style>
 
+    <!-- ═══ 4.2 DASHBOARD HUD (top area) ═══ -->
+    <Style Selector="Border.hud">
+        <Setter Property="Background" Value="#070F1C"/>
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderGradient}"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+        <Setter Property="CornerRadius" Value="16"/>
+        <Setter Property="BoxShadow" Value="0 6 24 0 #66000000"/>
+    </Style>
+    <Style Selector="Border.hud-tile">
+        <Setter Property="Background" Value="#0A1424"/>
+        <Setter Property="BorderBrush" Value="#17284A"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.2"/>
+                <BrushTransition Property="Background" Duration="0:0:0.2"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.hud-tile:pointerover">
+        <Setter Property="BorderBrush" Value="#3B82F6"/>
+        <Setter Property="Background" Value="#0D1A30"/>
+    </Style>
+    <Style Selector="TextBlock.hud-label">
+        <Setter Property="FontSize" Value="9.5"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="LetterSpacing" Value="1.5"/>
+        <Setter Property="Foreground" Value="#5A7FA8"/>
+    </Style>
+    <Style Selector="TextBlock.hud-value">
+        <Setter Property="FontSize" Value="17"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        <Setter Property="Transitions">
+            <Transitions><BrushTransition Property="Foreground" Duration="0:0:0.6"/></Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="ProgressBar.hud-bar">
+        <Setter Property="Height" Value="3"/>
+        <Setter Property="MinHeight" Value="3"/>
+        <Setter Property="CornerRadius" Value="2"/>
+        <Setter Property="Background" Value="#14233D"/>
+        <Setter Property="Foreground" Value="{StaticResource AccentGradient}"/>
+        <Setter Property="Margin" Value="0,3,0,0"/>
+    </Style>
+    <Style Selector="Button.hud-chip">
+        <Setter Property="Background" Value="#0A1422"/>
+        <Setter Property="Foreground" Value="#8EACD0"/>
+        <Setter Property="BorderBrush" Value="#22385C"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="10,3"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.hud-refresh">
+        <Setter Property="FontSize" Value="18"/>
+        <Setter Property="FontWeight" Value="Black"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+
     <!-- ═══ TAB CONTROL ═══ -->
     <Style Selector="TabControl">
         <Setter Property="Background" Value="Transparent"/>
@@ -600,7 +668,7 @@
         <Setter Property="CornerRadius" Value="10"/>
         <!-- v4: every tab carries a visible outline; the same thickness is kept when selected so nothing shifts -->
         <Setter Property="BorderThickness" Value="1.5"/>
-        <Setter Property="BorderBrush" Value="#22385C"/>
+        <Setter Property="BorderBrush" Value="#182B4A"/>
         <Setter Property="Transitions">
             <Transitions>
                 <BrushTransition Property="Background" Duration="0:0:0.2"/>

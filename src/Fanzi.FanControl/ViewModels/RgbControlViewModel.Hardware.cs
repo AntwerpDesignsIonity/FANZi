@@ -1,6 +1,7 @@
 using Fanzi.FanControl.Services.Rgb;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,7 +25,15 @@ public partial class RgbControlViewModel
 
     private IAsyncRelayCommand? _closeConflictingAppsCommand;
     public IAsyncRelayCommand CloseConflictingAppsCommand =>
-        _closeConflictingAppsCommand ??= new AsyncRelayCommand(CloseConflictingAppsAsync);
+        _closeConflictingAppsCommand ??= new AsyncRelayCommand(() => CloseConflictingAppsAsync(disableAutostart: false));
+
+    private IAsyncRelayCommand? _disableConflictingAppsCommand;
+    /// <summary>Stops the conflicting apps AND their services, and turns their auto-start off (4.2).</summary>
+    public IAsyncRelayCommand DisableConflictingAppsCommand =>
+        _disableConflictingAppsCommand ??= new AsyncRelayCommand(() => CloseConflictingAppsAsync(disableAutostart: true));
+
+    /// <summary>Short title for the blocking banner, e.g. "SignalRGB is controlling your lights".</summary>
+    [ObservableProperty] private string _rgbConflictTitle = string.Empty;
 
     // ── PawnIO ───────────────────────────────────────────────────────────────
 
@@ -57,22 +66,38 @@ public partial class RgbControlViewModel
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             _conflicts = conflicts;
-            HasRgbConflicts = conflicts.Count > 0;
+            RgbConflictTitle = conflicts.Count == 0
+                ? string.Empty
+                : $"{RgbConflictDetector.Describe(conflicts)} {(conflicts.Count == 1 ? "is" : "are")} controlling your lights";
             RgbConflictMessage = conflicts.Count == 0
                 ? string.Empty
-                : $"{RgbConflictDetector.Describe(conflicts)} is controlling the same lighting — colours will flicker or be overwritten until it is closed.";
+                : BuildConflictMessage(conflicts);
+            HasRgbConflicts = conflicts.Count > 0;
+            OnPropertyChanged(nameof(ConnectionChipText));
             if (!IsInstallingPawnIo)
                 ShowPawnIoPrompt = pawnIoMissing;
         });
     }
 
-    private async Task CloseConflictingAppsAsync()
+    /// <summary>Banner body: what the other app does and which services keep relaunching it. Pure — unit-tested.</summary>
+    internal static string BuildConflictMessage(IReadOnlyList<RgbConflictDetector.Conflict> conflicts)
     {
-        var conflicts = _conflicts;
+        var services = conflicts.SelectMany(c => c.ServiceNames).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        string text = "It repaints the same RAM, GPU and USB lighting many times a second, so every colour FANZi sends is overwritten immediately. ";
+        text += services.Length > 0
+            ? $"Its background service ({string.Join(", ", services)}) relaunches it — use \"Stop & disable autostart\" to hand the lighting to FANZi for good."
+            : "Close it to hand the lighting to FANZi.";
+        return text;
+    }
+
+    private async Task CloseConflictingAppsAsync(bool disableAutostart)
+    {
+        var conflicts = RgbConflictDetector.Find();
+        if (conflicts.Count == 0) conflicts = _conflicts;
         if (conflicts.Count == 0) return;
 
-        ConnectionStatus = $"Closing {RgbConflictDetector.Describe(conflicts)}…";
-        int stopped = await Task.Run(() => RgbConflictDetector.Stop(conflicts));
+        ConnectionStatus = $"Stopping {RgbConflictDetector.Describe(conflicts)}…";
+        int stopped = await Task.Run(() => RgbConflictDetector.Stop(conflicts, disableAutostart));
         ConnectionStatus = $"Closed {stopped} process(es) — rescanning RGB devices…";
 
         // The devices those apps held only appear after OpenRGB detects again.
@@ -143,6 +168,7 @@ public partial class RgbControlViewModel
                 IsConnected = true;
                 ConnectionStatus = $"Connected — {_rgbService.ServerVersion}";
                 if (force) await RefreshDevicesAsync();
+                _ = FollowLateDevicesAsync(_cts.Token);
                 return true;
             }
             await Task.Delay(1000, _cts.Token);

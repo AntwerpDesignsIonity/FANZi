@@ -24,6 +24,8 @@ public sealed record DeepScanFinding(string Category, string Title, string Detai
         "USB" => "⌁",
         "Monitor" => "▭",
         "Driver" => "⚙",
+        "Software" => "⚠",
+        "SMBus" => "⇄",
         _ => "●",
     };
 
@@ -50,7 +52,29 @@ public sealed record SystemRgbInventory(
     IReadOnlyList<string> MemoryModules,
     IReadOnlyList<string> Gpus,
     IReadOnlyList<(string VidPid, string Vendor, string Name)> RgbUsbCandidates,
-    bool PawnIoRunning);
+    bool PawnIoRunning)
+{
+    /// <summary>GPU boards with their add-in-board partner read from the PCI subsystem vendor (4.2).</summary>
+    public IReadOnlyList<GpuBoard> GpuBoards { get; init; } = Array.Empty<GpuBoard>();
+
+    /// <summary>Low-level hardware-access kernel drivers present (PawnIO, WinRing0, inpoutx64, …).</summary>
+    public IReadOnlyList<KernelDriver> KernelDrivers { get; init; } = Array.Empty<KernelDriver>();
+
+    /// <summary>SMBus host controllers Windows exposes (RAM / motherboard RGB live behind these).</summary>
+    public IReadOnlyList<string> SmBusControllers { get; init; } = Array.Empty<string>();
+
+    /// <summary>Installed RGB / vendor lighting software (from the Uninstall registry keys).</summary>
+    public IReadOnlyList<string> InstalledRgbSoftware { get; init; } = Array.Empty<string>();
+
+    /// <summary>RGB software running right now (processes + services).</summary>
+    public IReadOnlyList<RgbConflictDetector.Conflict> RunningConflicts { get; init; } = Array.Empty<RgbConflictDetector.Conflict>();
+}
+
+/// <summary>A graphics card and the board partner that made it (PCI SUBSYS vendor).</summary>
+public sealed record GpuBoard(string Name, string Partner, string SubsystemVendorId, string PciDeviceId);
+
+/// <summary>A hardware-access kernel driver and whether it is running.</summary>
+public sealed record KernelDriver(string Name, bool Running, string Path);
 
 /// <summary>
 /// "Deep scan" for the RGB tab (v4): cross-checks what OpenRGB controls against what Windows sees —
@@ -72,6 +96,76 @@ public static class RgbHardwareInventory
         ["0951"] = "HyperX", ["03F0"] = "HP / HyperX", ["1AF3"] = "Kingston", ["093A"] = "Pixart (mouse)", ["258A"] = "SINOWEALTH (keyboard)",
     };
 
+    /// <summary>
+    /// PCI subsystem vendor → GPU board partner and whether OpenRGB ships an RGB driver for that partner's
+    /// cards (ported from OpenRGB's pci_ids.h / GPU detector list). "partial" = only some models.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, (string Partner, string Support)> GpuPartners =
+        new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["1043"] = ("ASUS", "yes"), ["1462"] = ("MSI", "yes"), ["1458"] = ("Gigabyte / AORUS", "yes"),
+            ["3842"] = ("EVGA", "yes"), ["19DA"] = ("ZOTAC", "yes"), ["1569"] = ("Palit", "yes"),
+            ["10B0"] = ("Gainward", "yes"), ["1B4C"] = ("GALAX / KFA2", "yes"), ["196E"] = ("PNY", "partial"),
+            ["1DA2"] = ("Sapphire", "yes"), ["148C"] = ("PowerColor", "partial"), ["1682"] = ("XFX", "no"),
+            ["1849"] = ("ASRock", "partial"), ["7377"] = ("Colorful", "partial"), ["10DE"] = ("NVIDIA Founders Edition", "partial"),
+            ["1002"] = ("AMD reference", "no"), ["17AA"] = ("Lenovo (OEM)", "no"), ["1028"] = ("Dell (OEM)", "no"),
+            ["103C"] = ("HP (OEM)", "no"), ["1565"] = ("Biostar", "no"), ["1ACC"] = ("Point of View", "no"),
+            ["16F3"] = ("Jetway", "no"), ["174B"] = ("PC Partner / Sapphire", "partial"), ["1642"] = ("Bitland", "no"),
+            ["1EAE"] = ("Inno3D", "partial"),
+        };
+
+    /// <summary>Motherboard makers with an OpenRGB lighting driver family (Aura, Mystic Light, RGB Fusion 2, Polychrome …).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> BoardRgbFamilies =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ASUS"] = "ASUS Aura (SMBus / USB)", ["ASUSTeK"] = "ASUS Aura (SMBus / USB)", ["Micro-Star"] = "MSI Mystic Light (USB)",
+            ["MSI"] = "MSI Mystic Light (USB)", ["Gigabyte"] = "Gigabyte RGB Fusion 2 (SMBus / USB)", ["ASRock"] = "ASRock Polychrome (SMBus / USB)",
+            ["NZXT"] = "NZXT RGB (USB)", ["EVGA"] = "EVGA (SMBus)",
+        };
+
+    /// <summary>Kernel drivers that give user-mode tools port / SMBus access (what OpenRGB, LibreHardwareMonitor, vendor apps use).</summary>
+    internal static readonly (string Prefix, string Description)[] KnownKernelDrivers =
+    {
+        ("PawnIO", "PawnIO — signed SMBus / port driver used by OpenRGB 1.0 and LibreHardwareMonitor"),
+        ("WinRing0", "WinRing0 — legacy port driver (blocked by Microsoft's vulnerable-driver list; OpenRGB 1.0 no longer uses it)"),
+        ("inpoutx64", "inpoutx64 — legacy port I/O driver (OpenRGB 0.9 SMBus access)"),
+        ("RTCore64", "RTCore64 — MSI Afterburner driver"),
+        ("AsIO", "AsIO — ASUS AI Suite / Armoury Crate driver"),
+        ("GLCKIO", "GLCKIO — ASRock / Gigabyte vendor driver"),
+        ("EneTechIo", "ENE vendor RGB driver"),
+        ("NTIOLib", "NTIOLib — MSI vendor driver"),
+        ("MsIo", "MsIo — MSI vendor driver"),
+        ("HwRwDrv", "HwRwDrv — RW-Everything driver"),
+    };
+
+    /// <summary>Installed-software name fragments of RGB / vendor lighting apps.</summary>
+    internal static readonly string[] RgbSoftwareKeywords =
+    {
+        "SignalRGB", "iCUE", "Armoury Crate", "AURA", "MSI Center", "Mystic Light", "RGB Fusion", "Gigabyte Control Center",
+        "Polychrome", "NZXT CAM", "L-Connect", "Razer Synapse", "G HUB", "SteelSeries GG", "MAXSUN", "FireStorm", "Spectra",
+        "OpenRGB", "TT RGB", "MasterPlus", "Corsair", "Thermaltake", "HyperX NGENUITY", "Lian Li", "Phanteks", "DeepCool",
+    };
+
+    private static readonly Regex SubsysRegex = new(@"SUBSYS_[0-9A-F]{4}([0-9A-F]{4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex PciDevRegex = new(@"VEN_([0-9A-F]{4})&DEV_([0-9A-F]{4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Board partner for a PCI device id ("PCI\VEN_10DE&amp;DEV_2216&amp;SUBSYS_361219DA…" → ZOTAC). Pure — unit-tested.</summary>
+    internal static (string Partner, string Support, string SubVendor) PartnerFromPnpId(string pnpId)
+    {
+        var m = SubsysRegex.Match(pnpId ?? "");
+        if (!m.Success) return ("Unknown", "unknown", "");
+        string sv = m.Groups[1].Value.ToUpperInvariant();
+        return GpuPartners.TryGetValue(sv, out var p) ? (p.Partner, p.Support, sv) : ($"Vendor {sv}", "unknown", sv);
+    }
+
+    /// <summary>OpenRGB driver family for a motherboard maker, or null when OpenRGB has none. Pure — unit-tested.</summary>
+    internal static string? BoardFamilyFor(string motherboard)
+    {
+        foreach (var (maker, family) in BoardRgbFamilies)
+            if (motherboard.Contains(maker, StringComparison.OrdinalIgnoreCase)) return family;
+        return null;
+    }
+
     private static readonly Regex VidPidRegex = new(@"VID_([0-9A-F]{4})&PID_([0-9A-F]{4})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>Reads the Windows-side inventory (WMI + service query) off the UI thread.</summary>
@@ -82,6 +176,10 @@ public static class RgbHardwareInventory
         var dimms = new List<string>();
         var gpus = new List<string>();
         var usb = new Dictionary<string, (string, string, string)>(StringComparer.OrdinalIgnoreCase);
+        var boards = new List<GpuBoard>();
+        var drivers = new List<KernelDriver>();
+        var smbus = new List<string>();
+        var software = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -106,11 +204,18 @@ public static class RgbHardwareInventory
         token.ThrowIfCancellationRequested();
         try
         {
-            using var s = new System.Management.ManagementObjectSearcher("SELECT Name FROM Win32_VideoController");
+            using var s = new System.Management.ManagementObjectSearcher("SELECT Name, PNPDeviceID FROM Win32_VideoController");
             foreach (var o in s.Get())
             {
                 var name = Convert.ToString(o["Name"], CultureInfo.InvariantCulture) ?? "";
-                if (!name.Contains("Basic Display", StringComparison.OrdinalIgnoreCase) && name.Length > 0) gpus.Add(name);
+                var pnp = Convert.ToString(o["PNPDeviceID"], CultureInfo.InvariantCulture) ?? "";
+                if (!name.Contains("Basic Display", StringComparison.OrdinalIgnoreCase) && name.Length > 0)
+                {
+                    gpus.Add(name);
+                    var (partner, _, sv) = PartnerFromPnpId(pnp);
+                    var dev = PciDevRegex.Match(pnp);
+                    boards.Add(new GpuBoard(name, partner, sv, dev.Success ? $"{dev.Groups[1].Value}:{dev.Groups[2].Value}".ToUpperInvariant() : ""));
+                }
             }
         }
         catch (Exception ex) { AppLog.Warn("Deep scan: GPU query failed", ex); }
@@ -139,13 +244,67 @@ public static class RgbHardwareInventory
         bool pawnIo = false;
         try
         {
-            using var s = new System.Management.ManagementObjectSearcher("SELECT State FROM Win32_SystemDriver WHERE Name = 'PawnIO'");
+            // Same approach as OpenRGB / LibreHardwareMonitor's driver checks: list kernel drivers by service name.
+            using var s = new System.Management.ManagementObjectSearcher("SELECT Name, State, PathName FROM Win32_SystemDriver");
             foreach (var o in s.Get())
-                pawnIo = string.Equals(Convert.ToString(o["State"], CultureInfo.InvariantCulture), "Running", StringComparison.OrdinalIgnoreCase);
+            {
+                var name = Convert.ToString(o["Name"], CultureInfo.InvariantCulture) ?? "";
+                if (!KnownKernelDrivers.Any(k => name.StartsWith(k.Prefix, StringComparison.OrdinalIgnoreCase))) continue;
+                bool running = string.Equals(Convert.ToString(o["State"], CultureInfo.InvariantCulture), "Running", StringComparison.OrdinalIgnoreCase);
+                drivers.Add(new KernelDriver(name, running, Convert.ToString(o["PathName"], CultureInfo.InvariantCulture) ?? ""));
+                if (name.Equals("PawnIO", StringComparison.OrdinalIgnoreCase)) pawnIo = running;
+            }
         }
-        catch (Exception ex) { AppLog.Warn("Deep scan: PawnIO query failed", ex); }
+        catch (Exception ex) { AppLog.Warn("Deep scan: driver query failed", ex); }
 
-        return new SystemRgbInventory(board, dimms, gpus, usb.Values.ToList(), pawnIo);
+        token.ThrowIfCancellationRequested();
+        try
+        {
+            // SMBus host controllers (AMD FCH "PIIX4" 1022:790B, Intel PCH SMBus, Nuvoton …) — the bus RGB RAM sits on.
+            using var s = new System.Management.ManagementObjectSearcher(
+                "SELECT Name, PNPDeviceID FROM Win32_PnPEntity WHERE Name LIKE '%SMBus%' OR PNPDeviceID LIKE 'PCI\\\\VEN_1022&DEV_790B%'");
+            foreach (var o in s.Get())
+            {
+                var name = Convert.ToString(o["Name"], CultureInfo.InvariantCulture) ?? "SMBus controller";
+                var id = Convert.ToString(o["PNPDeviceID"], CultureInfo.InvariantCulture) ?? "";
+                var dev = PciDevRegex.Match(id);
+                smbus.Add(dev.Success ? $"{name} ({dev.Groups[1].Value}:{dev.Groups[2].Value})" : name);
+            }
+        }
+        catch (Exception ex) { AppLog.Warn("Deep scan: SMBus query failed", ex); }
+
+        token.ThrowIfCancellationRequested();
+        foreach (var hive in new[] { Microsoft.Win32.Registry.LocalMachine, Microsoft.Win32.Registry.CurrentUser })
+        foreach (var path in new[] { @"Software\Microsoft\Windows\CurrentVersion\Uninstall", @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" })
+        {
+            try
+            {
+                using var key = hive.OpenSubKey(path);
+                if (key is null) continue;
+                foreach (var sub in key.GetSubKeyNames())
+                {
+                    using var app = key.OpenSubKey(sub);
+                    if (app?.GetValue("DisplayName") is not string dn || dn.Length == 0) continue;
+                    if (RgbSoftwareKeywords.Any(k => dn.Contains(k, StringComparison.OrdinalIgnoreCase))
+                        && !dn.Contains("FANZi", StringComparison.OrdinalIgnoreCase))
+                        software.Add(dn.Trim());
+                }
+            }
+            catch (Exception ex) { AppLog.Warn("Deep scan: installed-software query failed", ex); }
+        }
+
+        IReadOnlyList<RgbConflictDetector.Conflict> conflictsNow = Array.Empty<RgbConflictDetector.Conflict>();
+        try { conflictsNow = RgbConflictDetector.Find(); }
+        catch (Exception ex) { AppLog.Warn("Deep scan: conflict query failed", ex); }
+
+        return new SystemRgbInventory(board, dimms, gpus, usb.Values.ToList(), pawnIo)
+        {
+            GpuBoards = boards,
+            KernelDrivers = drivers,
+            SmBusControllers = smbus,
+            InstalledRgbSoftware = software.ToList(),
+            RunningConflicts = conflictsNow,
+        };
     }, token);
 
     /// <summary>
@@ -174,6 +333,29 @@ public static class RgbHardwareInventory
         list.Add(system.PawnIoRunning
             ? new("Driver", "PawnIO SMBus driver running", "OpenRGB 1.0 can reach RAM and motherboard controllers on the SMBus.", DeepScanStatus.Ok)
             : new("Driver", "PawnIO driver not running", "RGB RAM and most motherboard RGB are invisible to OpenRGB 1.0 without PawnIO — use the Install PawnIO button, then Restart OpenRGB.", DeepScanStatus.Warning));
+
+        // ── Other RGB software holding the hardware (the #1 reason colours "don't apply") ──
+        foreach (var c in system.RunningConflicts)
+            list.Add(new("Software", $"{c.Product} is running — it overrides FANZi",
+                $"{c.Product} streams its own colours to the same devices, so FANZi's colours are overwritten instantly." +
+                (c.ServiceNames.Count > 0 ? $" Its service ({string.Join(", ", c.ServiceNames)}) relaunches it." : "") +
+                " Use \"Stop & disable autostart\" at the top of the RGB tab.", DeepScanStatus.Missing));
+
+        // ── Kernel drivers (how OpenRGB / LibreHardwareMonitor reach SMBus and ports) ──
+        foreach (var d in system.KernelDrivers.Where(d => !d.Name.Equals("PawnIO", StringComparison.OrdinalIgnoreCase)))
+        {
+            var desc = KnownKernelDrivers.FirstOrDefault(k => d.Name.StartsWith(k.Prefix, StringComparison.OrdinalIgnoreCase)).Description ?? d.Name;
+            string from = d.Path.Length > 0 ? $" Installed at {d.Path.Replace(@"\??\", "")}." : "";
+            list.Add(new("Driver", $"{d.Name} {(d.Running ? "running" : "installed (stopped)")}", desc + "." + from, DeepScanStatus.Info));
+        }
+
+        // ── SMBus host controller ──
+        if (system.SmBusControllers.Count > 0)
+            list.Add(new("SMBus", "SMBus controller found", string.Join(" · ", system.SmBusControllers) +
+                (system.PawnIoRunning ? " — reachable through PawnIO." : " — needs PawnIO before OpenRGB can talk to RAM / board lighting."),
+                system.PawnIoRunning ? DeepScanStatus.Ok : DeepScanStatus.Warning));
+        else if (system.MemoryModules.Count > 0)
+            list.Add(new("SMBus", "No SMBus controller visible", "Windows did not list an SMBus host controller (install the chipset driver from AMD / Intel). Without it RGB RAM cannot be detected.", DeepScanStatus.Warning));
 
         // ── RAM ──
         int dimmCount = system.MemoryModules.Count;
@@ -211,19 +393,34 @@ public static class RgbHardwareInventory
         }
 
         // ── Motherboard ──
+        string? family = BoardFamilyFor(system.Motherboard);
         list.Add(rgbBoard.Count > 0
             ? new("Motherboard", $"{system.Motherboard} — RGB controller found", string.Join(", ", rgbBoard.Select(b => b.DisplayName)), DeepScanStatus.Ok)
-            : new("Motherboard", $"{system.Motherboard} — no RGB controller in OpenRGB",
-                "This board's lighting controller is not supported by OpenRGB (or needs PawnIO / Administrator). Its headers follow the BIOS lighting setting.",
-                DeepScanStatus.Warning));
+            : family is not null
+                ? new("Motherboard", $"{system.Motherboard} — {family} not detected",
+                    $"OpenRGB has a {family} driver for this maker, but it did not answer: install PawnIO, run FANZi as Administrator, close the vendor's own RGB app, then Restart OpenRGB.",
+                    DeepScanStatus.Warning)
+                : new("Motherboard", $"{system.Motherboard} — onboard RGB not supported",
+                    "No open-source tool (OpenRGB, SignalRGB's free tier, LibreHardwareMonitor) has a lighting driver for this board maker. Its onboard / ARGB-header lighting stays " +
+                    "on the BIOS or the maker's own app. FANZi still controls RAM, GPU, monitor and USB RGB devices.",
+                    DeepScanStatus.Info));
 
         // ── GPU ──
         foreach (var gpu in system.Gpus)
         {
             bool found = rgbGpu.Any(g => SharesModel(g.Name, gpu));
+            var board = system.GpuBoards.FirstOrDefault(b => b.Name == gpu);
+            string partner = board is null ? "" : $" ({board.Partner}{(board.SubsystemVendorId.Length > 0 ? $", subsystem {board.SubsystemVendorId}" : "")})";
+            string support = board is null ? "unknown" : (GpuPartners.TryGetValue(board.SubsystemVendorId, out var p) ? p.Support : "unknown");
             list.Add(found || rgbGpu.Count > 0
-                ? new("GPU", gpu, $"RGB via {string.Join(", ", rgbGpu.Select(g => $"{g.DisplayName} · {g.ControlLabel}"))}", DeepScanStatus.Ok)
-                : new("GPU", gpu, "No RGB controller found for this card in OpenRGB (card without RGB, or vendor not supported).", DeepScanStatus.Info));
+                ? new("GPU", gpu + partner, $"RGB via {string.Join(", ", rgbGpu.Select(g => $"{g.DisplayName} · {g.ControlLabel}"))}", DeepScanStatus.Ok)
+                : new("GPU", gpu + partner, support switch
+                {
+                    "yes" => "OpenRGB supports this board partner's RGB, but the card did not answer — close the partner's app (FireStorm, Afterburner, Armoury Crate, …) and Restart OpenRGB.",
+                    "partial" => "OpenRGB supports only some of this partner's cards — this model may not be in its list, or has no RGB.",
+                    "no" => "This board partner's RGB is not supported by OpenRGB (or the card has no RGB).",
+                    _ => "No RGB controller found for this card in OpenRGB (card without RGB, or vendor not supported).",
+                }, support == "yes" ? DeepScanStatus.Warning : DeepScanStatus.Info));
         }
 
         // ── Other OpenRGB devices (monitors, peripherals) ──
@@ -242,6 +439,12 @@ public static class RgbHardwareInventory
                 "If it is an ARGB hub or fan controller, check OpenRGB's supported-devices list or close the vendor's own RGB software.",
                 DeepScanStatus.Info));
         }
+
+        // ── Installed RGB software that is not running (can start again at sign-in) ──
+        var runningProducts = system.RunningConflicts.Select(c => c.Product).ToArray();
+        foreach (var app in system.InstalledRgbSoftware.Where(a => !a.Contains("OpenRGB", StringComparison.OrdinalIgnoreCase)
+                                                                   && !runningProducts.Any(r => a.Contains(r.Split(' ')[0], StringComparison.OrdinalIgnoreCase))))
+            list.Add(new("Software", $"{app} installed", "Not running now. If it starts with Windows it will take the lighting back — keep it closed while FANZi drives RGB.", DeepScanStatus.Info));
 
         return list;
     }

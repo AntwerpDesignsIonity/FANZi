@@ -111,12 +111,13 @@ public sealed partial class RgbControlViewModel
     {
         SelectEffectCommand = new RelayCommand<RgbEffectType>(effect =>
         {
+            TakeManualControl();
             SelectedEffect = effect;
             ActiveTheme = null;
             AiLightingStatus = $"Effect: {EffectChips.First(c => c.Effect == effect).Label} — {EffectChips.First(c => c.Effect == effect).Hint}.";
         });
-        SetPrimarySwatchCommand = new RelayCommand<RgbColor>(c => { PrimaryColor = c; SyncPrimarySliders(); });
-        SetSecondarySwatchCommand = new RelayCommand<RgbColor>(c => { SecondaryColor = c; SyncSecondarySliders(); });
+        SetPrimarySwatchCommand = new RelayCommand<RgbColor>(c => { TakeManualControl(); PrimaryColor = c; SyncPrimarySliders(); });
+        SetSecondarySwatchCommand = new RelayCommand<RgbColor>(c => { TakeManualControl(); SecondaryColor = c; SyncSecondarySliders(); });
         SwapColorsCommand = new RelayCommand(() =>
         {
             (PrimaryColor, SecondaryColor) = (SecondaryColor, PrimaryColor);
@@ -198,6 +199,19 @@ public sealed partial class RgbControlViewModel
     partial void OnSmartAmbientEnabledChanged(bool value) => OnAiSwitchChanged();
     partial void OnThermalGuardianEnabledChanged(bool value) => OnAiSwitchChanged();
     partial void OnNightDimmingEnabledChanged(bool value) => OnAiSwitchChanged();
+
+    /// <summary>
+    /// 4.2: a colour / effect / theme the user picks must show at once. v4.1 kept Smart Ambient in charge,
+    /// so on a warm PC every click was silently replaced by the temperature scene — "RGB does nothing".
+    /// Manual choice now pauses Smart Ambient (Thermal Guardian still protects at critical temperatures).
+    /// </summary>
+    internal void TakeManualControl()
+    {
+        if (!SmartAmbientEnabled) return;
+        SmartAmbientEnabled = false;
+        AiLightingStatus = "Smart Ambient paused — your colour and effect are live now. Turn it back on under AEDi Lighting AI.";
+        AppLog.Info("RGB: manual choice — Smart Ambient paused");
+    }
 
     private void OnAiSwitchChanged()
     {

@@ -207,6 +207,29 @@ public sealed class OpenRgbService : IRgbService
         }, cancellationToken);
     }
 
+    public Task<int?> GetDeviceCountAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.Run<int?>(() =>
+        {
+            bool taken = false;
+            try
+            {
+                Monitor.TryEnter(_lock, WriteLockTimeout, ref taken);
+                if (!taken || _client is null || !IsConnected) return null;
+                return _client.GetControllerCount();
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("OpenRGB: controller-count query failed", ex);
+                return null;
+            }
+            finally
+            {
+                if (taken) Monitor.Exit(_lock);
+            }
+        }, cancellationToken);
+    }
+
     internal static IReadOnlyList<RgbModeDescriptor> Describe(OpenRGB.NET.Device d) =>
         d.Modes.Select((m, idx) => new RgbModeDescriptor(
             idx, m.Name ?? "", (RgbModeColorMode)(int)m.ColorMode, m.ColorMin, m.ColorMax)).ToArray();

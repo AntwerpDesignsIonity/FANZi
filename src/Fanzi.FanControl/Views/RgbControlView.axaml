@@ -151,10 +151,86 @@
                 </Animation>
             </Style.Animations>
         </Style>
+        <!-- 4.2: collapsible advanced sections -->
+        <Style Selector="Expander.rgb-section">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,4,10,10"/>
+        </Style>
+        <Style Selector="Expander.rgb-section /template/ ToggleButton#ExpanderHeader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="10,10"/>
+        </Style>
+        <Style Selector="Expander.rgb-section /template/ ToggleButton#ExpanderHeader:pointerover /template/ Border#ToggleButtonBackground">
+            <Setter Property="Background" Value="#0E1A2E"/>
+        </Style>
+
     </UserControl.Styles>
 
     <ScrollViewer Classes="tab-scroll" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
     <StackPanel Spacing="14" Margin="0,12,12,12">
+
+        <!-- ══ 4.2 BLOCKER: other RGB software repainting the same hardware ══════ -->
+        <Border x:Name="RgbConflictBanner" IsVisible="{Binding HasRgbConflicts}" CornerRadius="14" Padding="16,14"
+                Background="#2A0A10" BorderBrush="#EF4444" BorderThickness="2" BoxShadow="0 0 18 0 #55EF4444">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                <TextBlock Grid.Column="0" Text="⛔" FontSize="26" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                    <TextBlock x:Name="RgbConflictTitleText" Text="{Binding RgbConflictTitle}" FontSize="15" FontWeight="Black" Foreground="#FCA5A5" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding RgbConflictMessage}" FontSize="11.5" Foreground="#F3C4C4" TextWrapping="Wrap"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="rgb-solid" Content="Stop &amp; disable autostart" Command="{Binding DisableConflictingAppsCommand}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            ToolTip.Tip="Stops the app and its background service, sets the service to Manual and removes its sign-in autostart. Re-enable any time in services.msc."/>
+                    <Button Classes="rgb-outline" Content="Close for now" Command="{Binding CloseConflictingAppsCommand}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            ToolTip.Tip="Close the app and stop its service until the next restart"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- OpenRGB banner: shown when not installed or when install/start/connect failed. -->
+        <Border IsVisible="{Binding ShowOpenRgbBanner}" Classes="banner warning">
+            <StackPanel Spacing="8">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding OpenRgbBannerTitle}" FontSize="12" FontWeight="Bold" Foreground="#FB923C"/>
+                    <SelectableTextBlock Text="{Binding OpenRgbBannerMessage}" FontSize="11" Foreground="#C08050" TextWrapping="Wrap"/>
+                </StackPanel>
+                <WrapPanel Orientation="Horizontal">
+                    <Button Content="Install OpenRGB" IsVisible="{Binding ShowInstallButton}" Command="{Binding InstallOpenRgbCommand}"
+                            Classes="rgb-solid" Margin="0,0,8,6"/>
+                    <Button Content="Retry" Command="{Binding RetryOpenRgbCommand}" Classes="rgb-outline" Margin="0,0,8,6"
+                            ToolTip.Tip="Detect, download if needed, start and connect to OpenRGB again"/>
+                    <Button Content="Locate OpenRGB.exe…" Command="{Binding LocateOpenRgbCommand}" Classes="ghost"
+                            CornerRadius="8" Padding="12,6" FontSize="12" Margin="0,0,8,6"
+                            ToolTip.Tip="Point FANZI at an existing OpenRGB.exe (remembered in settings)"/>
+                    <Button Content="Open download page" Command="{Binding OpenOpenRgbDownloadPageCommand}" Classes="ghost"
+                            CornerRadius="8" Padding="12,6" FontSize="12" Margin="0,0,8,6"
+                            ToolTip.Tip="https://openrgb.org/releases.html"/>
+                    <Button Content="PawnIO" Command="{Binding OpenPawnIoCommand}" Classes="ghost"
+                            CornerRadius="8" Padding="12,6" FontSize="12" Margin="0,0,8,6"
+                            ToolTip.Tip="OpenRGB 1.0 needs the PawnIO driver (pawnio.eu) and Administrator for RAM/motherboard RGB"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <!-- PawnIO driver: needed for RGB RAM and motherboard lighting -->
+        <Border IsVisible="{Binding ShowPawnIoPrompt}" Classes="banner warning">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Text="RAM and motherboard RGB need the PawnIO driver" FontSize="12" FontWeight="Bold" Foreground="#FB923C"/>
+                    <TextBlock Text="{Binding PawnIoStatus}" FontSize="11" Foreground="#C08050" TextWrapping="Wrap"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="{Binding PawnIoButtonText}" Command="{Binding InstallPawnIoCommand}"
+                        Classes="rgb-solid" VerticalAlignment="Center"
+                        ToolTip.Tip="Downloads the signed PawnIO driver from github.com/namazso and installs it"/>
+                <Button Grid.Column="2" Content="About" Command="{Binding OpenPawnIoCommand}" Classes="ghost"
+                        VerticalAlignment="Center" CornerRadius="8" Padding="12,6" FontSize="12"
+                        ToolTip.Tip="https://pawnio.eu"/>
+            </Grid>
+        </Border>
+        <!-- Install progress -->
+        <TextBlock IsVisible="{Binding IsInstallingOpenRgb}" Text="{Binding InstallProgress}" FontSize="11" Foreground="#FB923C" Margin="4,0"/>
 
         <!-- ══ HERO ═════════════════════════════════════════════════════════ -->
         <Border Classes="rgb-card" Padding="18,16">
@@ -195,15 +271,17 @@
                                 ToolTip.Tip="Cycle red, green, blue, white on all devices to verify output"/>
                         <Button Classes="rgb-outline" Content="⟳ Rescan" Command="{Binding RescanDevicesCommand}" Margin="0,0,8,6"
                                 ToolTip.Tip="Re-enumerate OpenRGB devices"/>
-                        <Button x:Name="DeepScanButton" Classes="rgb-outline" Content="🔍 Deep scan" Command="{Binding DeepScanCommand}" Margin="0,0,8,6"
-                                ToolTip.Tip="Cross-check OpenRGB against Windows: RAM sticks, fan headers, motherboard, GPU, USB RGB controllers"/>
+                        <Button Classes="rgb-solid" Content="✓ Take control" Command="{Binding TakeControlCommand}" Margin="0,0,8,6"
+                                ToolTip.Tip="Switch every device into FANZi's control mode (Direct / Custom / Static) and apply the current colour now"/>
                         <Button Classes="rgb-outline" Content="↻ Restart OpenRGB" Command="{Binding RestartServerCommand}" Margin="0,0,8,6"
                                 ToolTip.Tip="Restart the OpenRGB server so it re-detects all hardware"/>
                     </WrapPanel>
                 </StackPanel>
 
-                <!-- Connection status badge -->
-                <Border Grid.Column="2" Classes="pill" Padding="14,8" VerticalAlignment="Top"
+                <!-- Connection status badge + master switch -->
+                <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Top">
+                <ToggleSwitch IsChecked="{Binding RgbEnabled}" OnContent="RGB on" OffContent="RGB off" HorizontalAlignment="Right"/>
+                <Border Classes="pill" Padding="14,8"
                         Background="{Binding ConnectionBadgeBackground}"
                         BorderBrush="{Binding ConnectionBadgeBorderBrush}">
                     <StackPanel Spacing="4">
@@ -214,169 +292,83 @@
                                    Classes="muted" TextWrapping="Wrap" MaxWidth="240"/>
                     </StackPanel>
                 </Border>
+                </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ══ SERVER & CONNECTION ══════════════════════════════════════════ -->
+        <!-- ══ DEVICES + LIVE PREVIEW ═══════════════════════════════════════ -->
         <Border Classes="rgb-card">
-            <StackPanel Spacing="10">
-                <!-- OpenRGB banner: shown when not installed or when install/start/connect failed. -->
-                <Border IsVisible="{Binding ShowOpenRgbBanner}" Classes="banner warning">
-                    <StackPanel Spacing="8">
-                        <StackPanel Spacing="2">
-                            <TextBlock Text="{Binding OpenRgbBannerTitle}" FontSize="12" FontWeight="Bold" Foreground="#FB923C"/>
-                            <SelectableTextBlock Text="{Binding OpenRgbBannerMessage}" FontSize="11" Foreground="#C08050" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <WrapPanel Orientation="Horizontal">
-                            <Button Content="Install OpenRGB" IsVisible="{Binding ShowInstallButton}" Command="{Binding InstallOpenRgbCommand}"
-                                    Classes="rgb-solid" Margin="0,0,8,6"/>
-                            <Button Content="Retry" Command="{Binding RetryOpenRgbCommand}" Classes="rgb-outline" Margin="0,0,8,6"
-                                    ToolTip.Tip="Detect, download if needed, start and connect to OpenRGB again"/>
-                            <Button Content="Locate OpenRGB.exe…" Command="{Binding LocateOpenRgbCommand}" Classes="ghost"
-                                    CornerRadius="8" Padding="12,6" FontSize="12" Margin="0,0,8,6"
-                                    ToolTip.Tip="Point FANZI at an existing OpenRGB.exe (remembered in settings)"/>
-                            <Button Content="Open download page" Command="{Binding OpenOpenRgbDownloadPageCommand}" Classes="ghost"
-                                    CornerRadius="8" Padding="12,6" FontSize="12" Margin="0,0,8,6"
-                                    ToolTip.Tip="https://openrgb.org/releases.html"/>
-                            <Button Content="PawnIO" Command="{Binding OpenPawnIoCommand}" Classes="ghost"
-                                    CornerRadius="8" Padding="12,6" FontSize="12" Margin="0,0,8,6"
-                                    ToolTip.Tip="OpenRGB 1.0 needs the PawnIO driver (pawnio.eu) and Administrator for RAM/motherboard RGB"/>
-                        </WrapPanel>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+                <StackPanel Grid.Column="0" Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="DETECTED DEVICES" Classes="rgb-caption" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding DeviceSummary}" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="12" VerticalAlignment="Center"/>
                     </StackPanel>
-                </Border>
-                <!-- Other RGB software holding the same hardware (SignalRGB, iCUE, Aura, …) -->
-                <Border IsVisible="{Binding HasRgbConflicts}" Classes="banner warning">
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Other RGB software is running" FontSize="12" FontWeight="Bold" Foreground="#FB923C"/>
-                            <TextBlock Text="{Binding RgbConflictMessage}" FontSize="11" Foreground="#C08050" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="Close them" Command="{Binding CloseConflictingAppsCommand}"
-                                Classes="rgb-solid" VerticalAlignment="Center"
-                                ToolTip.Tip="Close these apps so FANZI gets exclusive control of your RGB hardware"/>
-                    </Grid>
-                </Border>
-                <!-- PawnIO driver: needed for RGB RAM and motherboard lighting -->
-                <Border IsVisible="{Binding ShowPawnIoPrompt}" Classes="banner warning">
-                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="RAM and motherboard RGB need the PawnIO driver" FontSize="12" FontWeight="Bold" Foreground="#FB923C"/>
-                            <TextBlock Text="{Binding PawnIoStatus}" FontSize="11" Foreground="#C08050" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="{Binding PawnIoButtonText}" Command="{Binding InstallPawnIoCommand}"
-                                Classes="rgb-solid" VerticalAlignment="Center"
-                                ToolTip.Tip="Downloads the signed PawnIO driver from github.com/namazso and installs it"/>
-                        <Button Grid.Column="2" Content="About" Command="{Binding OpenPawnIoCommand}" Classes="ghost"
-                                VerticalAlignment="Center" CornerRadius="8" Padding="12,6" FontSize="12"
-                                ToolTip.Tip="https://pawnio.eu"/>
-                    </Grid>
-                </Border>
-                <!-- Install progress -->
-                <TextBlock IsVisible="{Binding IsInstallingOpenRgb}" Text="{Binding InstallProgress}" FontSize="11" Foreground="#FB923C" Margin="4,0"/>
-                <!-- Server status row — Enable/Disable toggle, server auto-launches with FANZI -->
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                    <Border Grid.Column="0" Classes="pill success" Padding="8,3" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding ServerStatus}" FontSize="10" Foreground="#6EE7B7"
-                                   MaxWidth="360" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ServerStatus}"/>
-                    </Border>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Border Classes="pill info"><TextBlock Text="{Binding CpuTempDisplay}" Foreground="#8EACD0" FontSize="11" FontWeight="SemiBold"/></Border>
-                        <Border Classes="pill info"><TextBlock Text="{Binding GpuTempDisplay}" Foreground="#8EACD0" FontSize="11" FontWeight="SemiBold"/></Border>
-                        <Border Classes="pill success"><TextBlock Text="{Binding PumpSpeedDisplay}" Foreground="#6EE7B7" FontSize="11" FontWeight="SemiBold"/></Border>
-                    </StackPanel>
-                    <ToggleSwitch Grid.Column="2" IsChecked="{Binding RgbEnabled}" OnContent="RGB Enabled" OffContent="RGB Disabled" VerticalAlignment="Center"/>
-                </Grid>
-                <!-- 4.1: OpenRGB SDK endpoint (saved), take-control and diagnostics — makes RGB work on any PC -->
-                <Border x:Name="OpenRgbEndpointPanel" Classes="tile" Padding="12,10">
-                    <StackPanel Spacing="8">
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
-                            <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
-                                <TextBlock Text="SDK ENDPOINT" Classes="rgb-caption"/>
-                                <TextBlock Text="{Binding EndpointLabel}" FontSize="10" Classes="muted"/>
-                            </StackPanel>
-                            <TextBox x:Name="EndpointHostBox" Grid.Column="1" Text="{Binding EndpointHostInput}" Watermark="127.0.0.1 (this PC) or another PC's IP"
-                                     MinWidth="150" VerticalAlignment="Center" AutomationProperties.Name="OpenRGB host"/>
-                            <NumericUpDown x:Name="EndpointPortBox" Grid.Column="2" Value="{Binding EndpointPortInput}" Minimum="1" Maximum="65535" Increment="1"
-                                           FormatString="0" Width="130" VerticalAlignment="Center" AutomationProperties.Name="OpenRGB port"/>
-                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                <Button Classes="rgb-solid" Content="Apply &amp; connect" Command="{Binding ApplyEndpointCommand}"
-                                        ToolTip.Tip="Save this host / port and connect to the OpenRGB SDK server there"/>
-                                <Button Classes="rgb-outline" Content="Auto-detect" Command="{Binding DetectEndpointCommand}"
-                                        ToolTip.Tip="Find the port a running OpenRGB listens on (this PC)"/>
-                            </StackPanel>
-                        </Grid>
-                        <TextBlock x:Name="EndpointStatusText" Text="{Binding EndpointStatus}" FontSize="11" Classes="muted" TextWrapping="Wrap"/>
-                        <WrapPanel>
-                            <Button Classes="rgb-solid" Content="✓ Take control" Command="{Binding TakeControlCommand}" Margin="0,0,8,0"
-                                    ToolTip.Tip="Switch every device into FANZi's control mode (Direct / Custom / Static) and apply the current lighting now"/>
-                            <Button Classes="rgb-outline" Content="⧉ Copy diagnostics" Command="{Binding CopyDiagnosticsCommand}"
-                                    ToolTip.Tip="Copy endpoint, server, devices and errors — paste it when asking for help"/>
-                        </WrapPanel>
-                        <SelectableTextBlock x:Name="ControlReportText" Text="{Binding ControlReport}" FontSize="11" Foreground="#A5F3FC" TextWrapping="Wrap"
-                                             IsVisible="{Binding ControlReport, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </Border>
+                    <Panel>
+                        <ItemsControl x:Name="DeviceCards" ItemsSource="{Binding Devices}">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="model:RgbDeviceInfo">
+                                    <Border Classes="tile row" Width="300" Margin="0,0,10,10" Padding="12,10" CornerRadius="14">
+                                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+                                            <Border Grid.RowSpan="2" Width="40" Height="40" CornerRadius="20" VerticalAlignment="Top"
+                                                    Background="{StaticResource RgbRing}">
+                                                <Border Width="34" Height="34" CornerRadius="17" Background="#0A1322">
+                                                    <TextBlock Text="{Binding Icon}" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="{Binding DisplayName}" Foreground="#E8F0FF" FontSize="13" FontWeight="Bold"
+                                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Location}"/>
+                                                <TextBlock Foreground="#6E8DB5" FontSize="11" TextTrimming="CharacterEllipsis">
+                                                    <Run Text="{Binding FriendlyType}" Foreground="#A5F3FC"/>
+                                                    <Run Text="  ·  "/>
+                                                    <Run Text="{Binding LedCount, StringFormat='{}{0} LEDs'}"/>
+                                                    <Run Text="  ·  "/>
+                                                    <Run Text="{Binding ControlLabel}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <!-- Live LED strip preview: the device's current colour -->
+                                                <Border Height="8" CornerRadius="4" VerticalAlignment="Center"
+                                                        Background="{Binding $parent[UserControl].((vm:RgbControlViewModel)DataContext).PreviewColor, Converter={StaticResource RgbBrush}}"
+                                                        BoxShadow="0 0 8 0 #40FFFFFF"/>
+                                                <Button Grid.Column="1" Classes="rgb-outline" Content="Identify" Padding="8,2" FontSize="10"
+                                                        Command="{Binding $parent[UserControl].DataContext.IdentifyDeviceCommand}" CommandParameter="{Binding}"
+                                                        ToolTip.Tip="Flash this device white three times"/>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border IsVisible="{Binding !Devices.Count}" Classes="tile empty">
+                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource FanziTextMutedBrush}"
+                                       Text="No OpenRGB devices detected yet. FANZI launches OpenRGB automatically in the background — if your hardware doesn't appear, run a Deep scan or Restart OpenRGB."/>
+                        </Border>
+                    </Panel>
+                </StackPanel>
 
-        <!-- ══ AEDi LIGHTING AI ═════════════════════════════════════════════ -->
-        <Border Classes="rgb-card" x:Name="AediLightingCard">
-            <StackPanel Spacing="12">
-                <Grid ColumnDefinitions="*,Auto">
-                    <StackPanel Spacing="2">
-                        <TextBlock Text="AEDi LIGHTING AI" Classes="rgb-caption"/>
-                        <TextBlock Text="Describe a mood, let AEDi pick for you, or hand the lights to the system's live state."
-                                   Foreground="#6E8DB5" FontSize="11" TextWrapping="Wrap"/>
-                    </StackPanel>
-                    <Button Grid.Column="1" Classes="rgb-solid" Content="✨ AEDi suggest" Command="{Binding AiSuggestCommand}" VerticalAlignment="Center"
-                            ToolTip.Tip="Pick a theme from the time of day, load, temperature and game mode"/>
-                </Grid>
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                    <TextBox x:Name="MoodPromptBox" Text="{Binding MoodPrompt, Mode=TwoWay}" Watermark="Describe a mood… e.g. calm ocean, red galaxy, fast cyberpunk party"
-                             FontSize="13" Padding="12,8" CornerRadius="10" Background="#070D18" BorderBrush="#22385C">
-                        <TextBox.KeyBindings>
-                            <KeyBinding Gesture="Return" Command="{Binding GenerateMoodCommand}"/>
-                        </TextBox.KeyBindings>
-                    </TextBox>
-                    <Button Grid.Column="1" Classes="rgb-solid" Content="Generate" Command="{Binding GenerateMoodCommand}" VerticalAlignment="Stretch"/>
-                </Grid>
-                <ItemsControl ItemsSource="{Binding MoodChips}">
-                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:RgbMoodChip">
-                            <Button Classes="chip" Background="{Binding Background}"
-                                    Command="{Binding $parent[UserControl].DataContext.ApplyMoodChipCommand}" CommandParameter="{Binding Prompt}">
-                                <Border Classes="chip-scrim" Padding="10,4">
-                                    <TextBlock Text="{Binding Prompt}" Foreground="#FFFFFF" FontSize="11" FontWeight="Bold"/>
-                                </Border>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <UniformGrid Columns="3">
-                    <Border Classes="tile" Padding="12,8" Margin="0,0,8,0">
-                        <StackPanel Spacing="4">
-                            <ToggleSwitch x:Name="SmartAmbientToggle" IsChecked="{Binding SmartAmbientEnabled}" OnContent="Smart Ambient" OffContent="Smart Ambient" FontSize="12"/>
-                            <TextBlock Text="Idle → calm breathe · busy → load pace · game → performance · hot → thermal colours."
-                                       FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Classes="tile" Padding="12,8" Margin="0,0,8,0">
-                        <StackPanel Spacing="4">
-                            <ToggleSwitch IsChecked="{Binding ThermalGuardianEnabled}" OnContent="Thermal Guardian" OffContent="Thermal Guardian" FontSize="12"/>
-                            <TextBlock Text="CPU ≥ 92 °C or GPU ≥ 86 °C → red alert flash on every device until it cools 6 °C."
-                                       FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Classes="tile" Padding="12,8">
-                        <StackPanel Spacing="4">
-                            <ToggleSwitch IsChecked="{Binding NightDimmingEnabled}" OnContent="Night dimming" OffContent="Night dimming" FontSize="12"/>
-                            <TextBlock Text="22:00 – 06:30: brightness capped at 35 % and effects slow down."
-                                       FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </Border>
-                </UniformGrid>
-            </StackPanel>
+                <!-- Live preview orb (large) -->
+                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Width="150">
+                    <TextBlock Text="LIVE PREVIEW" Classes="rgb-caption" HorizontalAlignment="Center"/>
+                    <Panel Width="132" Height="132" HorizontalAlignment="Center">
+                        <Border Classes="rgb-ring-spin" Width="132" Height="132" CornerRadius="66" Background="{StaticResource RgbRing}" Opacity="0.85"
+                                RenderTransformOrigin="50%,50%">
+                            <Border.RenderTransform><RotateTransform Angle="0"/></Border.RenderTransform>
+                        </Border>
+                        <Border Width="122" Height="122" CornerRadius="61" Background="#070D18"/>
+                        <Border Width="106" Height="106" CornerRadius="53" BoxShadow="0 0 40 6 #500064FF"
+                                Background="{Binding PreviewColor, Converter={StaticResource RgbBrush}}">
+                            <Border.Transitions><Transitions><BrushTransition Property="Background" Duration="0:0:0.08"/></Transitions></Border.Transitions>
+                        </Border>
+                    </Panel>
+                    <TextBlock Text="{Binding PreviewHex}" HorizontalAlignment="Center" FontFamily="Consolas,monospace" FontSize="14" FontWeight="Bold"
+                               Foreground="{Binding PreviewColor, Converter={StaticResource RgbBrush}}"/>
+                    <TextBlock Text="{Binding SelectedEffect}" HorizontalAlignment="Center" Foreground="#6E8DB5" FontSize="12"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- ══ EFFECTS ══════════════════════════════════════════════════════ -->
@@ -557,162 +549,220 @@
             </StackPanel>
         </Border>
 
-        <!-- ══ DEVICES + LIVE PREVIEW ═══════════════════════════════════════ -->
-        <Border Classes="rgb-card">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
-                <StackPanel Grid.Column="0" Spacing="10">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <TextBlock Text="DETECTED DEVICES" Classes="rgb-caption" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding DeviceSummary}" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="12" VerticalAlignment="Center"/>
+        <!-- ══ HARDWARE &AMP; DRIVERS (collapsible) ══ -->
+        <Border Classes="rgb-card" Padding="6,4">
+            <Expander x:Name="HardwareSection" Classes="rgb-section" IsExpanded="False" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <StackPanel Spacing="1">
+                        <TextBlock Text="HARDWARE &amp; DRIVERS" Classes="rgb-caption"/>
+                        <TextBlock x:Name="HardwareSectionSummary" Text="{Binding DeepScanSummary}" Foreground="#6E8DB5" FontSize="11" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <Panel>
-                        <ItemsControl x:Name="DeviceCards" ItemsSource="{Binding Devices}">
-                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="model:RgbDeviceInfo">
-                                    <Border Classes="tile row" Width="300" Margin="0,0,10,10" Padding="12,10" CornerRadius="14">
-                                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8">
-                                            <Border Grid.RowSpan="2" Width="40" Height="40" CornerRadius="20" VerticalAlignment="Top"
-                                                    Background="{StaticResource RgbRing}">
-                                                <Border Width="34" Height="34" CornerRadius="17" Background="#0A1322">
-                                                    <TextBlock Text="{Binding Icon}" FontSize="16" FontWeight="Black" Foreground="#E8F0FF"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </Border>
-                                            <StackPanel Grid.Column="1" Spacing="2">
-                                                <TextBlock Text="{Binding DisplayName}" Foreground="#E8F0FF" FontSize="13" FontWeight="Bold"
-                                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Location}"/>
-                                                <TextBlock Foreground="#6E8DB5" FontSize="11" TextTrimming="CharacterEllipsis">
-                                                    <Run Text="{Binding FriendlyType}" Foreground="#A5F3FC"/>
-                                                    <Run Text="  ·  "/>
-                                                    <Run Text="{Binding LedCount, StringFormat='{}{0} LEDs'}"/>
-                                                    <Run Text="  ·  "/>
-                                                    <Run Text="{Binding ControlLabel}"/>
-                                                </TextBlock>
-                                            </StackPanel>
-                                            <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                                <!-- Live LED strip preview: the device's current colour -->
-                                                <Border Height="8" CornerRadius="4" VerticalAlignment="Center"
-                                                        Background="{Binding $parent[UserControl].((vm:RgbControlViewModel)DataContext).PreviewColor, Converter={StaticResource RgbBrush}}"
-                                                        BoxShadow="0 0 8 0 #40FFFFFF"/>
-                                                <Button Grid.Column="1" Classes="rgb-outline" Content="Identify" Padding="8,2" FontSize="10"
-                                                        Command="{Binding $parent[UserControl].DataContext.IdentifyDeviceCommand}" CommandParameter="{Binding}"
-                                                        ToolTip.Tip="Flash this device white three times"/>
-                                            </Grid>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <Border IsVisible="{Binding !Devices.Count}" Classes="tile empty">
-                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource FanziTextMutedBrush}"
-                                       Text="No OpenRGB devices detected yet. FANZI launches OpenRGB automatically in the background — if your hardware doesn't appear, run a Deep scan or Restart OpenRGB."/>
-                        </Border>
-                    </Panel>
-                </StackPanel>
-
-                <!-- Live preview orb (large) -->
-                <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center" Width="150">
-                    <TextBlock Text="LIVE PREVIEW" Classes="rgb-caption" HorizontalAlignment="Center"/>
-                    <Panel Width="132" Height="132" HorizontalAlignment="Center">
-                        <Border Classes="rgb-ring-spin" Width="132" Height="132" CornerRadius="66" Background="{StaticResource RgbRing}" Opacity="0.85"
-                                RenderTransformOrigin="50%,50%">
-                            <Border.RenderTransform><RotateTransform Angle="0"/></Border.RenderTransform>
-                        </Border>
-                        <Border Width="122" Height="122" CornerRadius="61" Background="#070D18"/>
-                        <Border Width="106" Height="106" CornerRadius="53" BoxShadow="0 0 40 6 #500064FF"
-                                Background="{Binding PreviewColor, Converter={StaticResource RgbBrush}}">
-                            <Border.Transitions><Transitions><BrushTransition Property="Background" Duration="0:0:0.08"/></Transitions></Border.Transitions>
-                        </Border>
-                    </Panel>
-                    <TextBlock Text="{Binding PreviewHex}" HorizontalAlignment="Center" FontFamily="Consolas,monospace" FontSize="14" FontWeight="Bold"
-                               Foreground="{Binding PreviewColor, Converter={StaticResource RgbBrush}}"/>
-                    <TextBlock Text="{Binding SelectedEffect}" HorizontalAlignment="Center" Foreground="#6E8DB5" FontSize="12"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- ══ DEEP SCAN ════════════════════════════════════════════════════ -->
-        <Border Classes="rgb-card" x:Name="DeepScanCard">
-            <StackPanel Spacing="10">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <StackPanel Spacing="2">
-                        <TextBlock Text="DEEP HARDWARE SCAN" Classes="rgb-caption"/>
-                        <TextBlock x:Name="DeepScanSummaryText" Text="{Binding DeepScanSummary}" Foreground="#6E8DB5" FontSize="11" TextWrapping="Wrap"/>
-                    </StackPanel>
-                    <Button Grid.Column="1" Classes="rgb-solid" Command="{Binding DeepScanCommand}" VerticalAlignment="Center"
-                            Content="{Binding DeepScanButtonText}"/>
-                </Grid>
-                <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsDeepScanning}" Height="3" Foreground="{StaticResource RgbRainbow}"/>
-                <ItemsControl x:Name="DeepScanList" ItemsSource="{Binding DeepScanFindings}" IsVisible="{Binding HasDeepScanResults}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="rgb:DeepScanFinding">
-                            <Border Classes="tile row" Margin="0,0,0,6" Padding="12,8">
-                                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="12">
-                                    <Border Width="30" Height="30" CornerRadius="15" Background="#0A1322" BorderBrush="{Binding StatusColor}" BorderThickness="1.5" VerticalAlignment="Top">
-                                        <TextBlock Text="{Binding Icon}" FontSize="13" FontWeight="Black" Foreground="{Binding StatusColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <Border Grid.Column="1" Classes="pill" Padding="8,2" VerticalAlignment="Top" BorderBrush="{Binding StatusColor}">
-                                        <TextBlock Text="{Binding StatusLabel}" FontSize="9" FontWeight="Black" Foreground="{Binding StatusColor}"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="2" Spacing="2">
-                                        <TextBlock Foreground="#E8F0FF" FontSize="12" FontWeight="Bold" TextWrapping="Wrap">
-                                            <Run Text="{Binding Category}" Foreground="#A5F3FC"/>
-                                            <Run Text=" — "/>
-                                            <Run Text="{Binding Title}"/>
-                                        </TextBlock>
-                                        <SelectableTextBlock Text="{Binding Detail}" Foreground="#8EACD0" FontSize="11" TextWrapping="Wrap"/>
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-        </Border>
-
-        <!-- ══ PER-ZONE CONTROL ═════════════════════════════════════════════ -->
-        <Border Classes="rgb-card">
-            <StackPanel Spacing="12">
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <StackPanel Grid.Column="0" Spacing="2">
-                        <TextBlock Text="PER-ZONE CONTROL" Classes="rgb-caption"/>
-                        <TextBlock Text="Give each zone — RAM stick, fan ring, GPU block — its own colour, effect and reactive source."
-                                   Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
-                    </StackPanel>
-                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding ZoneModeEnabled}" OnContent="Per-zone" OffContent="Global" VerticalAlignment="Center"/>
-                </Grid>
-                <Border IsVisible="{Binding !HasZones}" Classes="tile empty">
-                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource FanziTextMutedBrush}"
-                               Text="No addressable zones detected yet. Once OpenRGB enumerates your RAM, ARGB headers or GPU, each zone appears here for individual control."/>
-                </Border>
-                <ItemsControl ItemsSource="{Binding ZoneControls}" IsVisible="{Binding HasZones}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ZoneEffectViewModel">
-                            <Border Margin="0,0,0,8" Classes="tile row" Padding="12">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                                    <Border Grid.Column="0" Width="34" Height="34" CornerRadius="17" VerticalAlignment="Center"
-                                            Background="{Binding PreviewColor, Converter={StaticResource RgbBrush}}"
-                                            BorderBrush="#55FFFFFF" BorderThickness="1.5"/>
-                                    <StackPanel Grid.Column="1" Spacing="6">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Text="{Binding DisplayLabel}" Foreground="#C4D8F4" FontSize="13" FontWeight="SemiBold"/>
-                                            <TextBlock Text="{Binding LedLabel}" Foreground="#4E6E95" FontSize="11" VerticalAlignment="Center"/>
+                </Expander.Header>
+                <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <TextBlock x:Name="DeepScanSummaryText" Text="Native scan: Windows PnP / PCI / SMBus, kernel drivers (PawnIO, WinRing0, inpoutx64), RGB RAM, GPU board partner, motherboard RGB family, USB RGB controllers and other RGB software — cross-checked against OpenRGB."
+                                   Foreground="#6E8DB5" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Classes="rgb-solid" Command="{Binding DeepScanCommand}" VerticalAlignment="Center"
+                                Content="{Binding DeepScanButtonText}"/>
+                    </Grid>
+                    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsDeepScanning}" Height="3" Foreground="{StaticResource RgbRainbow}"/>
+                    <ItemsControl x:Name="DeepScanList" ItemsSource="{Binding DeepScanFindings}" IsVisible="{Binding HasDeepScanResults}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="rgb:DeepScanFinding">
+                                <Border Classes="tile row" Margin="0,0,0,6" Padding="12,8">
+                                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="12">
+                                        <Border Width="30" Height="30" CornerRadius="15" Background="#0A1322" BorderBrush="{Binding StatusColor}" BorderThickness="1.5" VerticalAlignment="Top">
+                                            <TextBlock Text="{Binding Icon}" FontSize="13" FontWeight="Black" Foreground="{Binding StatusColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <Border Grid.Column="1" Classes="pill" Padding="8,2" VerticalAlignment="Top" BorderBrush="{Binding StatusColor}">
+                                            <TextBlock Text="{Binding StatusLabel}" FontSize="9" FontWeight="Black" Foreground="{Binding StatusColor}"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock Foreground="#E8F0FF" FontSize="12" FontWeight="Bold" TextWrapping="Wrap">
+                                                <Run Text="{Binding Category}" Foreground="#A5F3FC"/>
+                                                <Run Text=" — "/>
+                                                <Run Text="{Binding Title}"/>
+                                            </TextBlock>
+                                            <SelectableTextBlock Text="{Binding Detail}" Foreground="#8EACD0" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
-                                            <ComboBox Grid.Column="0" ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect, Mode=TwoWay}"
-                                                      FontSize="12" HorizontalAlignment="Stretch" ToolTip.Tip="Effect for this zone"/>
-                                            <ComboBox Grid.Column="1" ItemsSource="{Binding Sources}" SelectedItem="{Binding ReactiveSource, Mode=TwoWay}"
-                                                      FontSize="12" HorizontalAlignment="Stretch" ToolTip.Tip="Hardware signal that drives reactive effects"/>
-                                            <TextBox Grid.Column="2" Text="{Binding PrimaryHex}" Width="84" Classes="hex" ToolTip.Tip="Zone colour (hex)"/>
-                                        </Grid>
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Expander>
+        </Border>
+
+        <!-- ══ PER-ZONE CONTROL (collapsible) ══ -->
+        <Border Classes="rgb-card" Padding="6,4">
+            <Expander x:Name="ZoneSection" Classes="rgb-section" IsExpanded="False" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <StackPanel Spacing="1">
+                        <TextBlock Text="PER-ZONE CONTROL" Classes="rgb-caption"/>
+                        <TextBlock Text="Give each zone — RAM stick, GPU logo, monitor strip — its own colour and effect" Foreground="#6E8DB5" FontSize="11" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Expander.Header>
+                <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <TextBlock Grid.Column="0" Text="Off = every device follows the effect above. On = each zone uses its own row below."
+                                   Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding ZoneModeEnabled}" OnContent="Per-zone" OffContent="Global" VerticalAlignment="Center"/>
+                    </Grid>
+                    <Border IsVisible="{Binding !HasZones}" Classes="tile empty">
+                        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource FanziTextMutedBrush}"
+                                   Text="No addressable zones detected yet. Once OpenRGB enumerates your RAM, ARGB headers or GPU, each zone appears here for individual control."/>
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding ZoneControls}" IsVisible="{Binding HasZones}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ZoneEffectViewModel">
+                                <Border Margin="0,0,0,8" Classes="tile row" Padding="12">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                        <Border Grid.Column="0" Width="34" Height="34" CornerRadius="17" VerticalAlignment="Center"
+                                                Background="{Binding PreviewColor, Converter={StaticResource RgbBrush}}"
+                                                BorderBrush="#55FFFFFF" BorderThickness="1.5"/>
+                                        <StackPanel Grid.Column="1" Spacing="6">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding DisplayLabel}" Foreground="#C4D8F4" FontSize="13" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding LedLabel}" Foreground="#4E6E95" FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+                                                <ComboBox Grid.Column="0" ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect, Mode=TwoWay}"
+                                                          FontSize="12" HorizontalAlignment="Stretch" ToolTip.Tip="Effect for this zone"/>
+                                                <ComboBox Grid.Column="1" ItemsSource="{Binding Sources}" SelectedItem="{Binding ReactiveSource, Mode=TwoWay}"
+                                                          FontSize="12" HorizontalAlignment="Stretch" ToolTip.Tip="Hardware signal that drives reactive effects"/>
+                                                <TextBox Grid.Column="2" Text="{Binding PrimaryHex}" Width="84" Classes="hex" ToolTip.Tip="Zone colour (hex)"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Expander>
+        </Border>
+
+        <!-- ══ AEDI LIGHTING AI (collapsible) ══ -->
+        <Border Classes="rgb-card" Padding="6,4">
+            <Expander x:Name="AediSection" Classes="rgb-section" IsExpanded="False" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <StackPanel Spacing="1">
+                        <TextBlock Text="AEDi LIGHTING AI" Classes="rgb-caption"/>
+                        <TextBlock Text="Mood prompts, Smart Ambient, Thermal Guardian and Night dimming" Foreground="#6E8DB5" FontSize="11" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Expander.Header>
+                <StackPanel Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Describe a mood, let AEDi pick for you, or hand the lights to the system's live state."
+                                   Foreground="#6E8DB5" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Classes="rgb-solid" Content="✨ AEDi suggest" Command="{Binding AiSuggestCommand}" VerticalAlignment="Center"
+                                ToolTip.Tip="Pick a theme from the time of day, load, temperature and game mode"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBox x:Name="MoodPromptBox" Text="{Binding MoodPrompt, Mode=TwoWay}" Watermark="Describe a mood… e.g. calm ocean, red galaxy, fast cyberpunk party"
+                                 FontSize="13" Padding="12,8" CornerRadius="10" Background="#070D18" BorderBrush="#22385C">
+                            <TextBox.KeyBindings>
+                                <KeyBinding Gesture="Return" Command="{Binding GenerateMoodCommand}"/>
+                            </TextBox.KeyBindings>
+                        </TextBox>
+                        <Button Grid.Column="1" Classes="rgb-solid" Content="Generate" Command="{Binding GenerateMoodCommand}" VerticalAlignment="Stretch"/>
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding MoodChips}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RgbMoodChip">
+                                <Button Classes="chip" Background="{Binding Background}"
+                                        Command="{Binding $parent[UserControl].DataContext.ApplyMoodChipCommand}" CommandParameter="{Binding Prompt}">
+                                    <Border Classes="chip-scrim" Padding="10,4">
+                                        <TextBlock Text="{Binding Prompt}" Foreground="#FFFFFF" FontSize="11" FontWeight="Bold"/>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <UniformGrid Columns="3">
+                        <Border Classes="tile" Padding="12,8" Margin="0,0,8,0">
+                            <StackPanel Spacing="4">
+                                <ToggleSwitch x:Name="SmartAmbientToggle" IsChecked="{Binding SmartAmbientEnabled}" OnContent="Smart Ambient" OffContent="Smart Ambient" FontSize="12"/>
+                                <TextBlock Text="Idle → calm breathe · busy → load pace · game → performance · hot → thermal colours."
+                                           FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="tile" Padding="12,8" Margin="0,0,8,0">
+                            <StackPanel Spacing="4">
+                                <ToggleSwitch IsChecked="{Binding ThermalGuardianEnabled}" OnContent="Thermal Guardian" OffContent="Thermal Guardian" FontSize="12"/>
+                                <TextBlock Text="CPU ≥ 92 °C or GPU ≥ 86 °C → red alert flash on every device until it cools 6 °C."
+                                           FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="tile" Padding="12,8">
+                            <StackPanel Spacing="4">
+                                <ToggleSwitch IsChecked="{Binding NightDimmingEnabled}" OnContent="Night dimming" OffContent="Night dimming" FontSize="12"/>
+                                <TextBlock Text="22:00 – 06:30: brightness capped at 35 % and effects slow down."
+                                           FontSize="10" Foreground="{StaticResource FanziTextMutedBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+                </StackPanel>
+            </Expander>
+        </Border>
+
+        <!-- ══ CONNECTION & OPENRGB SERVER (collapsible, advanced) ══ -->
+        <Border Classes="rgb-card" Padding="6,4">
+            <Expander x:Name="ConnectionSection" Classes="rgb-section" IsExpanded="False" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <StackPanel Spacing="1">
+                        <TextBlock Text="CONNECTION &amp; OPENRGB SERVER" Classes="rgb-caption"/>
+                        <TextBlock Text="{Binding ServerStatus}" Foreground="#6E8DB5" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Expander.Header>
+                <StackPanel Spacing="10">
+                <!-- Server status row — Enable/Disable toggle, server auto-launches with FANZI -->
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                    <Border Grid.Column="0" Classes="pill success" Padding="8,3" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ServerStatus}" FontSize="10" Foreground="#6EE7B7"
+                                   MaxWidth="360" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ServerStatus}"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Border Classes="pill info"><TextBlock Text="{Binding CpuTempDisplay}" Foreground="#8EACD0" FontSize="11" FontWeight="SemiBold"/></Border>
+                        <Border Classes="pill info"><TextBlock Text="{Binding GpuTempDisplay}" Foreground="#8EACD0" FontSize="11" FontWeight="SemiBold"/></Border>
+                        <Border Classes="pill success"><TextBlock Text="{Binding PumpSpeedDisplay}" Foreground="#6EE7B7" FontSize="11" FontWeight="SemiBold"/></Border>
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="2" IsChecked="{Binding RgbEnabled}" OnContent="RGB Enabled" OffContent="RGB Disabled" VerticalAlignment="Center"/>
+                </Grid>
+                <!-- 4.1: OpenRGB SDK endpoint (saved), take-control and diagnostics — makes RGB work on any PC -->
+                <Border x:Name="OpenRgbEndpointPanel" Classes="tile" Padding="12,10">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                            <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                                <TextBlock Text="SDK ENDPOINT" Classes="rgb-caption"/>
+                                <TextBlock Text="{Binding EndpointLabel}" FontSize="10" Classes="muted"/>
+                            </StackPanel>
+                            <TextBox x:Name="EndpointHostBox" Grid.Column="1" Text="{Binding EndpointHostInput}" Watermark="127.0.0.1 (this PC) or another PC's IP"
+                                     MinWidth="150" VerticalAlignment="Center" AutomationProperties.Name="OpenRGB host"/>
+                            <NumericUpDown x:Name="EndpointPortBox" Grid.Column="2" Value="{Binding EndpointPortInput}" Minimum="1" Maximum="65535" Increment="1"
+                                           FormatString="0" Width="130" VerticalAlignment="Center" AutomationProperties.Name="OpenRGB port"/>
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <Button Classes="rgb-solid" Content="Apply &amp; connect" Command="{Binding ApplyEndpointCommand}"
+                                        ToolTip.Tip="Save this host / port and connect to the OpenRGB SDK server there"/>
+                                <Button Classes="rgb-outline" Content="Auto-detect" Command="{Binding DetectEndpointCommand}"
+                                        ToolTip.Tip="Find the port a running OpenRGB listens on (this PC)"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock x:Name="EndpointStatusText" Text="{Binding EndpointStatus}" FontSize="11" Classes="muted" TextWrapping="Wrap"/>
+                        <WrapPanel>
+                            <Button Classes="rgb-solid" Content="✓ Take control" Command="{Binding TakeControlCommand}" Margin="0,0,8,0"
+                                    ToolTip.Tip="Switch every device into FANZi's control mode (Direct / Custom / Static) and apply the current lighting now"/>
+                            <Button Classes="rgb-outline" Content="⧉ Copy diagnostics" Command="{Binding CopyDiagnosticsCommand}"
+                                    ToolTip.Tip="Copy endpoint, server, devices and errors — paste it when asking for help"/>
+                        </WrapPanel>
+                        <SelectableTextBlock x:Name="ControlReportText" Text="{Binding ControlReport}" FontSize="11" Foreground="#A5F3FC" TextWrapping="Wrap"
+                                             IsVisible="{Binding ControlReport, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+                </Border>
+                </StackPanel>
+            </Expander>
         </Border>
 
     </StackPanel>
