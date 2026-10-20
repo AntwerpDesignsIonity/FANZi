@@ -26,7 +26,7 @@ public class SmbusMirrorResolverTests
     [Fact]
     public void Johans_pc_two_sticks_on_two_ports_drives_one_entry_per_stick()
     {
-        // Exactly what OpenRGB reported on 2026-10-20: 4 ENE DRAM entries, 2 physical sticks (slots 2 & 4 on bus 1).
+        // Exactly what OpenRGB reported on 2026-10-20: 4 ENE DRAM entries, 2 physical sticks (A2 / B2 = ENE 0x71 / 0x73).
         var devices = new[]
         {
             Ram(0, 0, 0x71, 8), Ram(1, 0, 0x73, 8),
@@ -68,12 +68,16 @@ public class SmbusMirrorResolverTests
     }
 
     [Fact]
-    public void Both_ports_plausible_picks_the_highest_port_for_every_stick()
+    public void Both_ports_plausible_picks_port_0_for_every_stick()
     {
+        // 4.3.3: Patriot DDR5 in A2 / B2 (ENE 0x71 / 0x73) on the MAXSUN X870M. A clean OpenRGB detection lists the sticks on
+        // PIIX4 port 0 only; 4.3.2 drove the port 1 copies and the sticks never changed colour.
         var devices = new[] { Ram(0, 0, 0x71, 8), Ram(1, 0, 0x73, 8), Ram(2, 1, 0x71, 8), Ram(3, 1, 0x73, 8) };
         var d = SmbusMirrorResolver.Resolve(devices);
-        Assert.False(d[0].Drive); Assert.False(d[1].Drive);
-        Assert.True(d[2].Drive); Assert.True(d[3].Drive);
+        Assert.True(d[0].Drive); Assert.True(d[1].Drive);
+        Assert.False(d[2].Drive); Assert.False(d[3].Drive);
+        Assert.Equal(0, d[2].MirrorOf); Assert.Equal(1, d[3].MirrorOf);
+        Assert.Contains("port 0", d[0].Note);
     }
 
     [Fact]
@@ -81,7 +85,7 @@ public class SmbusMirrorResolverTests
     {
         // Port 1 wins 2:1 on plausibility; stick 0x75 reads 0 LEDs there but is still driven via port 1 (layout re-read later),
         // never via port 0 — that would mix host ports on one bus.
-        var devices = new[] { Ram(0, 0, 0x71, 300), Ram(1, 0, 0x73, 8), Ram(2, 0, 0x75, 8), Ram(3, 1, 0x71, 8), Ram(4, 1, 0x73, 8), Ram(5, 1, 0x75, 0) };
+        var devices = new[] { Ram(0, 0, 0x71, 300), Ram(1, 0, 0x73, 257), Ram(2, 0, 0x75, 8), Ram(3, 1, 0x71, 8), Ram(4, 1, 0x73, 8), Ram(5, 1, 0x75, 0) };
         var d = SmbusMirrorResolver.Resolve(devices);
         Assert.All(new[] { 0, 1, 2 }, i => Assert.False(d[i].Drive));
         Assert.All(new[] { 3, 4, 5 }, i => Assert.True(d[i].Drive));

@@ -26,7 +26,7 @@ public sealed record SmbusMirrorDecision(int Index, bool Drive, int? MirrorOf, s
 /// its LED count reads back as garbage (0, 249, 257 …).
 ///
 /// This resolver keeps exactly one entry per physical stick and marks the others as mirrors that are never
-/// written. Pick order: a user-forced port, else the entry with a plausible LED count, else the highest port
+/// written. Pick order: a user-forced port, else the entry with a plausible LED count, else the lowest port
 /// (OpenRGB's DRAM detector — which knows which bus the SPD EEPROMs answer on — runs after the generic I2C
 /// detector and therefore registers later).
 /// </summary>
@@ -113,7 +113,10 @@ public static class SmbusMirrorResolver
 
     /// <summary>
     /// The port that drives every mirrored controller on one adapter: the forced port when present, else the port with
-    /// the most plausible LED counts (a port that reads garbage is the one whose controllers are confused), tie → highest.
+    /// the most plausible LED counts (a port that reads garbage is the one whose controllers are confused), tie → lowest.
+    /// 4.3.3: lowest, not highest. On AMD FCH (PIIX4 1022:790B) a clean OpenRGB detection registers the DIMM controllers
+    /// on port 0 only; the port 1 copies show up on later re-detections and writes through them do not reach the sticks
+    /// (MAXSUN MS-iCraft X870M, Patriot DDR5 RGB in A2 / B2 = ENE 0x71 / 0x73, 2026-10-20).
     /// </summary>
     internal static int ChoosePort(List<(SmbusDeviceSketch Device, SmbusAddress Addr)> members, int? forcedPort)
     {
@@ -121,7 +124,7 @@ public static class SmbusMirrorResolver
         if (forcedPort is int fp && ports.Contains(fp)) return fp;
         return ports
             .OrderByDescending(p => members.Count(m => m.Addr.Port == p && IsPlausibleRamLedCount(m.Device.LedCount)))
-            .ThenByDescending(p => p)
+            .ThenBy(p => p)
             .First();
     }
 
@@ -134,10 +137,10 @@ public static class SmbusMirrorResolver
             if (forced.Device is not null) return forced;
         }
 
-        // Plausible LED count beats garbage; among equals the highest port wins (registered last by the DRAM detector).
+        // Plausible LED count beats garbage; among equals the lowest port wins (port 0 = the bus a clean detection finds).
         return members
             .OrderByDescending(m => IsPlausibleRamLedCount(m.Device.LedCount) ? 1 : 0)
-            .ThenByDescending(m => m.Addr.Port)
+            .ThenBy(m => m.Addr.Port)
             .First();
     }
 

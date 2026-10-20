@@ -65,6 +65,15 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | 🔥 **Thermal Bench (4.3)** | Repeatable all-core cooling benchmark with a 0–100 score, grade, fan-lag / recovery metrics, run history and CSV export |
 | ▤ **RAM lighting that sticks (4.3)** | ENE DRAM mirrored on two SMBus ports is driven exactly once, SMBus writes are rate-limited, and **Re-sync RAM** recovers a stuck controller without a reboot |
 
+### What's new in v4.3.3
+
+- **RAM drives through SMBus port 0.** When both PIIX4 ports read the sticks correctly, FANZi now picks port 0 - the port a clean
+  OpenRGB detection registers the DIMM controllers on (AMD FCH 1022:790B). 4.3.2 picked port 1, whose copies don't reach the sticks
+  on boards like the MAXSUN MS-iCraft X870M (Patriot DDR5 RGB in A2 / B2, ENE 0x71 / 0x73). Slots are never assumed: FANZi uses the
+  addresses OpenRGB detects and the slot names Windows reports.
+- **Sticks still frozen?** ENE controllers locked up by an older version (two ports writing at once) ignore every colour until they
+  lose power: shut down, switch the PSU off for 30 s, then start again. A Windows restart is not enough.
+
 ### What's new in v4.3.2
 
 - **RAM lighting fixed.** On AMD boards OpenRGB lists every ENE DRAM stick twice — once per SMBus host port (PIIX4 0 and 1) at the
