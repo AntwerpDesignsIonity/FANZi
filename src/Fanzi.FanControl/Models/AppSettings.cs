@@ -37,6 +37,8 @@ public sealed class AppSettings
     public bool ShowSystemCleanerTab { get; set; } = true;
     /// <summary>v4.1.0 Tools tab (disk optimiser, drive health, repair, power &amp; gaming).</summary>
     public bool ShowToolsTab { get; set; } = true;
+    /// <summary>4.3 Thermal Bench tab.</summary>
+    public bool ShowBenchTab { get; set; } = true;
 
     // Overlay
     public bool OverlayTransparent { get; set; } = false;
@@ -67,6 +69,18 @@ public sealed class AppSettings
     public bool RgbSmartAmbient { get; set; }
     public bool RgbThermalGuardian { get; set; } = true;
     public bool RgbNightDimming { get; set; }
+
+    /// <summary>4.3: SMBus host port forced for mirrored RAM entries (null = automatic pick).</summary>
+    public int? RgbRamSmbusPort { get; set; }
+
+    /// <summary>4.3 Typing FX: reactive keystroke lighting on / off (default off until the user tries it).</summary>
+    public bool RgbTypingFxEnabled { get; set; }
+
+    /// <summary>4.3 Typing FX style name ("Ripple", "Pulse", "Line", "Area", "Fireworks", "Typewriter", "Matrix").</summary>
+    public string RgbTypingFxStyle { get; set; } = "Ripple";
+
+    /// <summary>4.3 Typing FX: also drive non-keyboard devices (RAM, GPU, strips) from keystrokes.</summary>
+    public bool RgbTypingFxAllDevices { get; set; } = true;
 
     /// <summary>Last overlay position in screen pixels; null = default (top-right of the primary screen).</summary>
     public int? OverlayX { get; set; }

@@ -1,0 +1,119 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Fanzi.FanControl.ViewModels"
+             x:Class="Fanzi.FanControl.Views.ThermalBenchView"
+             x:DataType="vm:ThermalBenchViewModel">
+    <ScrollViewer Classes="tab-scroll">
+    <Border Classes="panel">
+        <StackPanel Spacing="14">
+            <!-- Header -->
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Thermal Bench" Classes="h1"/>
+                    <TextBlock Text="A repeatable cooling benchmark: all cores at 100 %, then watch how far the temperature climbs, how fast the fans answer and how quickly it recovers. Bench, change the fan curve, bench again."
+                               TextWrapping="Wrap" Foreground="#4A6A8F" FontSize="11" MaxWidth="760"/>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Export CSV" Command="{Binding ExportCsvCommand}" Classes="ghost" Padding="10,5" FontSize="11" VerticalAlignment="Top"
+                        ToolTip.Tip="Saves the last run's samples to Documents\FANZi\Thermal Bench"/>
+                <Button Grid.Column="2" Content="{Binding StartButtonText}" Command="{Binding StartStopCommand}" Classes="primary" Padding="16,6" FontSize="12" FontWeight="Bold" VerticalAlignment="Top"/>
+            </Grid>
+
+            <!-- Settings + live -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Border Grid.Column="0" Classes="tile" Padding="14,12" MinWidth="250">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="RUN SETTINGS" Classes="label-caps" LetterSpacing="1"/>
+                        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                            <TextBlock Text="Load time" Foreground="#C4D8F4" FontSize="12" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Column="1" ItemsSource="{Binding DurationChoices}" SelectedItem="{Binding LoadSeconds, Mode=TwoWay}" IsEnabled="{Binding !IsRunning}" HorizontalAlignment="Stretch" FontSize="12"/>
+                            <TextBlock Grid.Row="1" Text="Threads" Foreground="#C4D8F4" FontSize="12" VerticalAlignment="Center"/>
+                            <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding ThreadChoices}" SelectedItem="{Binding Threads, Mode=TwoWay}" IsEnabled="{Binding !IsRunning}" HorizontalAlignment="Stretch" FontSize="12"/>
+                            <TextBlock Grid.Row="2" Text="Cooldown" Foreground="#C4D8F4" FontSize="12" VerticalAlignment="Center"/>
+                            <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding CooldownSeconds, Mode=TwoWay}" Minimum="10" Maximum="300" Increment="10" FormatString="0 s" IsEnabled="{Binding !IsRunning}" FontSize="12"/>
+                            <TextBlock Grid.Row="3" Text="Baseline" Foreground="#C4D8F4" FontSize="12" VerticalAlignment="Center"/>
+                            <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding BaselineSeconds, Mode=TwoWay}" Minimum="3" Maximum="30" Increment="1" FormatString="0 s" IsEnabled="{Binding !IsRunning}" FontSize="12"/>
+                        </Grid>
+                        <TextBlock Text="Safety: the run stops itself at 95 °C. Bench threads run below normal priority so FANZi and your desktop stay responsive."
+                                   TextWrapping="Wrap" FontSize="11" Foreground="#5A7899"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Classes="tile" Padding="14,12">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Text="{Binding PhaseLabel}" Classes="label-caps" LetterSpacing="1" Foreground="#60A5FA"/>
+                            <TextBlock Grid.Column="2" Text="{Binding ElapsedLabel}" Foreground="#C4D8F4" FontSize="12" FontWeight="Bold"/>
+                        </Grid>
+                        <ProgressBar Value="{Binding Progress}" Minimum="0" Maximum="1" Height="6" Foreground="#38BDF8"/>
+                        <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="8">
+                            <StackPanel><TextBlock Text="CPU" Classes="label-caps"/><TextBlock Text="{Binding LiveTemp}" FontSize="22" FontWeight="Black" Foreground="#F97316"/></StackPanel>
+                            <StackPanel Grid.Column="1"><TextBlock Text="RISE" Classes="label-caps"/><TextBlock Text="{Binding LiveRise}" FontSize="22" FontWeight="Black" Foreground="#FBBF24"/></StackPanel>
+                            <StackPanel Grid.Column="2"><TextBlock Text="FAN" Classes="label-caps"/><TextBlock Text="{Binding LiveFan}" FontSize="22" FontWeight="Black" Foreground="#38BDF8"/></StackPanel>
+                            <StackPanel Grid.Column="3"><TextBlock Text="LOAD" Classes="label-caps"/><TextBlock Text="{Binding LiveLoad}" FontSize="22" FontWeight="Black" Foreground="#22C55E"/></StackPanel>
+                            <StackPanel Grid.Column="4"><TextBlock Text="POWER" Classes="label-caps"/><TextBlock Text="{Binding LiveWatts}" FontSize="22" FontWeight="Black" Foreground="#A78BFA"/></StackPanel>
+                        </Grid>
+                        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" FontSize="11" Foreground="#6E8DB5"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Live chart: temperature (orange) and fan rpm (blue) over the run -->
+            <Border Classes="tile" Padding="14,12" Background="#061018">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <Grid RowDefinitions="Auto,*,Auto" Height="160">
+                        <TextBlock Text="{Binding ChartMaxLabel}" FontSize="10" Foreground="#5A7899"/>
+                        <TextBlock Grid.Row="2" Text="{Binding ChartMinLabel}" FontSize="10" Foreground="#5A7899"/>
+                    </Grid>
+                    <Viewbox Grid.Column="1" Stretch="Fill" Height="160">
+                        <Canvas Width="600" Height="160">
+                            <Line StartPoint="0,40" EndPoint="600,40" Stroke="#14233A" StrokeThickness="1"/>
+                            <Line StartPoint="0,80" EndPoint="600,80" Stroke="#14233A" StrokeThickness="1"/>
+                            <Line StartPoint="0,120" EndPoint="600,120" Stroke="#14233A" StrokeThickness="1"/>
+                            <Polyline Points="{Binding FanPoints}" Stroke="#38BDF8" StrokeThickness="1.5" Opacity="0.8"/>
+                            <Polyline Points="{Binding TempPoints}" Stroke="#F97316" StrokeThickness="2.5"/>
+                        </Canvas>
+                    </Viewbox>
+                </Grid>
+            </Border>
+
+            <!-- Result -->
+            <Border Classes="tile" Padding="14,12" IsVisible="{Binding HasResult}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                    <Border Width="84" Height="84" CornerRadius="42" Background="#0A1322" BorderThickness="3" BorderBrush="{Binding ResultGradeColor}">
+                        <TextBlock Text="{Binding ResultGrade}" FontSize="30" FontWeight="Black" Foreground="{Binding ResultGradeColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="6">
+                        <TextBlock Text="COOLING SCORE" Classes="label-caps" LetterSpacing="1"/>
+                        <TextBlock Text="{Binding ResultHeadline}" FontSize="14" FontWeight="Bold" Foreground="#E8F0FF" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding ResultVerdict}" FontSize="12" Foreground="#C4D8F4" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding ResultDetails}" FontSize="11" Foreground="#6E8DB5" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding CompareLine}" FontSize="11" Foreground="#60A5FA" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- History -->
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="RUN HISTORY (this session)" Classes="label-caps"/>
+                <Button Grid.Column="1" Content="Clear" Command="{Binding ClearHistoryCommand}" Classes="ghost" Padding="8,3" FontSize="11"/>
+            </Grid>
+            <Border Classes="tile" Background="#061018" Padding="0">
+                <DataGrid ItemsSource="{Binding History}" GridLinesVisibility="Horizontal" HeadersVisibility="Column" IsReadOnly="True"
+                          Background="Transparent" Foreground="#C4D8F4" RowBackground="Transparent" BorderThickness="0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Time" Binding="{Binding When}" Width="90"/>
+                        <DataGridTextColumn Header="Grade" Binding="{Binding Grade}" Width="80"/>
+                        <DataGridTextColumn Header="Score" Binding="{Binding Score}" Width="80"/>
+                        <DataGridTextColumn Header="Run" Binding="{Binding Duration}" Width="110"/>
+                        <DataGridTextColumn Header="Idle" Binding="{Binding Idle}" Width="90"/>
+                        <DataGridTextColumn Header="Peak" Binding="{Binding Peak}" Width="90"/>
+                        <DataGridTextColumn Header="Rise" Binding="{Binding Rise}" Width="80"/>
+                        <DataGridTextColumn Header="Peak fan" Binding="{Binding Fan}" Width="100"/>
+                        <DataGridTextColumn Header="Recovery" Binding="{Binding Recovery}" Width="*"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+        </StackPanel>
+    </Border>
+    </ScrollViewer>
+</UserControl>

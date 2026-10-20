@@ -51,12 +51,12 @@ public partial class MainWindowViewModel
 
     /// <summary>
     /// Visibility of each main tab in order (Dashboard, Fans, Sensors, RGB, Tasks, Network, Power, Cleaner,
-    /// Alerts, Settings) — the optional modules can be hidden in Settings.
+    /// Tools, Bench, Alerts, Settings) — the optional modules can be hidden in Settings.
     /// </summary>
     internal IReadOnlyList<bool> TabVisibility => new[]
     {
         true, true, true, true,
-        ShowTaskManagerTab, ShowNetworkManagerTab, ShowPowerMonitorTab, ShowSystemCleanerTab, ShowToolsTab,
+        ShowTaskManagerTab, ShowNetworkManagerTab, ShowPowerMonitorTab, ShowSystemCleanerTab, ShowToolsTab, ShowBenchTab,
         true, true,
     };
 

@@ -20,6 +20,12 @@ public enum RgbControlKind
 
     /// <summary>The device exposes no colour-capable mode (effects only).</summary>
     Unsupported,
+
+    /// <summary>
+    /// 4.3: the same physical SMBus controller seen through a second host port (see
+    /// <see cref="SmbusMirrorResolver"/>). Never written — driving both entries corrupts the controller.
+    /// </summary>
+    Mirror,
 }
 
 /// <summary>OpenRGB colour modes (matches OpenRGB.NET's ColorMode values).</summary>
@@ -43,14 +49,25 @@ public sealed record RgbDeviceControl(RgbControlKind Kind, int ModeIndex, string
     public static RgbDeviceControl NoLeds { get; } =
         new(RgbControlKind.Unsupported, -1, "", 0) { Note = "No LEDs reported — close other RGB apps, then Rescan" };
 
+    /// <summary>Mirror entry of <paramref name="of"/> (another device index) — skipped by every write.</summary>
+    public static RgbDeviceControl MirrorOf(int of, string note) =>
+        new(RgbControlKind.Mirror, -1, "", 0) { Note = note, MirrorIndex = of };
+
     /// <summary>Optional explanation shown instead of the default label.</summary>
     public string? Note { get; init; }
+
+    /// <summary>For <see cref="RgbControlKind.Mirror"/>: the device index that is actually driven.</summary>
+    public int MirrorIndex { get; init; } = -1;
+
+    /// <summary>True when FANZi can push colours to this device.</summary>
+    public bool IsControllable => Kind is RgbControlKind.PerLed or RgbControlKind.ModeColor;
 
     /// <summary>Short label for the UI ("Per-LED · Direct", "Single colour · Static").</summary>
     public string Label => Note ?? Kind switch
     {
         RgbControlKind.PerLed => $"Per-LED · {ModeName}",
         RgbControlKind.ModeColor => $"Single colour · {ModeName}",
+        RgbControlKind.Mirror => "Mirror — not driven",
         _ => "Effects only (no colour control)",
     };
 }

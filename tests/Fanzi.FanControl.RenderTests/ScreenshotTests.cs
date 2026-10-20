@@ -21,7 +21,7 @@ namespace Fanzi.FanControl.RenderTests;
 [Trait("Category", "Render")]
 public sealed class ScreenshotTests
 {
-    private const int TabDashboard = 0, TabFans = 1, TabSensors = 2, TabSettings = 10;
+    private const int TabDashboard = 0, TabFans = 1, TabSensors = 2, TabBench = 9, TabSettings = 11;
 
     [RenderFact]
     public void MainWindow_NormalState_RendersDashboardAndTabs()
@@ -119,6 +119,16 @@ public sealed class ScreenshotTests
             toolsScroll.Offset = new Vector(0, 0);
             window.Width = window.MinWidth;
             Capture(window, "tools-1100.png", 1100, 960);
+            window.Width = 1400;
+
+            // 4.3 Thermal Bench tab (idle state — the bench itself is not run under test).
+            scope.Vm.SelectedTabIndex = TabBench;
+            Dispatcher.UIThread.RunJobs();
+            Capture(window, "bench.png", 1400, 960);
+            Assert.Single(window.GetVisualDescendants().OfType<ThermalBenchView>());
+            Assert.False(scope.Vm.BenchVm.IsRunning);
+            window.Width = window.MinWidth;
+            Capture(window, "bench-1100.png", 1100, 960);
             window.Width = 1400;
 
             scope.Vm.SelectedTabIndex = TabSettings;
@@ -294,11 +304,20 @@ public sealed class ScreenshotTests
         Assert.Equal(Models.RgbColor.Red, rgb.PrimaryColor);
         Assert.Contains("galaxy", rgb.AiLightingStatus);
 
+        // 4.3 Typing FX: eight style chips, each in its own gradient; the card is Windows-only.
+        var typingChips = view.FindControl<ItemsControl>("TypingFxChipList")!;
+        Assert.Equal(8, typingChips.ItemCount);
+        Assert.All(typingChips.GetVisualDescendants().OfType<Button>(), b => Assert.IsAssignableFrom<IGradientBrush>(b.Background));
+        Assert.True(rgb.TypingFxSupported);
+
         var scroll = view.GetVisualDescendants().OfType<ScrollViewer>().First();
-        scroll.Offset = new Vector(0, 760);
+        scroll.Offset = new Vector(0, 420);
+        Dispatcher.UIThread.RunJobs();
+        Capture(window, "rgb-typing-fx.png", 1400, 960);
+        scroll.Offset = new Vector(0, 1500);
         Dispatcher.UIThread.RunJobs();
         Capture(window, "rgb-colours.png", 1400, 960);
-        scroll.Offset = new Vector(0, 1500);
+        scroll.Offset = new Vector(0, 2300);
         Dispatcher.UIThread.RunJobs();
         Capture(window, "rgb-devices.png", 1400, 960);
         var cards = view.FindControl<ItemsControl>("DeviceCards")!;
@@ -307,11 +326,11 @@ public sealed class ScreenshotTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    /// <summary>All eleven tab headers (v4.1.0 adds Tools) share one row (no orphaned tab wrapping onto a second line).</summary>
+    /// <summary>All twelve tab headers (4.1.0 adds Tools, 4.3 adds Bench) share one row (no orphaned tab wrapping onto a second line).</summary>
     private static void AssertTabsOnOneRow(Window window)
     {
         var tabs = window.GetVisualDescendants().OfType<TabItem>().Where(t => t.IsEffectivelyVisible).ToList();
-        Assert.Equal(11, tabs.Count);
+        Assert.Equal(12, tabs.Count);
         var rows = tabs.Select(t => Math.Round(t.TranslatePoint(default, window)!.Value.Y)).Distinct().ToList();
         Assert.True(rows.Count == 1, $"tab strip wraps onto {rows.Count} rows at width {window.Width}");
     }

@@ -945,6 +945,11 @@
                         <views:ToolsView DataContext="{Binding ToolsVm}" Margin="0,12,0,0"/>
                     </TabItem>
 
+                    <!-- 4.3 TAB: THERMAL BENCH (repeatable all-core cooling benchmark with a score) -->
+                    <TabItem Header="Bench" IsVisible="{Binding ShowBenchTab}">
+                        <views:ThermalBenchView DataContext="{Binding BenchVm}" Margin="0,12,0,0"/>
+                    </TabItem>
+
                     <!-- ══ TAB: NOTIFICATIONS ═════════════════════ -->
                     <TabItem Header="Alerts">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -1211,6 +1216,10 @@
                                         <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
                                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Tools tab (disk optimiser, drive health, repair, power &amp; gaming)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                             <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding ShowToolsTab}" HorizontalAlignment="Right"/>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Bench tab (repeatable all-core cooling benchmark with a score)" Foreground="#A0C0E0" FontSize="13" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                            <ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding ShowBenchTab}" HorizontalAlignment="Right"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>

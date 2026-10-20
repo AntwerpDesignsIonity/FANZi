@@ -255,7 +255,14 @@ public sealed partial class RgbControlViewModel
         if (!string.IsNullOrWhiteSpace(modeStatus)) sb.Append(" — ").Append(modeStatus);
         sb.Append('.');
         foreach (var d in devices.Where(d => !d.IsControllable))
-            sb.Append('\n').Append(CultureInfo.InvariantCulture, $"• {d.Name}: effects-only in OpenRGB (no Direct / Custom / Static mode) — it keeps its own lighting.");
+        {
+            string why = d.IsMirror
+                ? $"same stick seen again through another SMBus port — not driven (device {d.MirrorOf} is)."
+                : d.LedCount == 0 && d.Category == RgbDeviceCategory.Ram
+                    ? "reports 0 LEDs — OpenRGB has not read its layout yet (Rescan / Re-sync RAM)."
+                    : "effects-only in OpenRGB (no Direct / Custom / Static mode) — it keeps its own lighting.";
+            sb.Append('\n').Append(CultureInfo.InvariantCulture, $"• {d.Name}: {why}");
+        }
         if (modeChangesRejected)
             sb.Append("\n• The OpenRGB server refused mode changes (legacy_workaround off). Restart OpenRGB from FANZi, or enable it in OpenRGB → Settings → Server.");
         return sb.ToString();
@@ -298,7 +305,8 @@ public sealed partial class RgbControlViewModel
         sb.AppendLine($"PawnIO: {PawnIoStatus}");
         sb.AppendLine($"Devices ({Devices.Count}):");
         foreach (var d in Devices)
-            sb.AppendLine($"  [{d.DeviceIndex}] {d.Name} · {d.FriendlyType} · {d.Vendor} · LEDs {d.LedCount} · zones {d.Zones.Count} · {(d.IsControllable ? "controllable" : "effects-only")} · {d.ControlLabel} · {d.Location}");
+            sb.AppendLine($"  [{d.DeviceIndex}] {d.Name} · {d.FriendlyType} · {d.Vendor} · LEDs {d.LedCount} · zones {d.Zones.Count} · {(d.IsControllable ? "controllable" : d.IsMirror ? "mirror" : "effects-only")} · {d.ControlLabel} · {d.Location}");
+        if (!string.IsNullOrWhiteSpace(_rgbService.RamBusStatus)) sb.AppendLine(_rgbService.RamBusStatus + (RamSmbusPort is int p ? $" · forced port {p}" : ""));
         if (!string.IsNullOrWhiteSpace(ControlReport)) sb.AppendLine("Control report: " + ControlReport.Replace("\n", " | "));
         return sb.ToString();
     }

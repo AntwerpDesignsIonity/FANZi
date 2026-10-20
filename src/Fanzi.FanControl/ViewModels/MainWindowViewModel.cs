@@ -56,6 +56,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public event EventHandler? SettingsLoaded;
 
     public RgbControlViewModel RgbControl { get; }
+
+    private BenchReadings _latestBenchReadings;
     public TaskManagerViewModel TaskManagerVm { get; } = new();
     public NetworkManagerViewModel NetworkManagerVm { get; } = new();
     public PowerMonitorViewModel PowerMonitorVm { get; } = new();
@@ -64,8 +66,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>v4.1.0 Tools tab (disk optimiser, drive health, repair, network / quick fixes, power &amp; gaming).</summary>
     public ToolsViewModel ToolsVm { get; } = new();
 
-    /// <summary>Index of the Tools tab (after Cleaner, before Alerts).</summary>
+    /// <summary>Index of the Tools tab (after Cleaner, before Bench / Alerts).</summary>
     internal const int ToolsTabIndex = 8;
+
+    /// <summary>4.3 Thermal Bench tab (after Tools, before Alerts).</summary>
+    public ThermalBenchViewModel BenchVm { get; } = new();
 
     /// <summary>Drives, drive health and power plans are read the first time the Tools tab opens (not at start-up).</summary>
     partial void OnSelectedTabIndexChanged(int value)
@@ -80,6 +85,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _showPowerMonitorTab = true;
     [ObservableProperty] private bool _showSystemCleanerTab = true;
     [ObservableProperty] private bool _showToolsTab = true;
+    [ObservableProperty] private bool _showBenchTab = true;
 
     // ── Observable properties ─────────────────────────────────────────────────
 
@@ -743,6 +749,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         PowerMonitorVm.Dispose();
         SystemCleanerVm.Dispose();
         ToolsVm.Dispose();
+        BenchVm.Dispose();
         foreach (var fanChannel in FanChannels)
             fanChannel.Dispose();
     }
@@ -788,12 +795,27 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             });
             // v4 AEDi lighting switches + fan-header count for the RGB deep scan.
             RgbControl.FanHeaderCountProvider = () => FanChannels.Count;
+            BenchVm.ReadingsProvider = () => _latestBenchReadings;
             RgbControl.ApplyAiSettings(_appSettings.RgbSmartAmbient, _appSettings.RgbThermalGuardian, _appSettings.RgbNightDimming,
                 (smart, guardian, night) =>
                 {
                     _appSettings.RgbSmartAmbient = smart;
                     _appSettings.RgbThermalGuardian = guardian;
                     _appSettings.RgbNightDimming = night;
+                    _ = SaveSettingsAsync();
+                });
+            // 4.3: RAM SMBus port override + Typing FX.
+            RgbControl.ApplyRamSettings(_appSettings.RgbRamSmbusPort, port =>
+            {
+                _appSettings.RgbRamSmbusPort = port;
+                _ = SaveSettingsAsync();
+            });
+            RgbControl.ApplyTypingFxSettings(_appSettings.RgbTypingFxEnabled, _appSettings.RgbTypingFxStyle, _appSettings.RgbTypingFxAllDevices,
+                (enabled, style, all) =>
+                {
+                    _appSettings.RgbTypingFxEnabled = enabled;
+                    _appSettings.RgbTypingFxStyle = style;
+                    _appSettings.RgbTypingFxAllDevices = all;
                     _ = SaveSettingsAsync();
                 });
             InitialiseProfiles();
@@ -866,6 +888,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ShowPowerMonitorTab = _appSettings.ShowPowerMonitorTab;
             ShowSystemCleanerTab = _appSettings.ShowSystemCleanerTab;
             ShowToolsTab = _appSettings.ShowToolsTab;
+            ShowBenchTab = _appSettings.ShowBenchTab;
             OverlayTransparent = _appSettings.OverlayTransparent;
             OverlayOpacity = _appSettings.OverlayOpacity;
             OverlayTopmost = _appSettings.OverlayTopmost;
@@ -955,6 +978,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_suppressProfileSync) return;
         _appSettings.ShowToolsTab = value;
+        _ = SaveSettingsAsync();
+    }
+
+    partial void OnShowBenchTabChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.ShowBenchTab = value;
         _ = SaveSettingsAsync();
     }
 
@@ -1319,6 +1349,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                     pumpRpm: pump?.SpeedRpm,
                     isLiquidCooled: pump is not null);
             });
+            RunPollStep("Thermal bench feed", () => _latestBenchReadings = new BenchReadings(
+                snapshot.CpuPackageTemperature ?? snapshot.CpuHotspotTemperature ?? snapshot.CpuAverageTemperature,
+                snapshot.GpuCoreTemperature,
+                snapshot.CpuTotalLoadPercent,
+                snapshot.CpuFan?.SpeedRpm ?? pump?.SpeedRpm ?? snapshot.Fans.Select(f => f.SpeedRpm).Where(r => r.HasValue).DefaultIfEmpty(null).Max(),
+                snapshot.CpuPackagePowerWatts));
             RunPollStep("Thermal history", () => RecordHistory(
                 snapshot.Timestamp.UtcDateTime,
                 cpuTempC: CpuGaugeTempValue,

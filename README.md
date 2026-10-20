@@ -61,6 +61,22 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | 🤖 **AEDi Lighting AI (v4)** | Describe-a-mood lighting, Smart Ambient, Thermal Guardian alert, Night dimming, AEDi suggest — all offline |
 | ▣ **Overlay Studio (v4)** | Switchable rows incl. RAM and network ↓/↑, 80–160 % size, 8 accents incl. RGB Sync, snap to corners |
 | ⏱ **Live heartbeat (v4)** | Dashboard, Tasks, Network, Power and the overlay update together, in place — no list flicker |
+| ⌨ **Typing FX (4.3)** | Keystrokes become light: Ripple, Pulse, Line, Area, Fireworks, Typewriter, Matrix rain, Typing heat — on the keyboard where you hit the key and across RAM, GPU, strips and mouse |
+| 🔥 **Thermal Bench (4.3)** | Repeatable all-core cooling benchmark with a 0–100 score, grade, fan-lag / recovery metrics, run history and CSV export |
+| ▤ **RAM lighting that sticks (4.3)** | ENE DRAM mirrored on two SMBus ports is driven exactly once, SMBus writes are rate-limited, and **Re-sync RAM** recovers a stuck controller without a reboot |
+
+### What's new in v4.3.0
+
+- **RAM lighting fixed.** On AMD boards OpenRGB lists every ENE DRAM stick twice — once per SMBus host port (PIIX4 0 and 1) at the
+  same address. 4.2 and earlier streamed colours through both entries; two host ports writing into one ENE controller corrupt its
+  register pointer and the stick ignores every colour until a power-cycle (and reads back 0 / 249 / 257 LEDs). 4.3 drives one entry
+  per stick (`SmbusMirrorResolver`), rate-limits SMBus devices to 5 fps, skips unchanged frames and adds **Re-sync RAM** plus a
+  **Try SMBus port N** override in the RGB tab.
+- **Typing FX.** Eight keystroke-reactive styles rendered per LED at 30 fps. The keyboard uses true key positions (OpenRGB LED names
+  / matrix map, with an ANSI layout fallback); with *All devices* on, RAM, GPU, strips, mouse and monitor receive the same animation
+  mapped onto their own LEDs. Only key *codes* are polled (GetAsyncKeyState); nothing is logged or sent.
+- **Bench tab.** Baseline → all-core load → cooldown, sampled from FANZi's own monitor, scored 0–100 with a plain-language verdict,
+  before/after comparison, session history and CSV export. Stops itself at 95 °C.
 
 ### What's new in v4.0.0
 
@@ -233,6 +249,12 @@ Each device row in the RGB tab shows how it is controlled:
 | **Per-LED** (Direct / Custom) | Motherboards, RAM, LED strips, monitors such as the ViewSonic XG270QG | Switched to the per-LED mode, then every frame goes out with `UpdateLeds`. |
 | **Single colour** (Static) | GPUs with no per-LED mode, for example the ZOTAC RTX 30-series | The frame's average colour is written into the Static mode, at most every 120 ms and only when it changes. |
 | **Effects only** | Devices that expose no colour mode | Listed, not coloured. |
+| **Mirror** (4.3) | The same SMBus controller seen through a second host port | Listed, never written — see *RAM lighting* below. |
+
+**RAM lighting (4.3):** the RGB tab shows a *RAM LIGHTING* line — which SMBus port drives the sticks and how many mirror entries were
+skipped. **Re-sync RAM** re-applies Direct mode and re-sends the colour (the fix for "RAM stopped changing colour"); **Try SMBus port N**
+flips the automatic port choice if colours still don't land; **Auto** returns to it. SMBus-attached devices receive at most one frame per
+200 ms and never an unchanged frame.
 
 Two OpenRGB 1.0 compatibility fixes make this work:
 

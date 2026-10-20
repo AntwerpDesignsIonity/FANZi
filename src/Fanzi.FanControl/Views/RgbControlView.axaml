@@ -348,6 +348,23 @@
                                        Text="No OpenRGB devices detected yet. FANZI launches OpenRGB automatically in the background — if your hardware doesn't appear, run a Deep scan or Restart OpenRGB."/>
                         </Border>
                     </Panel>
+                    <!-- 4.3 RAM bus status: which SMBus port drives the sticks, re-sync and port override -->
+                    <Border Classes="tile" Padding="12,8" IsVisible="{Binding HasRamBusStatus}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <StackPanel Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="RAM LIGHTING" Classes="rgb-caption"/>
+                                <TextBlock Text="{Binding RamBusStatus}" TextWrapping="Wrap" FontSize="11" Foreground="#C4D8F4"/>
+                            </StackPanel>
+                            <WrapPanel Grid.Column="1" VerticalAlignment="Center">
+                                <Button Classes="rgb-solid" Content="{Binding ResyncRamButtonText}" Command="{Binding ResyncRamCommand}" Margin="0,0,8,0" FontSize="11" Padding="10,4"
+                                        ToolTip.Tip="RAM stopped changing colour? Re-applies Direct mode on every stick and re-sends the current colour — no reboot needed."/>
+                                <Button Classes="rgb-outline" Content="{Binding SwapRamPortButtonText}" Command="{Binding SwapRamPortCommand}" IsVisible="{Binding HasRamMirrors}" Margin="0,0,8,0" FontSize="11" Padding="10,4"
+                                        ToolTip.Tip="Your board exposes the sticks on two SMBus ports; FANZi drives one and ignores the mirror. If colours still don't land, drive the other port."/>
+                                <Button Classes="rgb-outline" Content="Auto" Command="{Binding AutoRamPortCommand}" IsVisible="{Binding HasRamMirrors}" FontSize="11" Padding="10,4"
+                                        ToolTip.Tip="Back to the automatic port choice"/>
+                            </WrapPanel>
+                        </Grid>
+                    </Border>
                 </StackPanel>
 
                 <!-- Live preview orb (large) -->
@@ -367,6 +384,66 @@
                     <TextBlock Text="{Binding PreviewHex}" HorizontalAlignment="Center" FontFamily="Consolas,monospace" FontSize="14" FontWeight="Bold"
                                Foreground="{Binding PreviewColor, Converter={StaticResource RgbBrush}}"/>
                     <TextBlock Text="{Binding SelectedEffect}" HorizontalAlignment="Center" Foreground="#6E8DB5" FontSize="12"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ══ TYPING FX (4.3) ══════════════════════════════════════════════ -->
+        <Border Classes="rgb-card" IsVisible="{Binding TypingFxSupported}">
+            <Grid ColumnDefinitions="1.6*,*" ColumnSpacing="18">
+                <StackPanel Grid.Column="0" Spacing="10">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <TextBlock Text="TYPING FX" Classes="rgb-caption" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="{Binding TypingFxStyleLabel}" Foreground="#A5F3FC" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <ToggleSwitch Grid.Column="2" IsChecked="{Binding TypingFxEnabled, Mode=TwoWay}" OnContent="On" OffContent="Off" FontSize="12"/>
+                    </Grid>
+                    <TextBlock Text="Every key you press becomes light — on the keyboard where you hit it, and across RAM, GPU, strips and mouse too. Pick a style:"
+                               TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource FanziTextMutedBrush}"/>
+                    <ItemsControl x:Name="TypingFxChipList" ItemsSource="{Binding TypingFxChips}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TypingFxChip">
+                                <Button Classes="chip" Background="{Binding Background}" ToolTip.Tip="{Binding Hint}"
+                                        Command="{Binding $parent[UserControl].DataContext.SelectTypingFxCommand}" CommandParameter="{Binding Style}">
+                                    <Border Classes="chip-scrim" Padding="12,7" MinWidth="96">
+                                        <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Glyph}" Foreground="#FFFFFF" FontSize="13" FontWeight="Black" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Label}" Foreground="#FFFFFF" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Classes="tile" Padding="12,8">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <ToggleSwitch IsChecked="{Binding TypingFxAllDevices, Mode=TwoWay}" OnContent="On" OffContent="Off" FontSize="12" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="All devices" Foreground="#C4D8F4" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Off = keyboard only. On = RAM, GPU, strips, mouse and monitor light up with every key" FontSize="11" Foreground="{StaticResource FanziTextMutedBrush}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Classes="rgb-outline" Content="▶ Demo burst" Command="{Binding TypingFxDemoCommand}" FontSize="11" Padding="10,4" VerticalAlignment="Center"
+                                    ToolTip.Tip="Plays a scripted burst of keystrokes so you can see the style without typing"/>
+                        </Grid>
+                    </Border>
+                    <TextBlock Text="{Binding TypingFxStatus}" TextWrapping="Wrap" FontSize="11" Foreground="#6E8DB5"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="FX SPEED" Classes="rgb-caption" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="{Binding TypingFxSpeed, StringFormat='{}{0:0.0}×'}" Foreground="#60A5FA" FontSize="13" FontWeight="Bold"/>
+                    </Grid>
+                    <Slider Minimum="0.5" Maximum="2.0" TickFrequency="0.1" Value="{Binding TypingFxSpeed, Mode=TwoWay}" Foreground="{StaticResource RgbRainbow}"/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="BACKGROUND" Classes="rgb-caption" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="{Binding TypingFxBackground, StringFormat='{}{0:P0}'}" Foreground="#60A5FA" FontSize="13" FontWeight="Bold"/>
+                    </Grid>
+                    <Slider Minimum="0" Maximum="1" TickFrequency="0.05" Value="{Binding TypingFxBackground, Mode=TwoWay}" Foreground="{StaticResource RgbRainbow}"/>
+                    <TextBlock Text="How much of the running effect stays lit underneath while you type. 0 % = pitch black between keystrokes." TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource FanziTextMutedBrush}"/>
+                    <Border Classes="tile" Padding="10,8">
+                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource FanziTextMutedBrush}"
+                                   Text="Privacy: FANZi only polls which key codes go down to time the animation. Nothing is logged, stored or sent anywhere."/>
+                    </Border>
                 </StackPanel>
             </Grid>
         </Border>

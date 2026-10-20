@@ -86,6 +86,21 @@ public interface IRgbService : IDisposable
     /// </summary>
     Task<int?> GetDeviceCountAsync(CancellationToken cancellationToken = default) => Task.FromResult<int?>(null);
 
+    /// <summary>
+    /// 4.3: re-arms SMBus-attached per-LED devices (RAM) — mode re-applied, frame cache cleared, colour re-sent.
+    /// Returns how many devices were re-armed (0 when unsupported / not connected).
+    /// </summary>
+    Task<int> ResyncSmbusDevicesAsync(RgbColor color, CancellationToken cancellationToken = default) => Task.FromResult(0);
+
+    /// <summary>4.3: forced SMBus host port for mirrored RAM entries (null = automatic).</summary>
+    int? RamSmbusPort { get => null; set { } }
+
+    /// <summary>4.3: SMBus ports among which RAM mirrors were found (empty = no mirroring).</summary>
+    IReadOnlyList<int> MirroredSmbusPorts => Array.Empty<int>();
+
+    /// <summary>4.3: one-line RAM bus summary for the UI ("" when there is nothing to say).</summary>
+    string RamBusStatus => "";
+
     /// <summary>Closes the OpenRGB connection.</summary>
     void Disconnect();
 }

@@ -879,9 +879,23 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
             PreviewHex   = color.ToHex();
         });
 
+        // 4.3 Typing FX: while keystroke effects are alive, every frame (33 ms) goes to the hardware — rings and
+        // beams need the full rate on USB/HID devices; SMBus RAM is rate-limited inside the service.
+        _frameCounter++;
+        if (TypingFxActive(elapsed))
+        {
+            if (RgbEnabled && _rgbService.IsConnected && _identifyingDevice < 0
+                && Interlocked.CompareExchange(ref _frameInFlight, 1, 0) == 0)
+            {
+                _ = SendTypingFxFrameAsync(elapsed, color)
+                    .ContinueWith(_ => Interlocked.Exchange(ref _frameInFlight, 0), TaskScheduler.Default);
+            }
+            return;
+        }
+
         // Send to hardware every Nth frame to avoid overwhelming OpenRGB.
         // Gated on RgbEnabled — when user toggles off, frames stop reaching hardware.
-        if (++_frameCounter >= HardwareSendEveryNth)
+        if (_frameCounter >= HardwareSendEveryNth)
         {
             _frameCounter = 0;
             // v4: one frame in flight at most. v3 queued a new frame task every 100 ms even when OpenRGB was
@@ -1013,7 +1027,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 if (count is null) return;              // service cannot tell — nothing to follow
                 // A per-LED device that still reports 0 LEDs (OpenRGB sized its zones late) gets no colour:
                 // re-read the layout until every device has its LEDs.
-                bool emptyDevice = Devices.Any(d => d.IsControllable && d.LedCount == 0);
+                bool emptyDevice = Devices.Any(d => !d.IsMirror && d.LedCount == 0 && d.Category == RgbDeviceCategory.Ram);
                 if (count.Value != Devices.Count || emptyDevice)
                 {
                     stable = 0;
@@ -1106,6 +1120,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
             // v4: in-place sync — watchdog refreshes no longer flash the device list.
             SyncDevices(list);
+            RefreshRamStatus();
             _deviceCount  = Math.Max(1, Devices.Count);
             DeviceSummary = Devices.Count == 0
                 ? "No RGB devices found in OpenRGB"
@@ -1349,6 +1364,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     {
         _timer.Stop();
         _timer.Dispose();
+        DisposeTypingFx();
         _watchdogCts?.Cancel();
         _watchdogCts?.Dispose();
         _cts.Cancel();

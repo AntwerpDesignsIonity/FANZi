@@ -33,6 +33,24 @@ public sealed record RgbDeviceInfo(
     /// <summary>Bus location reported by OpenRGB (I2C address, HID path …) — used by the deep scan.</summary>
     public string Location { get; init; } = string.Empty;
 
+    /// <summary>
+    /// 4.3: true when this entry is the same physical SMBus controller as <see cref="MirrorOf"/> seen through a
+    /// second host port; FANZi never writes to mirrors (see SmbusMirrorResolver).
+    /// </summary>
+    public bool IsMirror { get; init; }
+
+    /// <summary>Device index this mirror duplicates (-1 when not a mirror).</summary>
+    public int MirrorOf { get; init; } = -1;
+
+    /// <summary>4.3: LED positions for Typing FX (matrix for keyboards, a line for everything else); null until read.</summary>
+    public LedLayout? Layout { get; init; }
+
+    /// <summary>4.3: OpenRGB LED names ("Key: A" …) — used to place keystrokes exactly on keyboards.</summary>
+    public IReadOnlyList<string> LedNames { get; init; } = Array.Empty<string>();
+
+    /// <summary>Per-LED device that currently reports no LEDs — layout not read yet, or the controller is confused.</summary>
+    public bool IsWaitingForLeds => IsControllable == false && !IsMirror && LedCount == 0 && Category is RgbDeviceCategory.Ram;
+
     /// <summary>Family derived from OpenRGB's device type (numeric for types newer than the SDK enum).</summary>
     public RgbDeviceCategory Category => CategoryFor(Type);
 

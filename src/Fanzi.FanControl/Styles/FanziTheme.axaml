@@ -658,11 +658,11 @@
     <Style Selector="TabItem">
         <Setter Property="Background" Value="{StaticResource FanziBg1Brush}"/>
         <Setter Property="Foreground" Value="{StaticResource FanziTextDimBrush}"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="FontWeight" Value="Bold"/>
-        <!-- Content-sized outlined tabs: all eleven (4.1 adds Tools) still fit on one row down to the window's 1100 px MinWidth -->
-        <Setter Property="Padding" Value="8,7"/>
-        <Setter Property="Margin" Value="0,0,4,6"/>
+        <!-- Content-sized outlined tabs: all twelve (4.1 adds Tools, 4.3 adds Bench) still fit on one row down to the window's 1100 px MinWidth -->
+        <Setter Property="Padding" Value="7,7"/>
+        <Setter Property="Margin" Value="0,0,3,6"/>
         <Setter Property="MinWidth" Value="0"/>
         <Setter Property="MinHeight" Value="0"/>
         <Setter Property="CornerRadius" Value="10"/>

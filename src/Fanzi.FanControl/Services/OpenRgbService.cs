@@ -33,6 +33,28 @@ public sealed class OpenRgbService : IRgbService
     private RgbDeviceControl[]  _controls = Array.Empty<RgbDeviceControl>();
     private readonly Dictionary<int, (OpenRGB.NET.Color Color, long Ticks)> _lastModeColor = new();
     private readonly HashSet<int> _modeColorActivated = new();
+
+    // 4.3: last frame written per per-LED device, so unchanged frames are not re-sent (SMBus RAM, slow HID).
+    private readonly Dictionary<int, (OpenRGB.NET.Color[] Frame, long Ticks)> _lastLedFrame = new();
+
+    /// <summary>
+    /// Minimum gap between UpdateLeds writes to one SMBus-attached device (RAM, onboard Aura). ENE DRAM is driven
+    /// over SMBus at ~100 kHz: 8 LEDs × 3 bytes plus register addressing is ~5 ms per stick per write, and the
+    /// controller has no input buffer — 10 fps per stick on several sticks is enough to make it drop writes.
+    /// </summary>
+    internal static readonly TimeSpan SmbusMinInterval = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
+    /// User override for which SMBus host port drives mirrored RAM entries (null = automatic, see
+    /// <see cref="SmbusMirrorResolver"/>). Takes effect on the next device refresh.
+    /// </summary>
+    public int? RamSmbusPort { get; set; }
+
+    /// <summary>SMBus ports that currently show RAM mirrors (empty when no mirroring was detected).</summary>
+    public IReadOnlyList<int> MirroredSmbusPorts { get; private set; } = Array.Empty<int>();
+
+    /// <summary>Human-readable summary of the RAM mirror decision ("RAM: 2 sticks driven via PIIX4 port 1 …").</summary>
+    public string RamBusStatus { get; private set; } = "";
     private volatile bool       _disposed;
     private bool                _writeFailureLogged;
     private readonly object     _lock = new();
@@ -137,6 +159,7 @@ public sealed class OpenRgbService : IRgbService
         _controls = Array.Empty<RgbDeviceControl>();
         _lastModeColor.Clear();
         _modeColorActivated.Clear();
+        _lastLedFrame.Clear();
     }
 
     // ── Device discovery ──────────────────────────────────────────────────────
@@ -157,9 +180,11 @@ public sealed class OpenRgbService : IRgbService
                     _deviceCache = devices;
                     _lastModeColor.Clear();
                     _modeColorActivated.Clear();
+                    _lastLedFrame.Clear();
                     LastDeviceQueryError = null;
 
                     _controls = devices.Select(d => RgbControlPlanner.Plan(Describe(d), d.Leds.Length)).ToArray();
+                    var mirrors = ApplyMirrorResolution(devices);
 
                     // Put every per-LED device into its per-LED mode now; without this devices stay in
                     // their built-in effect (Rainbow, Spectrum, …) and silently ignore UpdateLeds().
@@ -187,9 +212,13 @@ public sealed class OpenRgbService : IRgbService
                             {
                                 Zones = zones,
                                 ControlLabel = _controls[i].Label,
-                                IsControllable = _controls[i].Kind != RgbControlKind.Unsupported,
+                                IsControllable = _controls[i].IsControllable,
                                 Vendor = d.Vendor ?? string.Empty,
                                 Location = d.Location ?? string.Empty,
+                                IsMirror = _controls[i].Kind == RgbControlKind.Mirror,
+                                MirrorOf = _controls[i].MirrorIndex,
+                                Layout = BuildLayout(d),
+                                LedNames = d.Leds.Select(l => l.Name ?? "").ToArray(),
                             };
                         })
                         .ToArray();
@@ -241,7 +270,7 @@ public sealed class OpenRgbService : IRgbService
     /// </summary>
     private void ActivatePerLedModes(OpenRGB.NET.Device[] devices)
     {
-        int perLed = 0, modeColor = 0, unsupported = 0, failed = 0;
+        int perLed = 0, modeColor = 0, unsupported = 0, failed = 0, mirror = 0;
         bool rejected = false;
 
         for (int i = 0; i < devices.Length; i++)
@@ -254,6 +283,9 @@ public sealed class OpenRgbService : IRgbService
                     continue;
                 case RgbControlKind.Unsupported:
                     unsupported++;
+                    continue;
+                case RgbControlKind.Mirror:
+                    mirror++;
                     continue;
             }
 
@@ -296,6 +328,7 @@ public sealed class OpenRgbService : IRgbService
         if (perLed > 0)      parts.Add($"{perLed} per-LED");
         if (modeColor > 0)   parts.Add($"{modeColor} single-colour");
         if (unsupported > 0) parts.Add($"{unsupported} effects-only");
+        if (mirror > 0)      parts.Add($"{mirror} SMBus mirror(s) skipped");
         if (failed > 0)      parts.Add($"{failed} failed");
 
         ModeSwitchStatus = parts.Count > 0 ? string.Join(", ", parts) : "No devices";
@@ -451,9 +484,25 @@ public sealed class OpenRgbService : IRgbService
         switch (control.Kind)
         {
             case RgbControlKind.PerLed when device.Leds.Length > 0:
+            {
                 // UpdateLeds needs exactly one colour per LED: a stale or short frame from an
                 // effect would otherwise be rejected and wrongly drop the whole connection.
-                _client!.UpdateLeds(deviceIndex, FitToLedCount(frame, device.Leds.Length));
+                var leds = FitToLedCount(frame, device.Leds.Length);
+                long now = Stopwatch.GetTimestamp();
+                if (_lastLedFrame.TryGetValue(deviceIndex, out var last))
+                {
+                    // 4.3: identical frame → nothing to send (a static colour costs zero bus traffic).
+                    if (SameFrame(last.Frame, leds)) return;
+                    // 4.3: SMBus devices (RAM, onboard Aura) are rate-limited; USB/HID devices stream at full rate.
+                    if (IsSmbusDevice(device) && Stopwatch.GetElapsedTime(last.Ticks, now) < SmbusMinInterval) return;
+                }
+                _client!.UpdateLeds(deviceIndex, leds);
+                _lastLedFrame[deviceIndex] = (leds, now);
+                break;
+            }
+
+            case RgbControlKind.Mirror:
+                // Same physical controller as another entry — writing here corrupts it.
                 break;
 
             case RgbControlKind.ModeColor:
@@ -541,6 +590,138 @@ public sealed class OpenRgbService : IRgbService
 
         (_modeWriter ?? throw new InvalidOperationException("OpenRGB mode writer not connected"))
             .UpdateMode(deviceIndex, modeIndex, snapshot);
+    }
+
+    // ── 4.3 RAM: SMBus mirrors, throttling, re-sync ───────────────────────────
+
+    /// <summary>
+    /// Replaces the control plan of SMBus mirror entries with <see cref="RgbControlKind.Mirror"/> and records a
+    /// status line. Caller holds _lock; <see cref="_controls"/> must already be planned.
+    /// </summary>
+    private IReadOnlyList<SmbusMirrorDecision> ApplyMirrorResolution(OpenRGB.NET.Device[] devices)
+    {
+        var sketches = devices.Select((d, i) => new SmbusDeviceSketch(i, d.Name ?? "", d.Type.ToString(), d.Location ?? "", d.Leds.Length)).ToArray();
+        var decisions = SmbusMirrorResolver.Resolve(sketches, RamSmbusPort);
+
+        int mirrors = 0;
+        var drivenPorts = new SortedSet<int>();
+        for (int i = 0; i < decisions.Count; i++)
+        {
+            var d = decisions[i];
+            if (!d.Drive)
+            {
+                mirrors++;
+                _controls[i] = RgbDeviceControl.MirrorOf(d.MirrorOf!.Value, d.Note!);
+            }
+            else if (d.Note is not null && SmbusMirrorResolver.Parse(devices[i].Location) is { } addr)
+            {
+                // Driven entry of a mirrored pair: its plan stays as is; only the port is recorded for the status line.
+                drivenPorts.Add(addr.Port);
+            }
+        }
+
+        MirroredSmbusPorts = mirrors > 0
+            ? SmbusMirrorResolver.Ports(sketches.Where(s => SmbusMirrorResolver.Parse(s.Location) is not null && s.Type.Equals("Dram", StringComparison.OrdinalIgnoreCase)))
+            : Array.Empty<int>();
+
+        int ramDriven = devices.Where((d, i) => _controls[i].IsControllable && d.Type.ToString().Equals("Dram", StringComparison.OrdinalIgnoreCase)).Count();
+        RamBusStatus = mirrors == 0
+            ? (ramDriven > 0 ? $"RAM: {ramDriven} stick(s) driven" : "")
+            : $"RAM: {ramDriven} stick(s) driven via SMBus port {string.Join("/", drivenPorts)}; {mirrors} mirror entr{(mirrors == 1 ? "y" : "ies")} on the other port skipped" +
+              (RamSmbusPort is int fp ? $" (port {fp} forced)" : " (auto)");
+        if (mirrors > 0) AppLog.Info("OpenRGB: " + RamBusStatus);
+        return decisions;
+    }
+
+    /// <summary>
+    /// 4.3: LED geometry for Typing FX. The first matrix zone (keyboards, some mice / pads) gives real 2-D positions;
+    /// a device without one is a line of LEDs. Zone LED offsets are honoured so a multi-zone keyboard maps correctly.
+    /// </summary>
+    internal static LedLayout BuildLayout(OpenRGB.NET.Device d)
+    {
+        int total = d.Leds.Length;
+        int offset = 0;
+        foreach (var z in d.Zones)
+        {
+            var map = z.MatrixMap;
+            if (map is not null && map.Width > 0 && map.Height > 0)
+            {
+                int w = (int)map.Width, h = (int)map.Height, zoneOffset = offset;
+                object matrix = map.Matrix;
+                return LedLayout.FromMatrix(total, w, h, (r, c) =>
+                {
+                    long v = matrix switch
+                    {
+                        uint[,] m2 => m2[r, c],
+                        uint[][] mj => mj[r][c],
+                        Array a when a.Rank == 2 => Convert.ToInt64(a.GetValue(r, c)),
+                        _ => 0xFFFFFFFF,
+                    };
+                    return v == 0xFFFFFFFF ? -1 : (int)v + zoneOffset;
+                });
+            }
+            offset += (int)z.LedCount;
+        }
+        return LedLayout.Linear(total);
+    }
+
+    private static bool IsSmbusDevice(OpenRGB.NET.Device d) =>
+        d.Type == DeviceType.Dram || (d.Location?.StartsWith("I2C:", StringComparison.OrdinalIgnoreCase) ?? false);
+
+    internal static bool SameFrame(OpenRGB.NET.Color[] a, OpenRGB.NET.Color[] b)
+    {
+        if (a.Length != b.Length) return false;
+        for (int i = 0; i < a.Length; i++)
+            if (a[i].R != b[i].R || a[i].G != b[i].G || a[i].B != b[i].B) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Re-arms every driven RAM / SMBus device: switches it back into its per-LED mode (an ENE controller that was
+    /// kicked into an effect by another app or a confused register pointer accepts Direct again after this), clears
+    /// the frame cache so the next frame is sent unconditionally, and re-sends <paramref name="color"/> immediately.
+    /// Returns the number of devices re-armed.
+    /// </summary>
+    public Task<int> ResyncSmbusDevicesAsync(RgbColor color, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                if (_client is null || !IsConnected || _deviceCache is null) return 0;
+                int done = 0;
+                for (int i = 0; i < _deviceCache.Length; i++)
+                {
+                    var dev = _deviceCache[i];
+                    var control = _controls[i];
+                    if (control.Kind != RgbControlKind.PerLed || !IsSmbusDevice(dev)) continue;
+                    try
+                    {
+                        // Static-with-colour then back to the per-LED mode: the ENE firmware reloads its colour
+                        // table on a mode change, which is what un-sticks a controller that stopped applying LEDs.
+                        var staticMode = Describe(dev).FirstOrDefault(m => m.Name.Equals("Static", StringComparison.OrdinalIgnoreCase));
+                        if (staticMode is not null && staticMode.Index != control.ModeIndex)
+                        {
+                            var cols = Enumerable.Repeat(((byte)color.R, (byte)color.G, (byte)color.B), Math.Max(1, (int)Math.Max(staticMode.ColorMin, 1u))).ToArray();
+                            ApplyMode(i, staticMode.Index, staticMode.ColorMode == RgbModeColorMode.ModeSpecific ? cols : null);
+                            Thread.Sleep(60);
+                        }
+                        ApplyMode(i, control.ModeIndex, colors: null);
+                        Thread.Sleep(40);
+                        _lastLedFrame.Remove(i);
+                        _client.UpdateLeds(i, FitToLedCount(Enumerable.Repeat(color, dev.Leds.Length).ToArray(), dev.Leds.Length));
+                        _lastLedFrame[i] = (FitToLedCount(Enumerable.Repeat(color, dev.Leds.Length).ToArray(), dev.Leds.Length), Stopwatch.GetTimestamp());
+                        done++;
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLog.Warn($"OpenRGB: re-sync of '{dev.Name}' failed", ex);
+                    }
+                }
+                AppLog.Info($"OpenRGB: re-synced {done} SMBus device(s)");
+                return done;
+            }
+        }, cancellationToken);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
