@@ -65,7 +65,7 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | 🔥 **Thermal Bench (4.3)** | Repeatable all-core cooling benchmark with a 0–100 score, grade, fan-lag / recovery metrics, run history and CSV export |
 | ▤ **RAM lighting that sticks (4.3)** | ENE DRAM mirrored on two SMBus ports is driven exactly once, SMBus writes are rate-limited, and **Re-sync RAM** recovers a stuck controller without a reboot |
 
-### What's new in v4.3.0
+### What's new in v4.3.1
 
 - **RAM lighting fixed.** On AMD boards OpenRGB lists every ENE DRAM stick twice — once per SMBus host port (PIIX4 0 and 1) at the
   same address. 4.2 and earlier streamed colours through both entries; two host ports writing into one ENE controller corrupt its
