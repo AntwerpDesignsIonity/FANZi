@@ -69,33 +69,60 @@ public static class SmbusMirrorResolver
             .Select(t => (t.Device, Addr: t.Addr!.Value))
             .ToList();
 
-        foreach (var group in smbus.GroupBy(t => (t.Device.Name, t.Addr.Adapter, t.Addr.Address)))
-        {
-            var members = group.ToList();
-            if (members.Select(m => m.Addr.Port).Distinct().Count() < 2) continue; // same port twice = two real devices
+        // Groups: same name + adapter + slave address on more than one port = one physical controller seen twice.
+        var groups = smbus
+            .GroupBy(t => (t.Device.Name, t.Addr.Adapter, t.Addr.Address))
+            .Where(g => g.Select(m => m.Addr.Port).Distinct().Count() >= 2)
+            .ToList();
+        if (groups.Count == 0) return decisions;
 
-            var chosen = Choose(members, forcedPort);
-            foreach (var m in members)
+        // One port per adapter for *all* its mirrored groups: the two PIIX4 ports share the physical bus wires and
+        // OpenRGB serialises access per port, not per bus, so driving stick A through port 0 and stick B through
+        // port 1 would still put two host controllers on one bus at the same time.
+        foreach (var adapterGroups in groups.GroupBy(g => g.Key.Adapter))
+        {
+            int port = ChoosePort(adapterGroups.SelectMany(g => g).ToList(), forcedPort);
+            foreach (var group in adapterGroups)
             {
-                int pos = IndexOf(devices, m.Device.Index);
-                if (m.Device.Index == chosen.Device.Index)
+                var members = group.ToList();
+                var chosen = members.FirstOrDefault(m => m.Addr.Port == port);
+                if (chosen.Device is null) chosen = Choose(members, forcedPort); // this stick is missing on the chosen port
+                foreach (var m in members)
                 {
-                    decisions[pos] = decisions[pos] with
+                    int pos = IndexOf(devices, m.Device.Index);
+                    if (m.Device.Index == chosen.Device.Index)
                     {
-                        Note = $"Driven via {chosen.Addr.PortLabel} (mirror on port " +
-                               string.Join("/", members.Where(x => x.Device.Index != chosen.Device.Index).Select(x => x.Addr.Port)) + " ignored)",
-                    };
-                }
-                else
-                {
-                    decisions[pos] = new SmbusMirrorDecision(
-                        m.Device.Index, Drive: false, MirrorOf: chosen.Device.Index,
-                        Note: $"Mirror of the same stick seen through {m.Addr.PortLabel} — driven via port {chosen.Addr.Port} instead");
+                        decisions[pos] = decisions[pos] with
+                        {
+                            Note = $"Driven via {chosen.Addr.PortLabel} (mirror on port " +
+                                   string.Join("/", members.Where(x => x.Device.Index != chosen.Device.Index).Select(x => x.Addr.Port)) + " ignored)",
+                        };
+                    }
+                    else
+                    {
+                        decisions[pos] = new SmbusMirrorDecision(
+                            m.Device.Index, Drive: false, MirrorOf: chosen.Device.Index,
+                            Note: $"Mirror of the same stick seen through {m.Addr.PortLabel} — driven via port {chosen.Addr.Port} instead");
+                    }
                 }
             }
         }
 
         return decisions;
+    }
+
+    /// <summary>
+    /// The port that drives every mirrored controller on one adapter: the forced port when present, else the port with
+    /// the most plausible LED counts (a port that reads garbage is the one whose controllers are confused), tie → highest.
+    /// </summary>
+    internal static int ChoosePort(List<(SmbusDeviceSketch Device, SmbusAddress Addr)> members, int? forcedPort)
+    {
+        var ports = members.Select(m => m.Addr.Port).Distinct().ToList();
+        if (forcedPort is int fp && ports.Contains(fp)) return fp;
+        return ports
+            .OrderByDescending(p => members.Count(m => m.Addr.Port == p && IsPlausibleRamLedCount(m.Device.LedCount)))
+            .ThenByDescending(p => p)
+            .First();
     }
 
     private static (SmbusDeviceSketch Device, SmbusAddress Addr) Choose(

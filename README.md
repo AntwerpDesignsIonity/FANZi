@@ -65,12 +65,12 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | 🔥 **Thermal Bench (4.3)** | Repeatable all-core cooling benchmark with a 0–100 score, grade, fan-lag / recovery metrics, run history and CSV export |
 | ▤ **RAM lighting that sticks (4.3)** | ENE DRAM mirrored on two SMBus ports is driven exactly once, SMBus writes are rate-limited, and **Re-sync RAM** recovers a stuck controller without a reboot |
 
-### What's new in v4.3.1
+### What's new in v4.3.2
 
 - **RAM lighting fixed.** On AMD boards OpenRGB lists every ENE DRAM stick twice — once per SMBus host port (PIIX4 0 and 1) at the
   same address. 4.2 and earlier streamed colours through both entries; two host ports writing into one ENE controller corrupt its
   register pointer and the stick ignores every colour until a power-cycle (and reads back 0 / 249 / 257 LEDs). 4.3 drives one entry
-  per stick (`SmbusMirrorResolver`), rate-limits SMBus devices to 5 fps, skips unchanged frames and adds **Re-sync RAM** plus a
+  per stick through one host port per adapter (`SmbusMirrorResolver`), rate-limits SMBus devices to 5 fps, skips unchanged frames and adds **Re-sync RAM** plus a
   **Try SMBus port N** override in the RGB tab.
 - **Typing FX.** Eight keystroke-reactive styles rendered per LED at 30 fps. The keyboard uses true key positions (OpenRGB LED names
   / matrix map, with an ANSI layout fallback); with *All devices* on, RAM, GPU, strips, mouse and monitor receive the same animation
