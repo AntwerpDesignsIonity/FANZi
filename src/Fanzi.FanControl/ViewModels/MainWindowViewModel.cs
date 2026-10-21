@@ -878,6 +878,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             StartWithWindows = _appSettings.StartWithWindows;
             ThermalFrameEnabled = _appSettings.ThermalFrameEnabled;
+            UseBiosFanControl = _appSettings.FanBiosControl;
             StartMinimized = _appSettings.StartMinimized;
             MinimizeToTray = _appSettings.MinimizeToTray;
             CloseToTray = _appSettings.CloseToTray;

@@ -40,7 +40,11 @@ public partial class App : Application
             // Windows: LibreHardwareMonitor (guards its own driver start-up via InitializationError);
             // Linux / macOS: hwmon / SMC readers (4.1) — see HardwareMonitorFactory.
             _hardwareMonitorService = HardwareMonitorFactory.Create();
-            _rgbService = new OpenRgbService();
+            // 4.4: on Windows RAM (and MAXSUN board LEDs) go through MaxsunSyncService when it is installed — the same
+            // ENE HAL path MAXSUN Sync 2 uses; everything else stays on OpenRGB. Pass-through when the service is absent.
+            _rgbService = OperatingSystem.IsWindows()
+                ? new MaxsunSyncRgbService(new OpenRgbService())
+                : new OpenRgbService();
             _settingsService = new SettingsService();
             var viewModel = new MainWindowViewModel(_hardwareMonitorService, _rgbService, _settingsService);
 

@@ -55,6 +55,16 @@ public sealed class OpenRgbService : IRgbService
 
     /// <summary>Human-readable summary of the RAM mirror decision ("RAM: 2 sticks driven via PIIX4 port 1 …").</summary>
     public string RamBusStatus { get; private set; } = "";
+
+    /// <summary>
+    /// 4.4: when true every DRAM entry is planned as "not driven" — no Direct-mode switch, no frames, no re-sync.
+    /// Set by <see cref="MaxsunSyncRgbService"/> while MaxsunSyncService owns the RAM (ENE HAL), so the sticks never
+    /// see OpenRGB's PIIX4 writes interleaved with the service's. Takes effect on the next device refresh.
+    /// </summary>
+    public bool SuppressDramWrites { get; set; }
+
+    /// <summary>4.4: DRAM entries (both SMBus ports) skipped by the last refresh because of <see cref="SuppressDramWrites"/>.</summary>
+    public int SuppressedDramCount { get; private set; }
     private volatile bool       _disposed;
     private bool                _writeFailureLogged;
     private readonly object     _lock = new();
@@ -185,6 +195,7 @@ public sealed class OpenRgbService : IRgbService
 
                     _controls = devices.Select(d => RgbControlPlanner.Plan(Describe(d), d.Leds.Length)).ToArray();
                     var mirrors = ApplyMirrorResolution(devices);
+                    ApplyDramSuppression(devices);
 
                     // Put every per-LED device into its per-LED mode now; without this devices stay in
                     // their built-in effect (Rainbow, Spectrum, …) and silently ignore UpdateLeds().
@@ -663,6 +674,27 @@ public sealed class OpenRgbService : IRgbService
             offset += (int)z.LedCount;
         }
         return LedLayout.Linear(total);
+    }
+
+    /// <summary>4.4: hands every DRAM entry to MAXSUN Sync (see <see cref="SuppressDramWrites"/>). Caller holds _lock.</summary>
+    private void ApplyDramSuppression(OpenRGB.NET.Device[] devices)
+    {
+        int skipped = 0;
+        if (SuppressDramWrites)
+        {
+            for (int i = 0; i < devices.Length; i++)
+            {
+                if (devices[i].Type != DeviceType.Dram) continue;
+                _controls[i] = RgbDeviceControl.None with { Note = "Driven by MAXSUN Sync (ENE HAL) — OpenRGB stays off this stick" };
+                skipped++;
+            }
+            if (skipped > 0)
+            {
+                MirroredSmbusPorts = Array.Empty<int>();
+                RamBusStatus = $"RAM: {skipped} OpenRGB DRAM entr{(skipped == 1 ? "y" : "ies")} left to MAXSUN Sync";
+            }
+        }
+        SuppressedDramCount = skipped;
     }
 
     private static bool IsSmbusDevice(OpenRGB.NET.Device d) =>

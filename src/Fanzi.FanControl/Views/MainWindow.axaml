@@ -699,6 +699,19 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <!-- 4.4: BIOS fan control — motherboard headers follow the BIOS Smart Fan settings -->
+                                <Border x:Name="BiosFanControlCard" Classes="card" Padding="20,14">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                        <StackPanel Grid.Column="0" Spacing="3">
+                                            <TextBlock Text="Use BIOS fan settings" Classes="h2"/>
+                                            <TextBlock x:Name="BiosFanControlStatusText" Text="{Binding BiosFanControlStatus}" Classes="muted" FontSize="11" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <ToggleSwitch Grid.Column="1" x:Name="BiosFanControlToggle" IsChecked="{Binding UseBiosFanControl}" VerticalAlignment="Center"
+                                                      ToolTip.Tip="Fans on motherboard headers follow the curves set in BIOS (Smart Fan). Turn off to control them from FANZi."
+                                                      AutomationProperties.Name="Use BIOS fan settings for motherboard fan headers"/>
+                                    </Grid>
+                                </Border>
+
                                 <!-- CPU fan curve editor: the active profile's FanCurve (what AI Auto-Fan follows) -->
                                 <Border Classes="card" Padding="20,16,20,14">
                                     <StackPanel Spacing="10">
@@ -1390,7 +1403,7 @@
                     <TextBlock Grid.ColumnSpan="2" Text="FANZI Quick Guide" Classes="h1" FontSize="18"/>
                     <StackPanel Grid.Row="1" Grid.Column="0" Spacing="10">
                         <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="FANZI requires administrator privileges to access hardware sensors via LibreHardwareMonitor kernel drivers."/>
-                        <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="Fan channels are auto-detected. Use sliders to set manual duty, Apply to commit, Auto to restore BIOS control."/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="Fan channels are auto-detected. Motherboard headers follow your BIOS fan settings by default (Fans → Use BIOS fan settings); switch it off to use sliders, Apply and Auto."/>
                         <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="RGB control works out of the box — FANZI launches OpenRGB automatically in the background (SDK port 6742) and connects on its own. Just open the RGB tab."/>
                         <TextBlock TextWrapping="Wrap" Foreground="#6A8AAF" FontSize="12" Text="AI engine learns your system's thermal characteristics and predictively adjusts fans. Enable in Settings."/>
                     </StackPanel>

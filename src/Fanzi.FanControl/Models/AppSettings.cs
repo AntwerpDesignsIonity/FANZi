@@ -70,6 +70,13 @@ public sealed class AppSettings
     public bool RgbThermalGuardian { get; set; } = true;
     public bool RgbNightDimming { get; set; }
 
+    /// <summary>
+    /// 4.4: fans on motherboard headers follow the BIOS Smart Fan settings; FANZi only reads them. Default on — the
+    /// BIOS curve is what the board vendor tuned, and it keeps working when FANZi is closed. GPU / fan-hub channels
+    /// are unaffected.
+    /// </summary>
+    public bool FanBiosControl { get; set; } = true;
+
     /// <summary>4.3: SMBus host port forced for mirrored RAM entries (null = automatic pick).</summary>
     public int? RgbRamSmbusPort { get; set; }
 

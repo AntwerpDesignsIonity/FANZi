@@ -19,6 +19,35 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
     private readonly Computer? _computer;
     private readonly Dictionary<string, IControl> _controlMap = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private volatile bool _biosFanControl;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Hand-back uses LibreHardwareMonitor's <see cref="IControl.SetDefault"/>, which restores the header registers the
+    /// Super IO chip held when FANZi started — i.e. the mode and curve the BIOS programmed. It is applied on the next
+    /// snapshot (≤ 1 poll) and re-applied every poll, so nothing in FANZi (AI Auto-Fan, profiles, curves) can pin a
+    /// motherboard header while the option is on.
+    /// </remarks>
+    public bool BiosFanControl
+    {
+        get => _biosFanControl;
+        set
+        {
+            if (_biosFanControl == value) return;
+            _biosFanControl = value;
+            AppLog.Info(value
+                ? "Fans: BIOS fan control on — motherboard headers follow the BIOS Smart Fan settings."
+                : "Fans: BIOS fan control off — FANZi may drive motherboard headers.");
+        }
+    }
+
+    /// <summary>Motherboard fan headers: Super IO chip, embedded controller, or anything hanging off the board.</summary>
+    internal static bool IsBoardHeader(HardwareType type, HardwareType? parentType) =>
+        type is HardwareType.SuperIO or HardwareType.Motherboard or HardwareType.EmbeddedController
+        || parentType is HardwareType.Motherboard;
+
+    private static bool IsBoardHeader(IHardware? hardware) =>
+        hardware is not null && IsBoardHeader(hardware.HardwareType, hardware.Parent?.HardwareType);
 
     public HardwareMonitorService()
     {
@@ -436,7 +465,23 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             fanSensor?.Identifier.ToString(),
             usedIds);
 
-        if (control is not null)
+        // 4.4: BIOS fan control — board headers go back to the BIOS and are not offered for manual duty.
+        bool biosOwned = control is not null && _biosFanControl
+            && IsBoardHeader(controlSensor?.Hardware ?? fanSensor?.Hardware);
+        if (biosOwned && control!.ControlMode == ControlMode.Software)
+        {
+            try
+            {
+                control.SetDefault();
+                AppLog.Info($"Fans: '{controlSensor?.Name ?? fanSensor?.Name}' handed back to BIOS control.");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn($"Fans: could not hand '{controlSensor?.Name ?? fanSensor?.Name}' back to the BIOS", ex);
+            }
+        }
+
+        if (control is not null && !biosOwned)
         {
             _controlMap[id] = control;
         }
@@ -451,7 +496,12 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
         }
 
         double? currentControlPercent = null;
-        if (controlSensor?.Value is float controlValue)
+        if (biosOwned)
+        {
+            // BIOS-driven: the control register value is the BIOS's own duty; show it only as telemetry.
+            currentControlPercent = controlSensor?.Value is float biosValue ? biosValue : null;
+        }
+        else if (controlSensor?.Value is float controlValue)
         {
             currentControlPercent = controlValue;
         }
@@ -462,7 +512,9 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
 
         FanDeviceKind deviceKind = ClassifyDevice(name);
 
-        string capabilityMessage = control switch
+        string capabilityMessage = biosOwned
+            ? "BIOS fan control — this header follows your BIOS Smart Fan settings (FANZi only reads it). Turn off 'Use BIOS fan settings' to drive it from FANZi."
+            : control switch
         {
             null => deviceKind == FanDeviceKind.Fan
                 ? "Read-only sensor channel. The device did not expose a writable software control endpoint."
@@ -484,7 +536,7 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             name,
             fanSensor?.Value,
             currentControlPercent,
-            control is not null,
+            control is not null && !biosOwned,
             deviceKind,
             capabilityMessage,
             hardwareSource,

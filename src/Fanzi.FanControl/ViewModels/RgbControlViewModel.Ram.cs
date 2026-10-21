@@ -97,7 +97,7 @@ public sealed partial class RgbControlViewModel
     {
         if (!_rgbService.IsConnected)
         {
-            AiLightingStatus = "Re-sync RAM: not connected to OpenRGB.";
+            AiLightingStatus = "Re-sync RAM: not connected to OpenRGB or MAXSUN Sync.";
             return;
         }
         IsResyncingRam = true;
@@ -105,7 +105,10 @@ public sealed partial class RgbControlViewModel
         try
         {
             int n = await _rgbService.ResyncSmbusDevicesAsync(FrameParameters().Primary, _cts.Token);
-            AiLightingStatus = n > 0
+            bool viaMaxsun = _rgbService is MaxsunSyncRgbService { OwnsRam: true };
+            AiLightingStatus = n > 0 && viaMaxsun
+                ? $"Re-synced {n} RAM stick(s) through MAXSUN Sync: Static re-armed on the ENE HAL and the current colour re-sent."
+                : n > 0
                 ? $"Re-synced {n} RAM stick(s): Direct mode re-applied and the current colour re-sent. If a stick still ignores colours, try the other SMBus port."
                 : "Re-sync RAM: no SMBus RAM device is under FANZi control right now — run Rescan first.";
             AppLog.Info("RGB: " + AiLightingStatus);
