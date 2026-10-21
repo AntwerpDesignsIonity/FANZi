@@ -22,4 +22,10 @@ public interface IHardwareMonitorService : IDisposable
     /// duty for them. GPU and USB fan-hub channels are not affected. Default implementation: not supported.
     /// </summary>
     bool BiosFanControl { get => false; set { } }
+
+    /// <summary>
+    /// 4.4 Self-Doctor: closes and reopens the sensor driver when readings stopped. Fan headers are handed back to
+    /// automatic / BIOS control first. Returns true when the driver reopened. Default: not supported.
+    /// </summary>
+    Task<bool> TryRecoverAsync() => Task.FromResult(false);
 }

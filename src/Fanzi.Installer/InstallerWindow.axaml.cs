@@ -40,6 +40,9 @@ public partial class InstallerWindow : Window
     /// <summary>Non-fatal problems shown as an amber warning on the completion page.</summary>
     private readonly List<string> _warnings = new();
 
+    /// <summary>4.4: FANZi already installed on this PC (upgrade in place), or null for a fresh install.</summary>
+    private readonly ExistingInstall? _existing;
+
     /// <summary>Install log, written to &lt;installPath&gt;\install.log at the end.</summary>
     private readonly List<string> _log = new();
     private readonly object _logLock = new();
@@ -49,6 +52,11 @@ public partial class InstallerWindow : Window
         InitializeComponent();
 
         InstallPathBox.Text = DefaultInstallPath;
+        if (OperatingSystem.IsWindows())
+        {
+            _existing = ExistingInstall.Find();
+            if (_existing is not null) ShowUpgradeMode(_existing);
+        }
         InstallButton.Click += OnInstallClicked;
         CancelButton.Click += (_, _) => Close();
         BrowseButton.Click += OnBrowseClicked;
@@ -82,6 +90,26 @@ public partial class InstallerWindow : Window
         }
     }
 
+    /// <summary>
+    /// 4.4 upgrade over an older FANZi: same folder (whatever it was), same start-with-Windows choice; settings,
+    /// profiles, logs and the AEDi fingerprint live in %APPDATA%\FANZI and are never touched.
+    /// </summary>
+    private void ShowUpgradeMode(ExistingInstall existing)
+    {
+        InstallPathBox.Text = existing.Path;
+        StartupCheck.IsChecked = existing.StartsWithWindows;
+        int cmp = ExistingInstall.CompareVersions(existing.Version, AppVersion);
+        UpgradeBannerText.Text = cmp switch
+        {
+            < 0 => $"FANZi {existing.Version} is installed in {existing.Path}. It will be upgraded to {AppVersion} in place — your settings, profiles and learned AEDi data are kept.",
+            0 => $"FANZi {existing.Version} is already installed in {existing.Path}. Installing again repairs it; your settings are kept.",
+            _ => $"A newer FANZi ({existing.Version}) is installed in {existing.Path}. Continuing replaces it with {AppVersion}; your settings are kept.",
+        };
+        UpgradeBanner.IsVisible = true;
+        InstallButton.Content = cmp < 0 ? "Upgrade" : cmp == 0 ? "Repair" : "Install anyway";
+        ProgressTitle.Text = cmp < 0 ? $"Upgrading FANZi {existing.Version} → {AppVersion}..." : "Installing FANZI...";
+    }
+
     private async void OnInstallClicked(object? sender, RoutedEventArgs e)
     {
         string installPath = InstallPathBox.Text?.Trim() ?? DefaultInstallPath;
@@ -106,6 +134,11 @@ public partial class InstallerWindow : Window
             ProgressPanel.IsVisible = false;
             CompletePanel.IsVisible = true;
             InstallLocationLabel.Text = installPath;
+            if (_existing is not null && ExistingInstall.CompareVersions(_existing.Version, AppVersion) < 0)
+            {
+                CompleteTitle.Text = $"Upgraded to {AppVersion}!";
+                CompleteSubtitle.Text = $"FANZi {_existing.Version} was replaced in place. Settings, profiles and AEDi data were kept.";
+            }
             ShowCompletionWarnings(installPath);
             InstallButton.Content = "Close";
             InstallButton.IsEnabled = true;
@@ -223,6 +256,11 @@ public partial class InstallerWindow : Window
         {
             await InstallVcRedistributableAsync();
         }
+
+        // ── Step 1b: close a running FANZi so its files can be replaced (upgrade in place) ──
+        if (_existing is not null) Log($"Existing install: v{_existing.Version} in {_existing.Path} — upgrading in place");
+        UpdateProgress(12, "Closing FANZi if it is running...");
+        if (ExistingInstall.StopRunningFanzi(Log)) UpdateProgress(14, "Running FANZi closed — replacing files");
 
         // ── Step 2: Extract FANZI ──────────────────────────────────────────────
         UpdateProgress(15, "Creating installation directory...");
@@ -423,18 +461,14 @@ public partial class InstallerWindow : Window
 
         Directory.CreateDirectory(installPath);
         string outPath = Path.Combine(installPath, "Fanzi.FanControl.exe");
+        ExistingInstall.StopRunningFanzi();
 
-        try
+        ExistingInstall.ReplaceFile(outPath, target =>
         {
-            foreach (var p in Process.GetProcessesByName("Fanzi.FanControl"))
-            {
-                try { p.Kill(true); p.WaitForExit(3000); } catch { }
-            }
-        }
-        catch { }
-
-        using var fs = File.Create(outPath);
-        stream.CopyTo(fs);
+            using var fs = File.Create(target);
+            if (stream.CanSeek) stream.Position = 0;
+            stream.CopyTo(fs);
+        });
         return true;
     }
 
@@ -606,7 +640,8 @@ public partial class InstallerWindow : Window
         foreach (string file in Directory.GetFiles(source))
         {
             string destFile = Path.Combine(destination, Path.GetFileName(file));
-            File.Copy(file, destFile, overwrite: true);
+            // 4.4: a file still mapped by a closing FANZi is renamed aside instead of failing the upgrade.
+            ExistingInstall.ReplaceFile(destFile, target => File.Copy(file, target, overwrite: true));
         }
 
         foreach (string dir in Directory.GetDirectories(source))

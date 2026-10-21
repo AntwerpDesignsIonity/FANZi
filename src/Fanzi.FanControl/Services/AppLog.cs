@@ -36,6 +36,13 @@ public static class AppLog
         get { lock (Sync) return _directory; }
     }
 
+    /// <summary>
+    /// 4.4: raised after every line is written (level "INFO" / "WARN" / "ERROR", message without timestamp). The
+    /// Self-Doctor uses it to spot error storms. Handlers run on the logging thread and must be quick; their
+    /// exceptions are swallowed.
+    /// </summary>
+    public static event Action<string, string>? Logged;
+
     public static void Info(string message) => Write("INFO", message, null);
 
     public static void Warn(string message, Exception? ex = null) => Write("WARN", message, ex);
@@ -103,6 +110,14 @@ public static class AppLog
         catch
         {
             // Never throw from logging.
+        }
+
+        var handlers = Logged;
+        if (handlers is null) return;
+        try { handlers(level, message); }
+        catch
+        {
+            // A broken listener must not break logging.
         }
     }
 

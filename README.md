@@ -65,6 +65,25 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | 🔥 **Thermal Bench (4.3)** | Repeatable all-core cooling benchmark with a 0–100 score, grade, fan-lag / recovery metrics, run history and CSV export |
 | ▤ **RAM lighting that sticks (4.3)** | ENE DRAM mirrored on two SMBus ports is driven exactly once, SMBus writes are rate-limited, and **Re-sync RAM** recovers a stuck controller without a reboot |
 
+### What's new in v4.4.0
+
+- **AEDi Cooling Fingerprint (new AI).** FANZi learns your cooler's thermal resistance - how many °C each extra CPU watt costs
+  (K/W) - from normal use, per fan-speed band, so room temperature and the BIOS fan curve don't fool it. Dust, a clogged filter,
+  drying thermal paste or a tired AIO raise that number slowly; AEDi tracks the trend and forecasts *"clean the cooling in ~N
+  days"*. Fan tachometers are fingerprinted too: a fan that spins ≥ 15 % slower at the same duty is flagged for bearing wear or a
+  blockage. Learned locally in `%APPDATA%\FANZI\ai`, nothing leaves the PC. Dashboard → AEDi Cooling Fingerprint.
+- **AEDi Self-Doctor (auto-debugging).** Every 30 s FANZi checks itself - sensors, fans, RGB link, MAXSUN Sync service, memory,
+  window responsiveness and the error log - and repairs what it safely can: reopens the sensor driver, reconnects lighting, restarts
+  MaxsunSyncService, compacts memory. Error storms save a diagnostics bundle (logs, crash logs, redacted settings) to
+  `Documents\FANZi\Diagnostics` automatically. Dashboard → Self-Doctor, with *Run checks now* and *Save diagnostics*.
+- **RAM through MAXSUN Sync.** On boards with MAXSUN Sync, RAM (and the MAXSUN board LEDs) are driven through MaxsunSyncService and
+  the ENE HAL - the same path MAXSUN's own utility uses - and OpenRGB keeps off the DRAM SMBus controllers, so sticks never see two
+  bus masters. Other PCs are unchanged.
+- **Use BIOS fan settings** (Fans tab, on by default): fans on motherboard headers follow your BIOS Smart Fan curve; FANZi reads
+  them. GPU and fan-hub channels stay controllable.
+- **Installer upgrades in place.** It finds the installed FANZi (any folder), closes it gracefully, replaces the files and keeps
+  your settings, profiles and AEDi data.
+
 ### What's new in v4.3.3
 
 - **RAM drives through SMBus port 0.** When both PIIX4 ports read the sticks correctly, FANZi now picks port 0 - the port a clean

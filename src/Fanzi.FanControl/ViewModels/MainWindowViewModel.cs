@@ -260,6 +260,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         : this(hardwareMonitorService, settingsService, new RgbControlViewModel(rgbService))
     {
         StartUpdateChecks();
+        // 4.4: AEDi Cooling Fingerprint + Self-Doctor (live app only — the test / render harness has no background work).
+        InitializeAedi(rgbService);
     }
 
     /// <param name="rgbControl">RGB tab view model; tests/render harness pass one without background
@@ -743,6 +745,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _miniOverlay = null;
 
         UnwireAlerts();
+        DisposeAedi();
         RgbControl.Dispose();
         TaskManagerVm.Dispose();
         NetworkManagerVm.Dispose();
@@ -1267,6 +1270,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             IsRefreshing = true;
             var snapshot = await _hardwareMonitorService.GetSnapshotAsync(_disposeTokenSource.Token);
+            FeedAedi(snapshot);
 
             // Same frame: finished panel results are committed right before the dashboard values below.
             CommitLiveSyncIfReady();

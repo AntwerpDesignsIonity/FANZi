@@ -396,6 +396,68 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- 4.4 AEDi: Cooling Fingerprint (predictive cooling maintenance) | Self-Doctor (auto-debugging) -->
+                                <Grid x:Name="AediCards" ColumnDefinitions="*,*" ColumnSpacing="14">
+                                    <Border x:Name="CoolingFingerprintCard" Grid.Column="0" Classes="tile" BorderBrush="{StaticResource CardBorderGradient}" Padding="16,12">
+                                        <StackPanel Spacing="8">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="🧬 AEDi COOLING FINGERPRINT" Classes="label-caps" VerticalAlignment="Center"
+                                                           ToolTip.Tip="AEDi learns your cooler's thermal resistance (°C per CPU watt) and forecasts when dust or ageing paste needs attention."/>
+                                                <Border Grid.Column="1" Classes="pill" Padding="8,2" BorderBrush="{Binding CoolingStateColor}">
+                                                    <TextBlock Text="{Binding CoolingStateLabel}" FontSize="10" FontWeight="Black" Foreground="{Binding CoolingStateColor}"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock x:Name="CoolingHeadlineText" Text="{Binding CoolingHeadline}" FontSize="15" FontWeight="Black" Foreground="#E8F0FF" TextWrapping="Wrap"/>
+                                            <ProgressBar Minimum="0" Maximum="110" Value="{Binding CoolingEfficiencyValue}" Height="6" CornerRadius="3" Foreground="{Binding CoolingStateColor}"/>
+                                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                                <StackPanel Grid.Column="0" Spacing="1">
+                                                    <TextBlock Text="EFFICIENCY" Classes="label-caps" FontSize="9"/>
+                                                    <TextBlock Text="{Binding CoolingEfficiency}" FontSize="13" FontWeight="Black" Foreground="#60A5FA" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="1" Spacing="1">
+                                                    <TextBlock Text="THERMAL R" Classes="label-caps" FontSize="9"/>
+                                                    <TextBlock Text="{Binding CoolingResistance}" FontSize="13" FontWeight="Black" Foreground="#A78BFA" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Spacing="1">
+                                                    <TextBlock Text="CLEAN IN" Classes="label-caps" FontSize="9"/>
+                                                    <TextBlock Text="{Binding CoolingForecast}" FontSize="13" FontWeight="Black" Foreground="#FBBF24" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                            </Grid>
+                                            <TextBlock Text="{Binding CoolingDetail}" FontSize="11" Foreground="#A0C0E0" TextWrapping="Wrap"/>
+                                            <Button Content="Re-learn (new cooler / repaste)" Command="{Binding RelearnCoolingCommand}" Padding="10,3" FontSize="10" HorizontalAlignment="Left"
+                                                    ToolTip.Tip="Forget the learned fingerprint and learn this cooler again"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border x:Name="SelfDoctorCard" Grid.Column="1" Classes="tile" BorderBrush="{StaticResource CardBorderGradient}" Padding="16,12">
+                                        <StackPanel Spacing="8">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="⚕ AEDi SELF-DOCTOR" Classes="label-caps" VerticalAlignment="Center"
+                                                           ToolTip.Tip="Auto-debugging: every 30 s FANZi checks its sensors, fans, RGB link, MAXSUN service, memory, responsiveness and error log, and repairs what it safely can."/>
+                                                <Border Grid.Column="1" Classes="pill" Padding="8,2">
+                                                    <TextBlock Text="{Binding DoctorFixesLabel}" FontSize="10" FontWeight="Black" Foreground="#60A5FA"/>
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock Text="{Binding DoctorSummary}" FontSize="13" FontWeight="Bold" Foreground="#E8F0FF" TextWrapping="Wrap"/>
+                                            <ItemsControl ItemsSource="{Binding DoctorChecks}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="services:DoctorCheck">
+                                                        <Grid ColumnDefinitions="18,Auto,*" ColumnSpacing="6" Margin="0,1" ToolTip.Tip="{Binding Detail}">
+                                                            <TextBlock Text="{Binding Icon}" FontWeight="Black" Foreground="{Binding Color}" FontSize="12"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11" FontWeight="Bold" Foreground="#C8D8F0"/>
+                                                            <TextBlock Grid.Column="2" Text="{Binding Detail}" FontSize="11" Foreground="#7A9AC0" TextTrimming="CharacterEllipsis"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Content="Run checks now" Command="{Binding RunDoctorCommand}" Padding="10,3" FontSize="10"/>
+                                                <Button Content="Save diagnostics" Command="{Binding SaveDiagnosticsCommand}" Padding="10,3" FontSize="10"
+                                                        ToolTip.Tip="Zip logs, crash logs, redacted settings and the Self-Doctor report to Documents\FANZi\Diagnostics"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
                                 <!-- CPU | GPU: side-by-side panels; header, temperature and stat rows line up across both
                                      (shared size groups), every card in a row has the same height. -->
                                 <Grid x:Name="HardwarePanels" ColumnDefinitions="*,*" ColumnSpacing="14" Grid.IsSharedSizeScope="True">

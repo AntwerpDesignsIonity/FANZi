@@ -379,6 +379,35 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
         }, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public Task<bool> TryRecoverAsync()
+    {
+        return Task.Run(() =>
+        {
+            lock (_syncRoot)
+            {
+                if (_disposed || _computer is null) return false;
+                foreach (var control in _controlMap.Values)
+                {
+                    try { control.SetDefault(); } catch { }
+                }
+                _controlMap.Clear();
+                try
+                {
+                    _computer.Close();
+                    _computer.Open();
+                    AppLog.Info("Hardware monitor reopened by Self-Doctor.");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Error("Hardware monitor could not be reopened", ex);
+                    return false;
+                }
+            }
+        });
+    }
+
     public Task<SetFanControlResult> RestoreAutomaticControlAsync(string channelId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
