@@ -71,7 +71,7 @@ public partial class MainWindowViewModel
     public IRelayCommand OpenOverlayStudioCommand { get; private set; } = null!;
 
     /// <summary>Tab index of Settings (Dashboard … Alerts, Settings).</summary>
-    public const int SettingsTabIndex = 10;
+    public const int SettingsTabIndex = 11; // 12 tabs since 4.3 (Bench) — was still 10 and opened Alerts
 
     /// <summary>The main window scrolls the Overlay Studio card into view.</summary>
     public event EventHandler? OverlayStudioRequested;

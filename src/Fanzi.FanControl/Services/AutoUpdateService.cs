@@ -41,6 +41,10 @@ public sealed class AutoUpdateService : IDisposable
 
     public string? LatestVersion { get; private set; }
     public string? DownloadUrl { get; private set; }
+    /// <summary>4.5.1: file name of the selected asset (looked up in SHA256SUMS.txt).</summary>
+    public string? DownloadFileName { get; private set; }
+    /// <summary>4.5.1: URL of the release's SHA256SUMS.txt, when it has one.</summary>
+    public string? ChecksumsUrl { get; private set; }
     public long? DownloadSize { get; private set; }
     public string? ReleaseNotes { get; private set; }
     public string ReleasePageUrl { get; private set; } = ReleasesPageUrl;
@@ -84,6 +88,8 @@ public sealed class AutoUpdateService : IDisposable
             ReleaseNotes = release.Notes;
             ReleasePageUrl = release.HtmlUrl ?? ReleasesPageUrl;
             DownloadUrl = release.Asset?.Url;
+            DownloadFileName = release.Asset?.Name;
+            ChecksumsUrl = release.ChecksumsUrl;
             DownloadSize = release.Asset?.Size;
 
             UpdateAvailable = IsNewerVersion(LatestVersion, _currentVersion);
@@ -171,11 +177,32 @@ public sealed class AutoUpdateService : IDisposable
         }
     }
 
+    /// <summary>
+    /// 4.5.1: the SHA-256 the release publishes for the selected asset (from SHA256SUMS.txt), or null when the release
+    /// has no checksum file or does not list the asset.
+    /// </summary>
+    public async Task<string?> GetExpectedSha256Async(CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(ChecksumsUrl) || string.IsNullOrEmpty(DownloadFileName)) return null;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(ApiTimeout);
+            string text = await Http.GetStringAsync(ChecksumsUrl, timeout.Token).ConfigureAwait(false);
+            return SelfUpdater.FindSha256(text, DownloadFileName);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            AppLog.Warn("Reading SHA256SUMS.txt failed", ex);
+            return null;
+        }
+    }
+
     // ── Pure helpers (unit-tested) ────────────────────────────────────────────
 
     internal sealed record ReleaseAsset(string Name, string Url, long Size);
 
-    internal sealed record ReleaseInfo(string Version, string Notes, string? HtmlUrl, ReleaseAsset? Asset);
+    internal sealed record ReleaseInfo(string Version, string Notes, string? HtmlUrl, ReleaseAsset? Asset, string? ChecksumsUrl = null);
 
     /// <summary>Parses a GitHub "release" JSON document into the fields FANZi needs.</summary>
     internal static ReleaseInfo ParseRelease(string json)
@@ -200,7 +227,8 @@ public sealed class AutoUpdateService : IDisposable
             }
         }
 
-        return new ReleaseInfo(NormalizeTag(tag), notes, htmlUrl, SelectAsset(assets));
+        string? sums = assets.FirstOrDefault(a => a.Name.Equals("SHA256SUMS.txt", StringComparison.OrdinalIgnoreCase))?.Url;
+        return new ReleaseInfo(NormalizeTag(tag), notes, htmlUrl, SelectAsset(assets), sums);
     }
 
     /// <summary>
@@ -212,6 +240,8 @@ public sealed class AutoUpdateService : IDisposable
         static bool IsExe(ReleaseAsset a) => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
 
         return assets.FirstOrDefault(a => a.Name.Equals(PrimaryAssetName, StringComparison.OrdinalIgnoreCase))
+            // 4.5.1: the Windows application itself, as published since 4.0 ("…-Portable-win-x64.exe").
+            ?? assets.FirstOrDefault(a => IsExe(a) && a.Name.Contains("Portable-win-x64", StringComparison.OrdinalIgnoreCase))
             ?? assets.FirstOrDefault(a => IsExe(a) && a.Name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
             ?? assets.FirstOrDefault(IsExe);
     }

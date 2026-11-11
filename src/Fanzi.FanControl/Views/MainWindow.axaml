@@ -40,8 +40,8 @@
                     </Panel>
                     <TextBlock Text="FANZi IO-nity" FontSize="12" FontWeight="Black" Foreground="{StaticResource AccentGradient}" VerticalAlignment="Center"/>
                     <TextBlock Text="{x:Static services:AppVersion.ShortLabel}" FontSize="10" Foreground="#3A5070" VerticalAlignment="Center"/>
-                    <!-- Shown only when a newer release is published; opens the release page -->
-                    <Button IsVisible="{Binding IsUpdateAvailable}" Command="{Binding OpenUpdatePageCommand}"
+                    <!-- Shown only when a newer release is published; jumps to Settings → Updates -->
+                    <Button x:Name="UpdateBadge" IsVisible="{Binding IsUpdateAvailable}" Command="{Binding ShowUpdatesCommand}"
                             ToolTip.Tip="{Binding UpdateTooltip}" Content="{Binding UpdateBadgeText}"
                             Background="#3366FF" Foreground="#FFFFFF" FontSize="10" FontWeight="SemiBold"
                             Padding="8,2" CornerRadius="9" VerticalAlignment="Center" Cursor="Hand"/>
@@ -1170,6 +1170,42 @@
                     <TabItem Header="Settings">
                         <ScrollViewer VerticalScrollBarVisibility="Auto">
                             <StackPanel Spacing="14" Margin="0,12,12,12">
+
+                                <!-- 4.5.1 Updates: check, update in place, automatic check on/off -->
+                                <Border Classes="card" x:Name="UpdateSettingsCard">
+                                    <StackPanel Spacing="12">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Border Classes="pill info" Padding="8,3">
+                                                <TextBlock Text="⬆" FontSize="11"/>
+                                            </Border>
+                                            <TextBlock Text="Updates" FontSize="16" FontWeight="Black" Foreground="#E8F0FF" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                                            <StackPanel Spacing="3" VerticalAlignment="Center">
+                                                <TextBlock x:Name="UpdateStatusText" Text="{Binding UpdateStatusText}" Foreground="#A0C0E0" FontSize="13" TextWrapping="Wrap"/>
+                                                <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                           Text="Update now downloads the latest release from GitHub, checks it against the release's SHA256SUMS.txt, replaces the program file and restarts FANZi. Settings, profiles and AEDi data are kept; fans go back to automatic during the restart."/>
+                                            </StackPanel>
+                                            <Button x:Name="CheckForUpdatesButton" Grid.Column="1" Content="Check now" Command="{Binding CheckForUpdatesCommand}"
+                                                    Padding="12,6" VerticalAlignment="Center" ToolTip.Tip="Ask GitHub for the latest FANZi IO-nity release"/>
+                                            <Button x:Name="InstallUpdateButton" Grid.Column="2" Classes="primary" Content="{Binding UpdateButtonText}" Command="{Binding InstallUpdateCommand}"
+                                                    IsEnabled="{Binding CanInstallUpdate}" Padding="12,6" VerticalAlignment="Center"
+                                                    ToolTip.Tip="Download, verify and install the latest release, then restart FANZi"/>
+                                            <Button Grid.Column="3" Content="Release notes" Command="{Binding OpenUpdatePageCommand}" Padding="12,6" VerticalAlignment="Center"
+                                                    ToolTip.Tip="Open the release page in your browser"/>
+                                        </Grid>
+                                        <ProgressBar x:Name="UpdateProgressBar" Minimum="0" Maximum="100" Value="{Binding UpdateProgress}" Height="4" IsVisible="{Binding IsInstallingUpdate}"/>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="Check for updates automatically" Foreground="#A0C0E0" FontSize="13"/>
+                                                <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap"
+                                                           Text="30 seconds after start and every 12 hours FANZi asks GitHub for the latest release number. Nothing about your PC is sent. Off = FANZi contacts GitHub only when you press Check now."/>
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" x:Name="AutoUpdateCheckToggle" IsChecked="{Binding AutoUpdateCheckEnabled}"
+                                                          HorizontalAlignment="Right" VerticalAlignment="Center" AutomationProperties.Name="Check for updates automatically"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
 
                                 <!-- Alerts & Notifications -->
                                 <Border Classes="card" x:Name="NotificationSettingsCard">

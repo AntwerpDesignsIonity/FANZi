@@ -104,6 +104,9 @@ public sealed class AppSettings
     /// <summary>4.5: saved per-zone lighting ("device|zone" → settings): segments, direction, pattern, brightness…</summary>
     public Dictionary<string, RgbZoneSettings> RgbZones { get; set; } = new();
 
+    /// <summary>4.5.1: check GitHub for a newer release automatically (30 s after start, every 12 h).</summary>
+    public bool AutoUpdateCheck { get; set; } = true;
+
     /// <summary>4.5: per-zone control on (each zone / segment follows its own row).</summary>
     public bool RgbZoneMode { get; set; }
 

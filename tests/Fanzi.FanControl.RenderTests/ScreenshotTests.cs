@@ -137,6 +137,7 @@ public sealed class ScreenshotTests
 
             scope.Vm.SelectedTabIndex = TabSettings;
             Capture(window, "settings.png", 1400, 960);
+            AssertUpdatesCard(window, scope.Vm);
             window.FindControl<Border>("OverlayStudioCard")!.BringIntoView();
             Dispatcher.UIThread.RunJobs();
             Capture(window, "settings-overlay-studio.png", 1400, 960);
@@ -414,6 +415,19 @@ public sealed class ScreenshotTests
         Assert.False(rgb.AutoRgb);
         rgb.NightDimmingEnabled = false;
         Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>4.5.1 Settings → Updates: Check now, Update now (disabled while up to date), automatic-check switch.</summary>
+    private static void AssertUpdatesCard(Window window, MainWindowViewModel vm)
+    {
+        Assert.True(window.FindControl<Border>("UpdateSettingsCard")!.IsEffectivelyVisible);
+        Assert.True(window.FindControl<Button>("CheckForUpdatesButton")!.IsEffectivelyVisible);
+        var install = window.FindControl<Button>("InstallUpdateButton")!;
+        Assert.False(install.IsEffectivelyEnabled, "nothing to install while up to date");
+        Assert.Equal("Up to date", vm.UpdateButtonText);
+        Assert.True(window.FindControl<ToggleSwitch>("AutoUpdateCheckToggle")!.IsChecked);
+        Assert.False(window.FindControl<Button>("UpdateBadge")!.IsVisible);
+        Assert.Equal(TabSettings, MainWindowViewModel.SettingsTabIndex);
     }
 
     /// <summary>All twelve tab headers (4.1.0 adds Tools, 4.3 adds Bench) share one row (no orphaned tab wrapping onto a second line).</summary>

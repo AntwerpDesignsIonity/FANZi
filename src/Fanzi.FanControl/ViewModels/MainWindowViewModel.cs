@@ -926,6 +926,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             OverlayTopmost = _appSettings.OverlayTopmost;
             OverlayShowCpuHistory = _appSettings.OverlayShowCpuHistory;
             ToastNotificationsEnabled = _appSettings.ToastNotificationsEnabled;
+            AutoUpdateCheckEnabled = _appSettings.AutoUpdateCheck;
             ReduceMotion = _appSettings.ReduceMotion;
             OverlayCompact = _appSettings.OverlayCompact;
             ApplyOverlayStudioSettings();

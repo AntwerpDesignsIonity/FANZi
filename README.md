@@ -13,7 +13,7 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-blue?logo=windows"/>
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet"/>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green"/>
-  <img alt="Version" src="https://img.shields.io/badge/version-4.5.0-green"/>
+  <img alt="Version" src="https://img.shields.io/badge/version-4.5.1-green"/>
 </p>
 
 ---
@@ -64,6 +64,17 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | ⌨ **Typing FX (4.3)** | Keystrokes become light: Ripple, Pulse, Line, Area, Fireworks, Typewriter, Matrix rain, Typing heat — on the keyboard where you hit the key and across RAM, GPU, strips and mouse |
 | 🔥 **Thermal Bench (4.3)** | Repeatable all-core cooling benchmark with a 0–100 score, grade, fan-lag / recovery metrics, run history and CSV export |
 | ▤ **RAM lighting that sticks (4.3)** | ENE DRAM mirrored on two SMBus ports is driven exactly once, SMBus writes are rate-limited, and **Re-sync RAM** recovers a stuck controller without a reboot |
+
+### What's new in v4.5.1
+
+- **Update now.** Settings → Updates: *Check now* asks GitHub for the latest release; *Update now* downloads the Windows build,
+  checks it against the release's `SHA256SUMS.txt`, replaces the program file in place and restarts FANZi (settings, profiles and
+  AEDi data are kept; the fans go back to automatic during the restart). A download that has no published checksum, or does not
+  match it, is not installed. macOS / Linux: the button opens the download page.
+- **Automatic update check can be switched off** (Settings → Updates). The title-bar badge now opens that card.
+- **Open source.** FANZi IO-nity is MIT-licensed from this version on; see [LICENSE](LICENSE) and
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- Fixed: *Open overlay settings* jumped to the Alerts tab instead of Settings.
 
 ### What's new in v4.5.0
 

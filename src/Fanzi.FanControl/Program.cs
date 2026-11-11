@@ -44,6 +44,14 @@ sealed class Program
             ownsMutex = AcquireSingleInstance(recovered: true); // waits up to 10 s; an abandoned lock passes to us
         }
 
+        // 4.5.1: after an in-place update (the older instance has exited by now), drop the previous version's file
+        // and keep "Apps & features" in step.
+        if (ownsMutex)
+        {
+            SelfUpdater.CleanupAfterUpdate(Environment.ProcessPath);
+            SelfUpdater.SyncInstalledVersion(Environment.ProcessPath, AppVersion.Display);
+        }
+
         if (!ownsMutex)
         {
             AppLog.Info("Another FANZi instance is already running — asking it to show its window, then exiting.");

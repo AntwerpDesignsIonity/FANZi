@@ -34,12 +34,13 @@ This program will not transfer any information to other networked systems unless
 person installing or operating it.
 
 FANZi has no telemetry, analytics or account requirement. Sensor readings, settings, logs and AEDi learning data stay on the
-PC (`%APPDATA%\FANZI`). It connects to the network only for these functions; the update check and the OpenRGB download are the
-two that start without a click, and neither sends data about the user or the PC:
+PC (`%APPDATA%\FANZI`). It connects to the network only for these functions; the update check (which can be switched off) and the OpenRGB
+download are the two that start without a click, and neither sends data about the user or the PC:
 
 | Function | Connects to | When |
 |---|---|---|
-| Update check | `api.github.com` (release list of the FANZi repository; a plain request, nothing about the PC is sent) | Automatically 30 s after start and every 12 hours, and on *Check for updates* |
+| Update check | `api.github.com` (latest release of the FANZi repository; a plain request, nothing about the PC is sent) | Automatically 30 s after start and every 12 hours — can be switched off in Settings → Updates — and on *Check now* |
+| Update download | `github.com` release assets (the Windows program file and `SHA256SUMS.txt`) | Only when the user presses *Update now* |
 | OpenRGB download | `openrgb.org` / `codeberg.org` | Automatically when RGB is switched on and OpenRGB is not installed, and on *Install OpenRGB* |
 | PawnIO driver download | `api.github.com` / `github.com` (namazso/PawnIO.Setup) | When the user presses *Install PawnIO* |
 | OpenRGB SDK, MAXSUN Sync | `127.0.0.1`, or the host the user enters | While RGB is on |

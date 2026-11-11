@@ -12,7 +12,7 @@
     <Copyright>© 2018-2026 Antwerp Designs | Ionity Global (Pty) Ltd. MIT License.</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>FANZi IO-nity — AI Thermal Intelligence, Smart Fan Control, RGB Lighting &amp; System Health Monitoring. Powered by AEDi (Antwerp Ecosystems Designs Ionity) AI Engine.</Description>
-    <Version>4.5.0</Version>
+    <Version>4.5.1</Version>
   </PropertyGroup>
 
   <ItemGroup>

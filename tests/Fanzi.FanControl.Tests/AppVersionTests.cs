@@ -7,10 +7,10 @@ public sealed class AppVersionTests
     [Fact]
     public void Display_ComesFromTheAssembly_AndIs400()
     {
-        Assert.Equal("4.5.0", AppVersion.Display);
+        Assert.Equal("4.5.1", AppVersion.Display);
         Assert.Equal("v4.5", AppVersion.ShortLabel);
-        Assert.Equal("FANZi IO-nity v4.5.0", AppVersion.ProductTitle);
-        Assert.Equal(new Version(4, 5, 0, 0), typeof(AppVersion).Assembly.GetName().Version);
+        Assert.Equal("FANZi IO-nity v4.5.1", AppVersion.ProductTitle);
+        Assert.Equal(new Version(4, 5, 1, 0), typeof(AppVersion).Assembly.GetName().Version);
     }
 
     [Theory]
