@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Fanzi.FanControl.Models;
 using Fanzi.FanControl.Services;
+using Fanzi.FanControl.Services.Rgb;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -72,7 +73,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     private bool _isConnecting;
 
     /// <summary>Dashboard RGB chip dot: green connected, amber connecting/starting, red offline.</summary>
-    public string ConnectionDotColor => HasRgbConflicts ? "#EF4444" : DotColorFor(IsConnected, IsConnecting || _autoStartInProgress);
+    public string ConnectionDotColor => HasRgbConflicts && !ConflictIsSharing ? "#EF4444" : DotColorFor(IsConnected, IsConnecting || _autoStartInProgress);
 
     internal static string DotColorFor(bool connected, bool connecting)
         => connected ? "#22C55E" : connecting ? "#FBBF24" : "#EF4444";
@@ -89,7 +90,9 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
     partial void OnDeviceSummaryChanged(string value) => OnPropertyChanged(nameof(ConnectionChipText));
 
     /// <summary>Short dashboard chip label ("Connected · 3 devices"); the full <see cref="ConnectionStatus"/> is its tooltip.</summary>
-    public string ConnectionChipText => HasRgbConflicts && !string.IsNullOrEmpty(RgbConflictTitle)
+    public string ConnectionChipText => HasRgbConflicts && ConflictIsSharing
+        ? ChipTextFor(IsConnected, IsConnecting || _autoStartInProgress, Devices.Count) + " · RAM left to vendor app"
+        : HasRgbConflicts && !string.IsNullOrEmpty(RgbConflictTitle)
         ? "Blocked · " + RgbConflictTitle.Replace(" is controlling your lights", "").Replace(" are controlling your lights", "") + " overrides FANZi"
         : ChipTextFor(IsConnected, IsConnecting || _autoStartInProgress, Devices.Count);
 
@@ -433,6 +436,10 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 await ConnectRemoteAsync();
                 return;
             }
+
+            // 4.5: decide who owns SMBus lighting BEFORE OpenRGB scans the bus.
+            await Task.Run(PrimeCoexistence);
+            _coexistencePrimed = true;
 
             ConnectionStatus = "AEDi: Starting OpenRGB server...";
             bool serverOk = await _serverManager.EnsureRunningAsync(
@@ -859,18 +866,7 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
         // v4: AEDi Smart Ambient / Thermal Guardian / Night dimming can override the user's effect.
         var frame = FrameParameters();
 
-        RgbColor color = RgbEffectsEngine.Tick(
-            elapsedSeconds:  elapsed,
-            effect:          frame.Effect,
-            primary:         frame.Primary,
-            secondary:       frame.Secondary,
-            speedMultiplier: frame.Speed,
-            brightness:      frame.Brightness,
-            cpuTempC:        cpuTemp,
-            gpuTempC:        gpuTemp,
-            cpuLoadPct:      cpuLoad,
-            deviceIndex:     0,
-            deviceCount:     Math.Max(1, _deviceCount));
+        RgbColor color = TickLook(elapsed, 0, Math.Max(1, _deviceCount), cpuTemp, gpuTemp, cpuLoad);
 
         // Update UI preview (Avalonia requires Dispatcher for property changes).
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -930,18 +926,8 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 {
                     if (i == identifying) continue; // "Identify" is flashing this one
 
-                    RgbColor deviceColor = RgbEffectsEngine.Tick(
-                        elapsedSeconds:  elapsed,
-                        effect:          frame.Effect,
-                        primary:         frame.Primary,
-                        secondary:       frame.Secondary,
-                        speedMultiplier: frame.Speed,
-                        brightness:      frame.Brightness,
-                        cpuTempC:        reactive ? _cpuTempC : null,
-                        gpuTempC:        reactive ? _gpuTempC : null,
-                        cpuLoadPct:      reactive ? _cpuLoadPct : null,
-                        deviceIndex:     i,
-                        deviceCount:     _deviceCount);
+                    RgbColor deviceColor = TickLook(elapsed, i, _deviceCount,
+                        reactive ? _cpuTempC : null, reactive ? _gpuTempC : null, reactive ? _cpuLoadPct : null);
 
                     await _rgbService.SetDeviceColorAsync(i, deviceColor, _cts.Token);
                 }
@@ -976,23 +962,32 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
                 list.Add(z);
             }
 
+            var look = FrameParameters();
             foreach (var (deviceIndex, deviceZones) in byDevice)
             {
-                int maxZone = 0;
-                foreach (var z in deviceZones) maxZone = Math.Max(maxZone, z.ZoneIndex);
+                deviceZones.Sort((x, y) => x.ZoneIndex.CompareTo(y.ZoneIndex));
+                int maxZone = deviceZones[^1].ZoneIndex;
 
                 var colors = new RgbColor[maxZone + 1];
+                var rendered = new List<(int LedCount, RgbColor A, RgbColor B, ZoneRender Render)>(deviceZones.Count);
                 foreach (var z in deviceZones)
                 {
                     var c = z.Compute(
-                        elapsed, SpeedMultiplier, Brightness,
+                        elapsed, look.Speed, look.Brightness,
                         cpuTemp, gpuTemp, cpuLoad, pumpLoad,
                         deviceZones.Count);
                     colors[z.ZoneIndex] = c;
                     z.LastComputed = c;
+                    var render = z.AppliedRender;
+                    rendered.Add((z.LedCount, c, z.AppliedSecondary.Scale(look.Brightness * render.Brightness), render));
                 }
 
-                await _rgbService.SetDeviceZoneColorsAsync(deviceIndex, colors, _cts.Token);
+                // 4.5 segments: any zone that is split, patterned or switched off needs the per-LED update.
+                var leds = BuildDeviceLeds(rendered, elapsed * look.Speed);
+                if (leds is not null)
+                    await _rgbService.SetDeviceColorsAsync(deviceIndex, leds, _cts.Token);
+                else
+                    await _rgbService.SetDeviceZoneColorsAsync(deviceIndex, colors, _cts.Token);
             }
 
             // Reflect each zone's colour into its preview swatch.
@@ -1128,14 +1123,18 @@ public sealed partial class RgbControlViewModel : ViewModelBase, IDisposable
 
             // Rebuild per-zone controls only when the layout actually changes, so user
             // edits survive the periodic watchdog refreshes.
-            var sig = string.Join("|", list.Select(d => $"{d.DeviceIndex}:{d.Name}:{d.Zones.Count}"));
+            var sig = string.Join("|", list.Select(d => $"{d.DeviceIndex}:{d.Name}:{string.Join(",", d.Zones.Select(z => z.LedCount))}"));
             if (sig != _zoneSignature)
             {
                 _zoneSignature = sig;
                 ZoneControls.Clear();
                 foreach (var d in list)
                     foreach (var z in d.Zones)
-                        ZoneControls.Add(new ZoneEffectViewModel(z, d.Name));
+                    {
+                        var zone = new ZoneEffectViewModel(z, d.Name);
+                        AttachZone(zone); // 4.5: saved segments / pattern / colours + Apply mode
+                        ZoneControls.Add(zone);
+                    }
 
                 _zoneSendList = ZoneControls.ToArray();
                 HasZones = _zoneSendList.Length > 0;

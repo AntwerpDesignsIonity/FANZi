@@ -23,7 +23,9 @@ public readonly record struct RgbAiInputs(
     double? CpuLoadPct,
     bool IsGameMode,
     string? GameName,
-    TimeSpan LocalTime);
+    TimeSpan LocalTime,
+    // 4.5: monotonic seconds. When given, scene changes must hold for a dwell time before they show (no flapping).
+    double? NowSeconds = null);
 
 /// <summary>
 /// AEDi lighting director (v4) — a small, deterministic rules engine that turns live system state into
@@ -47,7 +49,26 @@ public sealed class RgbAiDirector
     public static readonly TimeSpan NightStart = TimeSpan.FromHours(22);
     public static readonly TimeSpan NightEnd = TimeSpan.FromHours(6.5);
 
+    // 4.5: hysteresis + dwell so the scene does not flap around a threshold.
+    /// <summary>Hot releases this far below its trigger.</summary>
+    public const double HotHysteresisC = 4;
+    /// <summary>Working releases when load falls below this.</summary>
+    public const double BusyReleasePct = 25;
+    /// <summary>A new scene must hold this long before it replaces the current one.</summary>
+    public const double DwellSeconds = 8;
+    /// <summary>Warm-up is shown sooner…</summary>
+    public const double HotDwellSeconds = 3;
+    /// <summary>…and a game is not dropped on a short alt-tab.</summary>
+    public const double LeaveGameDwellSeconds = 20;
+    /// <summary>Night dimming fades in / out over this long instead of jumping.</summary>
+    public static readonly TimeSpan NightRamp = TimeSpan.FromMinutes(45);
+
     private bool _guardianLatched;
+    private bool _hotLatched;
+    private bool _busyLatched;
+    private RgbAiMode? _shown;
+    private RgbAiMode? _candidate;
+    private double _candidateSince;
 
     public bool SmartAmbient { get; set; }
     public bool ThermalGuardian { get; set; } = true;
@@ -64,7 +85,7 @@ public sealed class RgbAiDirector
     {
         double cpu = input.CpuTempC ?? 0, gpu = input.GpuTempC ?? 0, load = input.CpuLoadPct ?? 0;
         bool night = IsNight(input.LocalTime);
-        double cap = NightDimming && night ? NightBrightnessCap : 1.0;
+        double cap = NightDimming ? NightCapAt(input.LocalTime) : 1.0;
 
         // ── Thermal Guardian (highest priority, latched with hysteresis) ──
         if (ThermalGuardian)
@@ -89,6 +110,7 @@ public sealed class RgbAiDirector
 
         if (!SmartAmbient)
         {
+            _hotLatched = _busyLatched = false; _shown = null; _candidate = null;
             return night && NightDimming
                 ? new RgbAiDecision(RgbAiMode.Night, RgbEffectType.Pulse, userPrimary, userSecondary, 0.4, cap,
                     "Night dimming: brightness capped at 35 % until 06:30.")
@@ -96,24 +118,71 @@ public sealed class RgbAiDirector
         }
 
         // ── Smart Ambient ──
-        if (cpu >= HotCpuC || gpu >= HotGpuC)
-            return new RgbAiDecision(RgbAiMode.Hot, RgbEffectType.TemperatureReactive, RgbColor.IceBlue, RgbColor.Red, 1.0, cap,
-                $"Smart Ambient: running warm (CPU {cpu:F0}°C / GPU {gpu:F0}°C) — colour follows temperature.");
+        // Raw state with hysteresis: a threshold has to be left by a margin before the scene lets go.
+        bool hotNow = cpu >= HotCpuC || gpu >= HotGpuC;
+        bool hotClear = cpu < HotCpuC - HotHysteresisC && gpu < HotGpuC - HotHysteresisC;
+        if (hotNow) _hotLatched = true; else if (hotClear) _hotLatched = false;
+        if (load >= BusyLoadPct) _busyLatched = true; else if (load < BusyReleasePct) _busyLatched = false;
 
-        if (input.IsGameMode)
-            return new RgbAiDecision(RgbAiMode.Gaming, RgbEffectType.Performance, userPrimary, RgbColor.Red, 1.2, cap,
-                $"Smart Ambient: game detected{(string.IsNullOrWhiteSpace(input.GameName) ? "" : $" ({input.GameName})")} — performance-reactive lighting.");
+        RgbAiMode raw = _hotLatched ? RgbAiMode.Hot
+            : input.IsGameMode ? RgbAiMode.Gaming
+            : night ? RgbAiMode.Night
+            : _busyLatched ? RgbAiMode.Working
+            : RgbAiMode.Idle;
 
-        if (night)
-            return new RgbAiDecision(RgbAiMode.Night, RgbEffectType.Pulse, userPrimary, userSecondary, 0.35, Math.Min(cap, 0.5),
-                "Smart Ambient: late evening — slow, low breathing.");
+        RgbAiMode mode = Settle(raw, input.NowSeconds);
 
-        if (load >= BusyLoadPct)
-            return new RgbAiDecision(RgbAiMode.Working, RgbEffectType.CpuLoadReactive, userPrimary, userSecondary, 1.0, cap,
-                $"Smart Ambient: busy ({load:F0}% CPU) — pace follows load.");
+        return mode switch
+        {
+            RgbAiMode.Hot => new RgbAiDecision(RgbAiMode.Hot, RgbEffectType.TemperatureReactive, RgbColor.IceBlue, RgbColor.Red, 1.0, cap,
+                $"Smart Ambient: running warm (CPU {cpu:F0}°C / GPU {gpu:F0}°C) — colour follows temperature."),
+            RgbAiMode.Gaming => new RgbAiDecision(RgbAiMode.Gaming, RgbEffectType.Performance, userPrimary, RgbColor.Red, 1.2, cap,
+                $"Smart Ambient: game detected{(string.IsNullOrWhiteSpace(input.GameName) ? "" : $" ({input.GameName})")} — performance-reactive lighting."),
+            RgbAiMode.Night => new RgbAiDecision(RgbAiMode.Night, RgbEffectType.Pulse, userPrimary, userSecondary, 0.35, Math.Min(cap, 0.5),
+                "Smart Ambient: late evening — slow, low breathing."),
+            RgbAiMode.Working => new RgbAiDecision(RgbAiMode.Working, RgbEffectType.CpuLoadReactive, userPrimary, userSecondary, 1.0, cap,
+                $"Smart Ambient: busy ({load:F0}% CPU) — pace follows load."),
+            _ => new RgbAiDecision(RgbAiMode.Idle, RgbEffectType.Pulse, userPrimary, userSecondary, 0.6, cap,
+                "Smart Ambient: idle — calm breathing in your colours."),
+        };
+    }
 
-        return new RgbAiDecision(RgbAiMode.Idle, RgbEffectType.Pulse, userPrimary, userSecondary, 0.6, cap,
-            "Smart Ambient: idle — calm breathing in your colours.");
+    /// <summary>
+    /// Dwell: with a clock, a new scene replaces the shown one only after it has been wanted continuously for its dwell
+    /// time. Without a clock (<paramref name="now"/> null) the raw state shows at once.
+    /// </summary>
+    private RgbAiMode Settle(RgbAiMode raw, double? now)
+    {
+        if (now is not double t || _shown is not RgbAiMode shown)
+        {
+            _shown = raw; _candidate = null;
+            return raw;
+        }
+        if (raw == shown) { _candidate = null; return shown; }
+        if (_candidate != raw) { _candidate = raw; _candidateSince = t; }
+
+        double dwell = raw == RgbAiMode.Hot ? HotDwellSeconds
+            : shown == RgbAiMode.Gaming ? LeaveGameDwellSeconds
+            : DwellSeconds;
+        if (t - _candidateSince < dwell) return shown;
+
+        _shown = raw; _candidate = null;
+        return raw;
+    }
+
+    /// <summary>
+    /// Night brightness cap for a time of day: <see cref="NightBrightnessCap"/> during the night, full outside it, and a
+    /// linear fade over <see cref="NightRamp"/> before the night starts and after it ends — no visible jump at 22:00.
+    /// </summary>
+    public static double NightCapAt(TimeSpan local)
+    {
+        if (IsNight(local)) return NightBrightnessCap;
+        double day = TimeSpan.FromDays(1).TotalMinutes, ramp = NightRamp.TotalMinutes;
+        double untilStart = ((NightStart - local).TotalMinutes % day + day) % day;
+        if (untilStart <= ramp) return NightBrightnessCap + (1.0 - NightBrightnessCap) * (untilStart / ramp);
+        double sinceEnd = ((local - NightEnd).TotalMinutes % day + day) % day;
+        if (sinceEnd <= ramp) return NightBrightnessCap + (1.0 - NightBrightnessCap) * (sinceEnd / ramp);
+        return 1.0;
     }
 
     public static bool IsNight(TimeSpan local)

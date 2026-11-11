@@ -28,4 +28,16 @@ public interface IHardwareMonitorService : IDisposable
     /// automatic / BIOS control first. Returns true when the driver reopened. Default: not supported.
     /// </summary>
     Task<bool> TryRecoverAsync() => Task.FromResult(false);
+
+    /// <summary>
+    /// 4.5 pump protection (default on). Pumps are read-only and stay on their BIOS / firmware speed; FANZi hands a
+    /// pump it finds under software control back and refuses duty writes for it. Default implementation: not supported.
+    /// </summary>
+    bool PumpProtectionEnabled { get => true; set { } }
+
+    /// <summary>4.5: highest duty a pump may be set to once the user unlocked pump control (60–100).</summary>
+    double PumpMaxPercent { get => 100; set { } }
+
+    /// <summary>4.5: the user's per-channel role choices (channel id → role); replaces the previous set.</summary>
+    void SetChannelRoles(System.Collections.Generic.IReadOnlyDictionary<string, CoolingRole> roles) { }
 }

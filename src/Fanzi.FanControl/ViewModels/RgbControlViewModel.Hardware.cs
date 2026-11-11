@@ -63,21 +63,40 @@ public partial class RgbControlViewModel
         var conflicts = RgbConflictDetector.Find();
         bool pawnIoMissing = !PawnIoInstaller.IsInstalled;
 
+        // 4.5: decide who drives SMBus lighting before anything is written to it.
+        bool coexistenceChanged = EvaluateCoexistence(conflicts, out var decision);
+        bool handsOff = _smbusHandsOffApplied;
+        var banner = BuildCoexistenceBanner(conflicts, decision);
+        string policyStatus = handsOff
+            ? (decision.Owners.Count > 0
+                ? $"RAM / onboard lighting is left to {string.Join(", ", decision.Owners)}. FANZi does not scan or write that bus."
+                : "RAM / onboard lighting is left to the vendor app. FANZi does not scan or write that bus.")
+            : decision.Risky
+                ? $"FANZi drives RAM / onboard lighting while {string.Join(", ", decision.Owners)} is running — two writers on one bus."
+                : "FANZi drives RAM and onboard lighting.";
+
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             _conflicts = conflicts;
-            RgbConflictTitle = conflicts.Count == 0
-                ? string.Empty
-                : $"{RgbConflictDetector.Describe(conflicts)} {(conflicts.Count == 1 ? "is" : "are")} controlling your lights";
-            RgbConflictMessage = conflicts.Count == 0
-                ? string.Empty
-                : BuildConflictMessage(conflicts);
+            SmbusHandsOff = handsOff;
+            SmbusPolicyStatus = policyStatus;
+            // The "left to the vendor app" choice with no vendor app running needs no banner.
+            ConflictIsSharing = banner.Sharing;
+            RgbConflictTitle = banner.Title;
+            RgbConflictMessage = banner.Message;
             HasRgbConflicts = conflicts.Count > 0;
             OnPropertyChanged(nameof(ConnectionChipText));
+            OnPropertyChanged(nameof(ConnectionDotColor));
             if (!IsInstallingPawnIo)
-                ShowPawnIoPrompt = pawnIoMissing;
+                ShowPawnIoPrompt = pawnIoMissing && !handsOff; // PawnIO is only needed for the bus FANZi is not touching
         });
+
+        if (coexistenceChanged && _coexistencePrimed)
+            _ = ApplyCoexistenceChangeAsync();
+        _coexistencePrimed = true;
     }
+
+    private bool _coexistencePrimed;
 
     /// <summary>Banner body: what the other app does and which services keep relaunching it. Pure — unit-tested.</summary>
     internal static string BuildConflictMessage(IReadOnlyList<RgbConflictDetector.Conflict> conflicts)
@@ -98,6 +117,9 @@ public partial class RgbControlViewModel
 
         ConnectionStatus = $"Stopping {RgbConflictDetector.Describe(conflicts)}…";
         int stopped = await Task.Run(() => RgbConflictDetector.Stop(conflicts, disableAutostart));
+        // The user stopped the vendor app on purpose: take the decision again now, without the settle delay.
+        _releaseStreak = 99;
+        EvaluateCoexistence(RgbConflictDetector.Find(), out _);
         ConnectionStatus = $"Closed {stopped} process(es) — rescanning RGB devices…";
 
         // The devices those apps held only appear after OpenRGB detects again.

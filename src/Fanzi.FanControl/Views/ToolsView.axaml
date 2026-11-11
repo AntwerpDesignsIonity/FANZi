@@ -164,6 +164,42 @@
                     </StackPanel>
                 </Border>
 
+                <!-- ═════ IONITY APPS (v4.5.0) ═════ -->
+                <Border Classes="tile" Padding="14,12">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="IONITY APPS" Classes="label-caps" FontSize="11"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <StackPanel Spacing="3">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding WispName}" FontWeight="Bold" Foreground="#E8F0FF" FontSize="13"/>
+                                    <TextBlock Text="{Binding WispVersion}" Foreground="#7090B0" FontSize="11" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding WispBlurb}" Foreground="#6A8AAF" FontSize="10" TextWrapping="Wrap"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="#22C55E" IsVisible="{Binding WispRunning}"/>
+                                    <Ellipse Width="8" Height="8" VerticalAlignment="Center" Fill="#FBBF24" IsVisible="{Binding !WispRunning}"/>
+                                    <TextBlock Text="{Binding WispStatus}" Foreground="#7090B0" FontSize="11"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                <Button Content="▶ Launch WISP" Command="{Binding LaunchWispCommand}" IsVisible="{Binding WispCanLaunch}" Classes="primary" Padding="12,6" FontWeight="Bold"/>
+                                <Button Content="⏹ Close WISP" Command="{Binding StopWispCommand}" IsVisible="{Binding WispRunning}" Classes="ghost" Padding="12,6"/>
+                                <Button Content="⬇ Get WISP" Command="{Binding OpenWispDownloadCommand}" IsVisible="{Binding WispNotInstalled}" Classes="primary" Padding="12,6" FontWeight="Bold"
+                                        ToolTip.Tip="Opens ionity.digital/#wisp — Windows, macOS and Linux downloads"/>
+                                <Button Content="Locate WISP.exe…" Command="{Binding LocateWispCommand}" CommandParameter="{Binding $self}" IsVisible="{Binding WispNotInstalled}" Classes="ghost" Padding="12,6"
+                                        ToolTip.Tip="Point FANZi at a portable WISP build"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                                <TextBlock Text="Keep WISP running" FontWeight="Bold" Foreground="#E8F0FF" FontSize="12"/>
+                                <TextBlock Text="FANZi watches WISP in the background and starts it again if it closes or crashes." Foreground="#6A8AAF" FontSize="10" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" IsChecked="{Binding KeepWispRunning}" IsEnabled="{Binding WispInstalled}" OnContent="" OffContent=""/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- ═════ POWER & GAMING ═════ -->
                 <Border Classes="tile" Padding="14,12">
                     <StackPanel Spacing="10">

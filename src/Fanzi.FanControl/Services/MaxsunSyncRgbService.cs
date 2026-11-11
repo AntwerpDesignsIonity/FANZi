@@ -67,6 +67,9 @@ public sealed class MaxsunSyncRgbService : IRgbService
         ? (_inner.IsConnected ? $"{_inner.ServerVersion} + MAXSUN Sync" : "MAXSUN Sync (OpenRGB offline)")
         : _inner.ServerVersion;
 
+    /// <inheritdoc />
+    public void SetSmbusHandsOff(bool handsOff, string ownerName) => _inner.SetSmbusHandsOff(handsOff, ownerName);
+
     public string ModeSwitchStatus => _inner.ModeSwitchStatus;
     public string? LastDeviceQueryError => _inner.IsConnected ? _inner.LastDeviceQueryError : null;
     public bool ModeChangesRejected => _inner.ModeChangesRejected;

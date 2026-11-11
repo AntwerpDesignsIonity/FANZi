@@ -73,8 +73,12 @@ public sealed class ScreenshotTests
             AssertHistoryChartsDrawn(window, "CpuHistoryChart", "GpuHistoryChart");
             window.Width = 1400;
 
+            // 4.5: system fans on the dashboard (HUD + chip strip), before leaving it.
+            AssertSystemFansOnDashboard(window, scope.Vm);
+
             scope.Vm.SelectedTabIndex = TabFans;
             Dispatcher.UIThread.RunJobs();
+            AssertFansTab45(window, scope.Vm);
             var curveEditor = window.FindControl<FanCurveEditor>("FanCurveEditor")!;
             curveEditor.SelectedIndex = 3; // show the selected-point value chip in the capture
             Capture(window, "fans-curve.png", 1400, 960);
@@ -291,6 +295,7 @@ public sealed class ScreenshotTests
     private static void AssertRgbStudio(Window window, Scope scope)
     {
         var view = window.GetVisualDescendants().OfType<RgbControlView>().First(v => v.IsEffectivelyVisible);
+        AssertRgb45(window, view, scope);
         var chips = view.FindControl<ItemsControl>("EffectChipList")!;
         Assert.Equal(9, chips.ItemCount);
         Assert.All(chips.GetVisualDescendants().OfType<Button>(), b => Assert.IsAssignableFrom<IGradientBrush>(b.Background));
@@ -323,6 +328,91 @@ public sealed class ScreenshotTests
         var cards = view.FindControl<ItemsControl>("DeviceCards")!;
         Assert.Equal(rgb.Devices.Count, cards.ItemCount);
         scroll.Offset = new Vector(0, 0);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>4.5: the HUD shows the system fans next to the CPU fan and the cooling card lists every channel.</summary>
+    /// <summary>The renders must not depend on what RGB software the build machine happens to run.</summary>
+    static ScreenshotTests() => Services.Rgb.RgbConflictDetector.FindOverride = () => Array.Empty<Services.Rgb.RgbConflictDetector.Conflict>();
+
+    private static void AssertSystemFansOnDashboard(Window window, MainWindowViewModel vm)
+    {
+        Assert.True(vm.HasSystemFans, "the sample rig has two system fans");
+        Assert.True(vm.HasPump);
+        Assert.Contains("RPM", vm.SystemFansHud);
+        var hud = window.FindControl<TextBlock>("HudSystemFans")!;
+        Assert.True(hud.IsEffectivelyVisible, "system fan speed is on the HUD");
+        Assert.Contains("SYS", string.Concat(hud.Inlines!.OfType<Avalonia.Controls.Documents.Run>().Select(r => r.Text)));
+        Assert.Equal(5, vm.CoolingChips.Count); // CPU fan, pump, 2 system fans, GPU fan
+        Assert.Equal(2, vm.CoolingChips.Count(c => c.Label.StartsWith("SYS ")));
+        Assert.Single(vm.CoolingChips, c => c.Label == "PUMP");
+        Assert.Equal(5, window.FindControl<ItemsControl>("CoolingChipList")!.ItemCount);
+    }
+
+    /// <summary>4.5 Fans tab: Apply all / All to Auto, pump protection, the system-fan group and per-row roles.</summary>
+    private static void AssertFansTab45(Window window, MainWindowViewModel vm)
+    {
+        foreach (string name in new[] { "ApplyAllFansButton", "AllFansAutoButton", "ApplySystemFansButton" })
+            Assert.True(window.FindControl<Button>(name)!.IsEffectivelyVisible, name + " is visible");
+        Assert.True(window.FindControl<Border>("PumpProtectionCard")!.IsEffectivelyVisible);
+        Assert.True(window.FindControl<Border>("SystemFansCard")!.IsEffectivelyVisible);
+        Assert.True(window.FindControl<ToggleSwitch>("PumpProtectionToggle")!.IsChecked, "pump protection is on by default");
+        Assert.True(vm.CanControlSystemFans);
+
+        var pump = vm.FanChannels.Single(f => f.IsPump);
+        Assert.True(pump.IsLocked, "the pump row is read-only");
+        Assert.False(pump.CanControl);
+        Assert.Contains("PUMP", pump.DeviceKindBadge);
+        Assert.Equal(2, vm.FanChannels.Count(f => f.Role == Services.CoolingRole.SystemFan));
+        Assert.DoesNotContain(vm.FanChannels, f => f.IsPump && f.CanControl);
+        Capture(window, "fans-45.png", 1400, 960);
+    }
+
+    /// <summary>4.5 RGB: quick bar (Auto / Instant / Simple), Apply + Revert, SMBus owner picker, Simple view hides the advanced sections.</summary>
+    private static void AssertRgb45(Window window, RgbControlView view, Scope scope)
+    {
+        var rgb = scope.Vm.RgbControl;
+        Assert.True(view.FindControl<Border>("RgbQuickBar")!.IsEffectivelyVisible);
+        Assert.True(view.FindControl<ComboBox>("SmbusPolicyPicker")!.IsEffectivelyVisible);
+        Assert.Equal(3, view.FindControl<ComboBox>("SmbusPolicyPicker")!.ItemCount);
+        Assert.False(view.FindControl<Border>("RgbApplyBar")!.IsVisible, "instant apply is the default");
+
+        // Apply mode: an edit waits, Revert drops it, Apply commits it.
+        var before = rgb.PrimaryColor;
+        rgb.RgbLiveApply = false;
+        rgb.PrimaryColor = Models.RgbColor.Magenta;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(view.FindControl<Border>("RgbApplyBar")!.IsEffectivelyVisible);
+        Assert.True(rgb.HasPendingRgbChanges);
+        Assert.True(view.FindControl<Button>("RgbApplyButton")!.IsEffectivelyEnabled);
+        Capture(window, "rgb-apply-bar.png", 1400, 960);
+        rgb.RevertRgbCommand.Execute(null);
+        Assert.Equal(before, rgb.PrimaryColor);
+        Assert.False(rgb.HasPendingRgbChanges);
+        rgb.PrimaryColor = Models.RgbColor.Magenta;
+        rgb.ApplyRgbCommand.Execute(null);
+        Assert.False(rgb.HasPendingRgbChanges);
+        rgb.RgbLiveApply = true;
+        rgb.PrimaryColor = before;
+
+        // Simple view hides Typing FX, zones, hardware scan and the connection section; Advanced brings them back.
+        rgb.RgbSimpleMode = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(view.FindControl<Panel>("TypingFxHost")!.IsVisible);
+        Assert.False(view.FindControl<Expander>("ZoneSection")!.IsEffectivelyVisible);
+        Assert.False(view.FindControl<Expander>("ConnectionSection")!.IsEffectivelyVisible);
+        Assert.True(view.FindControl<ItemsControl>("ThemeList")!.IsEffectivelyVisible);
+        Capture(window, "rgb-simple.png", 1400, 960);
+        rgb.RgbSimpleMode = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(view.FindControl<Expander>("ZoneSection")!.IsEffectivelyVisible);
+
+        // Auto = Smart Ambient + night dimming + guardian; a manual pick switches it back off.
+        rgb.AutoRgb = true;
+        Assert.True(rgb.SmartAmbientEnabled && rgb.NightDimmingEnabled && rgb.ThermalGuardianEnabled);
+        rgb.SetPrimarySwatchCommand.Execute(before);
+        Assert.False(rgb.AutoRgb);
+        rgb.NightDimmingEnabled = false;
         Dispatcher.UIThread.RunJobs();
     }
 

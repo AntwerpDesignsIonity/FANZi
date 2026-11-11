@@ -172,7 +172,7 @@ public sealed partial class RgbControlViewModel
     }
 
     private RgbAiInputs CurrentAiInputs()
-        => new(_cpuTempC, _gpuTempC, _cpuLoadPct, _isGameMode, _gameName, DateTime.Now.TimeOfDay);
+        => new(_cpuTempC, _gpuTempC, _cpuLoadPct, _isGameMode, _gameName, DateTime.Now.TimeOfDay, _stopwatch.Elapsed.TotalSeconds);
 
     /// <summary>Game state from the dashboard's detector (drives Smart Ambient's gaming scene).</summary>
     public void UpdateGameState(bool isGameMode, string? gameName)
@@ -227,8 +227,13 @@ public sealed partial class RgbControlViewModel
         _aiDirector.NightDimming = NightDimmingEnabled;
 
         var previous = _aiOverride;
-        var decision = _aiDirector.Decide(CurrentAiInputs(), PrimaryColor, SecondaryColor);
+        var look = CurrentLook();
+        var before = FrameParameters();
+        var decision = _aiDirector.Decide(CurrentAiInputs(), look.Primary, look.Secondary);
         _aiOverride = decision;
+        // 4.5: scenes fade into each other; a thermal alert (and its release) cuts in at once.
+        if (previous?.Mode != decision?.Mode)
+            BeginSceneFade(before, immediate: decision?.Mode == RgbAiMode.Critical || previous?.Mode == RgbAiMode.Critical);
 
         void Publish()
         {
@@ -271,8 +276,14 @@ public sealed partial class RgbControlViewModel
     private (RgbEffectType Effect, RgbColor Primary, RgbColor Secondary, double Speed, double Brightness) FrameParameters()
     {
         var ai = _aiOverride;
-        if (ai is null) return (SelectedEffect, PrimaryColor, SecondaryColor, SpeedMultiplier, Brightness);
-        double brightness = ai.Mode == RgbAiMode.Critical ? 1.0 : Math.Min(Brightness, ai.BrightnessCap);
+        var look = CurrentLook(); // 4.5: the applied look in Apply mode, the live controls otherwise
+        if (ai is null)
+        {
+            // 4.5: night dimming fades in before 22:00 and out after 06:30 without replacing the user's effect.
+            double capped = NightDimmingEnabled ? Math.Min(look.Brightness, RgbAiDirector.NightCapAt(DateTime.Now.TimeOfDay)) : look.Brightness;
+            return (look.Effect, look.Primary, look.Secondary, look.Speed, capped);
+        }
+        double brightness = ai.Mode == RgbAiMode.Critical ? 1.0 : Math.Min(look.Brightness, ai.BrightnessCap);
         return (ai.Effect, ai.Primary, ai.Secondary, ai.Speed, brightness);
     }
 

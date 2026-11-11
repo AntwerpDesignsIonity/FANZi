@@ -28,20 +28,24 @@ internal sealed class FakeHardwareMonitorService : IHardwareMonitorService
 
     public Task<HardwareSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
     {
+        // 4.5: every channel carries its role; the pump is protected (read-only) like on real hardware.
         var cpuFan = new FanChannelSnapshot("mb/fan/0", "CPU_FAN", _s.CpuFanRpm, _s.CpuFanPercent, true,
-            FanDeviceKind.Fan, "Software control available (Nuvoton NCT6798D).", "Motherboard", 0);
-        var pump = new FanChannelSnapshot("mb/fan/1", "AIO_PUMP", 2400 + _s.CpuLoad * 4, 70, true,
-            FanDeviceKind.Pump, "Pump header — keep above 60 %.", "Motherboard", 1);
+            FanDeviceKind.Fan, "Software control available (Nuvoton NCT6798D).", "Motherboard", 0)
+            { Role = CoolingRole.CpuFan, Evidence = CoolingEvidence.Name };
+        var pump = new FanChannelSnapshot("mb/fan/1", "AIO_PUMP", 2400 + _s.CpuLoad * 4, 70, false,
+            FanDeviceKind.Pump, PumpProtection.ProtectedMessage, "Motherboard", 1)
+            { Role = CoolingRole.Pump, Evidence = CoolingEvidence.Name, LockReason = FanLockReason.PumpProtected };
         var fans = new[]
         {
             cpuFan,
             pump,
             new FanChannelSnapshot("mb/fan/2", "SYS_FAN1 (front intake)", _s.CpuFanRpm * 0.82, 40, true,
-                FanDeviceKind.Fan, "Software control available.", "Motherboard", 2),
+                FanDeviceKind.Fan, "Software control available.", "Motherboard", 2) { Role = CoolingRole.SystemFan, Evidence = CoolingEvidence.Name },
             new FanChannelSnapshot("mb/fan/3", "SYS_FAN2 (rear exhaust)", _s.CpuFanRpm * 0.9, 45, true,
-                FanDeviceKind.Fan, "Software control available.", "Motherboard", 3),
+                FanDeviceKind.Fan, "Software control available.", "Motherboard", 3) { Role = CoolingRole.SystemFan, Evidence = CoolingEvidence.Name },
             new FanChannelSnapshot("gpu/fan/0", "GPU Fan", 900 + _s.GpuLoad * 14, null, false,
-                FanDeviceKind.Fan, "Controlled by the GPU driver (read only).", "GPU", 0),
+                FanDeviceKind.Fan, "Controlled by the GPU driver (read only).", "GPU", 0)
+                { Role = CoolingRole.GpuFan, Evidence = CoolingEvidence.Hardware, LockReason = FanLockReason.ReadOnlyHardware },
         };
 
         var cpuReadings = new List<CpuReadingSnapshot>
@@ -113,6 +117,7 @@ internal sealed class FakeSettingsService : ISettingsService
             },
             ActiveProfileId = balanced.Id,
             AiAnomalyDetection = false, // keeps the anomaly banner out of the steady-state renders
+            RgbSimpleMode = false,      // the renders cover every RGB section; Simple view is asserted separately
         };
         return Task.FromResult(settings);
     }

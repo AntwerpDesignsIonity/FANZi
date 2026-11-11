@@ -20,6 +20,40 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
     private readonly Dictionary<string, IControl> _controlMap = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
     private volatile bool _biosFanControl;
+    private volatile bool _pumpProtection = true;
+    private double _pumpMaxPercent = PumpProtection.DefaultMaxPercent;
+    private readonly PumpSignatureTracker _pumpSignature = new();
+    private IReadOnlyDictionary<string, CoolingRole> _channelRoles = new Dictionary<string, CoolingRole>(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Channel ids currently classified as pumps (rebuilt every snapshot); duty writes are clamped or refused.</summary>
+    private readonly HashSet<string> _pumpChannels = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _pumpLogged = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <inheritdoc />
+    public bool PumpProtectionEnabled
+    {
+        get => _pumpProtection;
+        set
+        {
+            if (_pumpProtection == value) return;
+            _pumpProtection = value;
+            AppLog.Info(value
+                ? "Fans: pump protection on — pumps stay on their BIOS / firmware speed."
+                : $"Fans: pump protection off by the user — fixed pump duty allowed between {PumpProtection.MinPercent:F0}% and {_pumpMaxPercent:F0}%.");
+        }
+    }
+
+    /// <inheritdoc />
+    public double PumpMaxPercent
+    {
+        get => _pumpMaxPercent;
+        set => _pumpMaxPercent = Math.Clamp(value, PumpProtection.MinPercent, 100);
+    }
+
+    /// <inheritdoc />
+    public void SetChannelRoles(IReadOnlyDictionary<string, CoolingRole> roles)
+    {
+        _channelRoles = new Dictionary<string, CoolingRole>(roles, StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <inheritdoc />
     /// <remarks>
@@ -277,34 +311,10 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
                         || name.Contains("free", StringComparison.OrdinalIgnoreCase) == false));
 
             List<FanChannelSnapshot> fanSnapshots = BuildFanSnapshots(sensors);
-            FanChannelSnapshot? cpuFan = fanSnapshots.FirstOrDefault(IsCpuFanSnapshot);
-
-            // Fallback 1: prefer ANY pump (water-cooled system has no CPU fan, just a pump).
-            if (cpuFan is null)
-            {
-                cpuFan = fanSnapshots.FirstOrDefault(f => f.DeviceKind == FanDeviceKind.Pump);
-            }
-
-            // Fallback 2: prefer any AIO/liquid cooler channel.
-            if (cpuFan is null)
-            {
-                cpuFan = fanSnapshots.FirstOrDefault(f => f.DeviceKind == FanDeviceKind.AioCooler);
-            }
-
-            // Fallback 3: pick the fastest-spinning fan (CPU coolers tend to spin highest under load).
-            if (cpuFan is null && fanSnapshots.Count > 1)
-            {
-                cpuFan = fanSnapshots
-                    .Where(f => f.SpeedRpm.HasValue && f.SpeedRpm.Value > 300)
-                    .OrderByDescending(f => f.SpeedRpm ?? 0)
-                    .FirstOrDefault();
-            }
-
-            // Fallback 4: if exactly one channel exists, use it.
-            if (cpuFan is null && fanSnapshots.Count == 1)
-            {
-                cpuFan = fanSnapshots[0];
-            }
+            // 4.5: the "CPU cooling" channel shown on the dashboard. A real CPU fan header wins; a pump is shown
+            // (read-only) only when there is no CPU fan. The old "fastest-spinning channel" fallback is gone — on
+            // liquid-cooled PCs the fastest channel is the pump, and AI Auto-Fan then drove the pump with the fan curve.
+            FanChannelSnapshot? cpuFan = SelectCpuCooling(fanSnapshots);
 
             List<CpuReadingSnapshot> cpuReadings = BuildCpuReadings(sensors);
             List<GpuReadingSnapshot> gpuReadings = BuildGpuReadings(sensors);
@@ -367,14 +377,23 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
 
                 if (!_controlMap.TryGetValue(channelId, out IControl? control))
                 {
-                    return new SetFanControlResult(false, "That fan channel is not currently controllable.");
+                    return new SetFanControlResult(false, _pumpChannels.Contains(channelId)
+                        ? PumpProtection.ProtectedMessage
+                        : "That fan channel is not currently controllable.");
                 }
 
-                float clamped = (float)Math.Clamp(percent, control.MinSoftwareValue, control.MaxSoftwareValue);
+                // 4.5: a pump is never driven below its safe floor or above the user's cap, whoever asks
+                // (manual Apply, AI Auto-Fan, a profile, the bench). Protected pumps are not in the control map at all.
+                bool isPump = _pumpChannels.Contains(channelId);
+                double requested = isPump ? PumpProtection.Clamp(percent, _pumpMaxPercent) : percent;
+
+                float clamped = (float)Math.Clamp(requested, control.MinSoftwareValue, control.MaxSoftwareValue);
                 control.SetSoftware(clamped);
                 control.Sensor?.Hardware.Update();
 
-                return new SetFanControlResult(true, $"Manual control applied at {clamped.ToString("F0", CultureInfo.InvariantCulture)}%.");
+                return new SetFanControlResult(true, isPump
+                    ? $"Pump set to {clamped.ToString("F0", CultureInfo.InvariantCulture)}% (kept between {PumpProtection.MinPercent:F0}% and {_pumpMaxPercent:F0}%)."
+                    : $"Manual control applied at {clamped.ToString("F0", CultureInfo.InvariantCulture)}%.");
             }
         }, cancellationToken);
     }
@@ -441,6 +460,14 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
         List<FanChannelSnapshot> fanSnapshots = new();
         HashSet<int> claimedControls = new();
         HashSet<string> usedIds = new(StringComparer.OrdinalIgnoreCase);
+        _pumpChannels.Clear();
+
+        // 4.5: RPM signature — a channel that runs fast and steady next to slower neighbours is a pump even when
+        // the board only calls it "Fan #2". Keyed by the fan sensor id; grouped per hardware.
+        _pumpSignature.Record(fanSensors.Select(f => (
+            Id: f.Identifier.ToString(),
+            Group: f.Hardware.Identifier.ToString(),
+            Rpm: (double?)f.Value)));
 
         foreach (ISensor fanSensor in fanSensors)
         {
@@ -494,6 +521,37 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             fanSensor?.Identifier.ToString(),
             usedIds);
 
+        IHardware? owner = fanSensor?.Hardware ?? controlSensor?.Hardware;
+        string rawName = fanSensor?.Name
+            ?? controlSensor?.Name.Replace("Control", string.Empty, StringComparison.OrdinalIgnoreCase).Trim()
+            ?? "Unnamed channel";
+        _channelRoles.TryGetValue(id, out CoolingRole userRole);
+        var classification = CoolingChannelClassifier.Classify(
+            rawName, owner?.HardwareType.ToString(), owner?.Name, userRole,
+            rpmSaysPump: fanSensor is not null && _pumpSignature.IsLikelyPump(fanSensor.Identifier.ToString()));
+
+        // 4.5 pump protection: a pump is handed back to its BIOS / firmware setting and is not offered for duty.
+        bool pumpProtected = classification.IsPump && _pumpProtection;
+        if (classification.IsPump)
+        {
+            _pumpChannels.Add(id);
+            if (_pumpLogged.Add(id))
+                AppLog.Info($"Fans: '{rawName}' on {owner?.Name ?? "unknown hardware"} is a pump ({classification.Evidence}) — " +
+                            (pumpProtected ? "protected, left on its BIOS / firmware speed." : "unlocked by the user."));
+        }
+        if (pumpProtected && control is not null && control.ControlMode == ControlMode.Software)
+        {
+            try
+            {
+                control.SetDefault();
+                AppLog.Info($"Fans: pump '{rawName}' was under software control — handed back to its BIOS / firmware speed.");
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn($"Fans: could not hand pump '{rawName}' back", ex);
+            }
+        }
+
         // 4.4: BIOS fan control — board headers go back to the BIOS and are not offered for manual duty.
         bool biosOwned = control is not null && _biosFanControl
             && IsBoardHeader(controlSensor?.Hardware ?? fanSensor?.Hardware);
@@ -510,7 +568,7 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             }
         }
 
-        if (control is not null && !biosOwned)
+        if (control is not null && !biosOwned && !pumpProtected)
         {
             _controlMap[id] = control;
         }
@@ -539,9 +597,13 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             currentControlPercent = control.SoftwareValue;
         }
 
-        FanDeviceKind deviceKind = ClassifyDevice(name);
+        FanDeviceKind deviceKind = classification.Kind;
 
-        string capabilityMessage = biosOwned
+        string capabilityMessage = pumpProtected
+            ? PumpProtection.ProtectedMessage + " " + classification.Reason
+            : classification.IsPump && control is not null && !biosOwned
+            ? PumpProtection.UnlockedMessage(_pumpMaxPercent)
+            : biosOwned
             ? "BIOS fan control — this header follows your BIOS Smart Fan settings (FANZi only reads it). Turn off 'Use BIOS fan settings' to drive it from FANZi."
             : control switch
         {
@@ -565,11 +627,19 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             name,
             fanSensor?.Value,
             currentControlPercent,
-            control is not null && !biosOwned,
+            control is not null && !biosOwned && !pumpProtected,
             deviceKind,
             capabilityMessage,
             hardwareSource,
-            sensorIndex);
+            sensorIndex)
+        {
+            Role = classification.Role,
+            Evidence = classification.Evidence,
+            LockReason = pumpProtected ? FanLockReason.PumpProtected
+                : biosOwned ? FanLockReason.BiosControl
+                : control is null ? FanLockReason.ReadOnlyHardware
+                : FanLockReason.None,
+        };
     }
 
     /// <summary>
@@ -674,97 +744,20 @@ public sealed class HardwareMonitorService : IHardwareMonitorService
             || sensor.Name.Contains("core", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsCpuFanSnapshot(FanChannelSnapshot snapshot)
+    /// <summary>
+    /// CPU cooling channel for the dashboard: a CPU-fan header first, else a pump (display only), else the only channel.
+    /// </summary>
+    internal static FanChannelSnapshot? SelectCpuCooling(IReadOnlyList<FanChannelSnapshot> fans)
     {
-        // Pumps, AIO coolers, watercoolers, and IO pumps ARE valid CPU cooling devices
-        if (snapshot.DeviceKind is FanDeviceKind.Pump or FanDeviceKind.AioCooler
-            or FanDeviceKind.Watercooler or FanDeviceKind.IoPump)
-        {
-            return snapshot.Name.Contains("cpu", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("pump", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("aio", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("w_pump", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("cooler", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("liquid", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("water", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("io", StringComparison.OrdinalIgnoreCase)
-                // Known AIO / watercooler vendors
-                || snapshot.Name.Contains("asetek", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("kraken", StringComparison.OrdinalIgnoreCase)   // NZXT
-                || snapshot.Name.Contains("h100", StringComparison.OrdinalIgnoreCase)     // Corsair Hydro
-                || snapshot.Name.Contains("h115", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("h150", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("ryujin", StringComparison.OrdinalIgnoreCase)   // ASUS ROG Ryujin
-                || snapshot.Name.Contains("eisbaer", StringComparison.OrdinalIgnoreCase)  // Alphacool
-                || snapshot.Name.Contains("au pump", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("a_pump", StringComparison.OrdinalIgnoreCase)
-                // EKWB / custom loop
-                || snapshot.Name.Contains("ekwb", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("ek-", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("barrow", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("bykski", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("swiftech", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("alphacool", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("optimum", StringComparison.OrdinalIgnoreCase)
-                // IO pump signatures
-                || snapshot.Name.Contains("io_pump", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("io pump", StringComparison.OrdinalIgnoreCase)
-                || snapshot.Name.Contains("ionity", StringComparison.OrdinalIgnoreCase);
-        }
-
-        return snapshot.Name.Contains("cpu", StringComparison.OrdinalIgnoreCase)
-            || snapshot.Name.Contains("processor", StringComparison.OrdinalIgnoreCase)
-            || snapshot.Name.Contains("cpu opt", StringComparison.OrdinalIgnoreCase)
-            || snapshot.Name.Contains("cpu_fan", StringComparison.OrdinalIgnoreCase)
-            || snapshot.Name.Contains("system fan", StringComparison.OrdinalIgnoreCase)
-            || snapshot.Name.Contains("sys fan", StringComparison.OrdinalIgnoreCase)
-            || snapshot.Name.Contains("chassis", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static FanDeviceKind ClassifyDevice(string name)
-    {
-        string lower = name.ToLowerInvariant();
-
-        // IO Pump signatures (Ionity / custom IO cooling)
-        if (lower.Contains("io_pump") || lower.Contains("io pump") || lower.Contains("io-pump")
-            || lower.Contains("ionity") || lower.Contains("io cooler"))
-        {
-            return FanDeviceKind.IoPump;
-        }
-
-        // Watercooler / custom loop signatures
-        if (lower.Contains("watercool") || lower.Contains("water cool") || lower.Contains("custom loop")
-            || lower.Contains("ekwb") || lower.Contains("ek-") || lower.Contains("barrow")
-            || lower.Contains("bykski") || lower.Contains("swiftech") || lower.Contains("alphacool")
-            || lower.Contains("optimum") || lower.Contains("reservoir") || lower.Contains("res")
-            || lower.Contains("coolant") || lower.Contains("block") || lower.Contains("rad")
-            || lower.Contains("radiator") || lower.Contains("water block"))
-        {
-            return FanDeviceKind.Watercooler;
-        }
-
-        // Pump signatures — include common AIO header names and vendor markers
-        if (lower.Contains("pump") || lower.Contains("w_pump") || lower.Contains("wpump")
-            || lower.Contains("au pump") || lower.Contains("a_pump") || lower.Contains("apump")
-            || lower.Contains("d5") || lower.Contains("ddc")
-            || lower.Contains("w_flow") || lower.Contains("flow sensor") || lower.Contains("flow meter"))
-        {
-            return FanDeviceKind.Pump;
-        }
-
-        // AIO / water cooler signatures - cover the common vendors that ship with sensor names
-        if (lower.Contains("aio") || lower.Contains("liquid") || lower.Contains("cooler")
-            || lower.Contains("water") || lower.Contains("radiator")
-            || lower.Contains("asetek") || lower.Contains("kraken")
-            || lower.Contains("hydro")  || lower.Contains("ryujin")
-            || lower.Contains("eisbaer") || lower.Contains("celsius")
-            || lower.Contains("h100")   || lower.Contains("h115") || lower.Contains("h150")
-            || lower.Contains("platinum") || lower.Contains("tuf") || lower.Contains("strix"))
-        {
-            return FanDeviceKind.AioCooler;
-        }
-
-        return FanDeviceKind.Fan;
+        return fans.FirstOrDefault(f => f.Role == CoolingRole.CpuFan && f.SpeedRpm is > 0)
+            ?? fans.FirstOrDefault(f => f.Role == CoolingRole.CpuFan)
+            ?? fans.FirstOrDefault(f => f.IsPump && f.SpeedRpm is > 0)
+            ?? fans.FirstOrDefault(f => f.IsPump)
+            // Anonymous headers ("Fan #1…#7"): the lowest-numbered spinning board fan is the usual CPU_FAN header.
+            ?? fans.Where(f => !f.IsPump && f.Role is CoolingRole.Auto or CoolingRole.SystemFan && f.SpeedRpm is > 0)
+                   .OrderBy(f => f.Role == CoolingRole.SystemFan ? 1 : 0).ThenBy(f => f.SensorIndex < 0 ? int.MaxValue : f.SensorIndex)
+                   .FirstOrDefault(f => !f.IsPump && f.SpeedRpm is > 0)
+            ?? (fans.Count == 1 ? fans[0] : null);
     }
 
     private static bool IsCpuMetricSensor(ISensor sensor, SensorType sensorType)

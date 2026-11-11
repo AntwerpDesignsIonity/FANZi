@@ -65,6 +65,35 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | 🔥 **Thermal Bench (4.3)** | Repeatable all-core cooling benchmark with a 0–100 score, grade, fan-lag / recovery metrics, run history and CSV export |
 | ▤ **RAM lighting that sticks (4.3)** | ENE DRAM mirrored on two SMBus ports is driven exactly once, SMBus writes are rate-limited, and **Re-sync RAM** recovers a stuck controller without a reboot |
 
+### What's new in v4.5.0
+
+- **AIO pumps are detected and protected.** A channel is a pump when its name says so (`Pump`, `AIO_PUMP`, `W_PUMP+`), when it is
+  a USB liquid cooler, when its RPM looks like one (fast, flat, well above the fans) or when you say so in the row's **role**
+  picker. A pump is read-only by default and stays on the BIOS / device curve; AI Auto-Fan, profiles and the dashboard slider never
+  drive it. Earlier versions could pick the pump as "the CPU fan" (the fastest-spinning channel) and run the fan curve on it.
+  Switch protection off (Fans tab → Pump protection) to set it yourself — then it is held between 60 % and your cap.
+- **System fans are visible and controllable as a group.** The HUD shows system-fan speed next to the CPU fan, the dashboard
+  cooling card lists every channel, and the Fans tab has a **System fans** slider with Apply, plus **Apply all** and **All to
+  Auto**. A locked row says why (BIOS control / pump protection / read-only hardware) with an **Unlock** button where it applies.
+- **RGB coexists with the motherboard / RAM vendor app.** RAM sticks and onboard LEDs sit on the board's SMBus, which tolerates one
+  writer. When the lighting part of a vendor suite (Aura / LightingService, Mystic Light, RGB Fusion, Polychrome), iCUE,
+  SignalRGB or a RAM maker's tool is running, FANZi now leaves that bus alone — OpenRGB is started with its SMBus RAM / board detectors off and nothing is written to
+  those devices — and lights the rest (keyboard, mouse, GPU, hubs, monitor). FANZi never closes another app on its own. RGB tab →
+  *RAM / onboard lighting owner*: Automatic, always the vendor app, or FANZi.
+- **Zone segments.** Per-zone control gains an on/off switch, 1–8 segments, patterns (Solid, Gradient, Alternate, Chase, Mirror),
+  reverse, a second colour, brightness and speed per zone, *Copy to all* and *Reset segments*. Saved per zone.
+- **Apply / Revert, Simple view, Auto.** *Instant* shows every change at once; *Use Apply* holds changes until **Apply** (Revert
+  drops them). *Simple* view keeps Auto, effects, colours and themes; *Advanced* shows everything (upgrades stay on Advanced).
+  **Auto** is one switch for Smart Ambient + night dimming + the overheat alert.
+- **Calmer AEDi lighting.** Scenes hold for a dwell time and release with hysteresis instead of flapping at a threshold, a short
+  alt-tab does not drop the game scene, scene changes cross-fade, and night dimming fades in over 45 minutes.
+- **WISP inside FANZi.** [WISP — Aura Wisp](https://ionity.digital/#wisp) is now an additional Ionity application on the Tools tab
+  (**Ionity apps**): FANZi finds the installed or portable WISP, shows its version and whether it is running, and gives you one
+  **Launch WISP** button (plus *Get WISP* / *Locate WISP.exe…* when it is not installed). WISP mirrors the aura onto the case through
+  the very OpenRGB server FANZi runs, so the two now sit together.
+- **Unseen WISP monitor.** A 10-second background check with no UI of its own notices when WISP starts, stops or crashes and logs it;
+  with **Keep WISP running** on, FANZi quietly starts it again (45 s back-off, remembered in `%APPDATA%\FANZI\wisp-keep.flag`).
+
 ### What's new in v4.4.0
 
 - **AEDi Cooling Fingerprint (new AI).** FANZi learns your cooler's thermal resistance - how many °C each extra CPU watt costs

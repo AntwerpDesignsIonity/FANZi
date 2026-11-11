@@ -323,6 +323,12 @@ public sealed class OpenRgbServerManager : IDisposable
         Status = "Server stopped";
     }
 
+    /// <summary>
+    /// 4.5: when true the next server start disables OpenRGB's SMBus RAM / motherboard detectors, so OpenRGB does not
+    /// scan a bus a vendor RGB app is driving. Set by the RGB view model from <see cref="RgbCoexistence"/>.
+    /// </summary>
+    public bool SmbusHandsOff { get; set; }
+
     /// <summary>Command line for FANZi's OpenRGB SDK server (config path quoted; omitted when null).</summary>
     internal static string BuildServerArguments(int port, string? configDir) =>
         configDir is null
@@ -334,12 +340,14 @@ public sealed class OpenRgbServerManager : IDisposable
     /// user's own OpenRGB config. Returns the private folder, or null if it could not be written
     /// (OpenRGB then uses its default config).
     /// </summary>
-    private static string? PrepareConfigDirectory(int port)
+    private string? PrepareConfigDirectory(int port)
     {
         OpenRgbConfigWriter.TryPatchSharedConfig();
         try
         {
-            return OpenRgbConfigWriter.EnsurePrivateConfig(port);
+            if (SmbusHandsOff)
+                AppLog.Info("OpenRGB: starting with SMBus RAM / board detectors off — a vendor RGB app owns that bus.");
+            return OpenRgbConfigWriter.EnsurePrivateConfig(port, SmbusHandsOff);
         }
         catch (Exception ex)
         {

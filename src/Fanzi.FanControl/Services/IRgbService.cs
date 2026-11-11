@@ -101,6 +101,12 @@ public interface IRgbService : IDisposable
     /// <summary>4.3: one-line RAM bus summary for the UI ("" when there is nothing to say).</summary>
     string RamBusStatus => "";
 
+    /// <summary>
+    /// 4.5 coexistence: true = a vendor RGB app owns SMBus lighting (RAM, onboard); the service writes nothing to those
+    /// devices. <paramref name="ownerName"/> is shown on the device cards. Takes effect on the next device refresh.
+    /// </summary>
+    void SetSmbusHandsOff(bool handsOff, string ownerName) { }
+
     /// <summary>Closes the OpenRGB connection.</summary>
     void Disconnect();
 }

@@ -39,6 +39,8 @@ public sealed partial class ToolsViewModel : ViewModelBase, IDisposable
         {
             (action.Group switch { "Repair" => RepairActions, "Network" => NetworkActions, _ => FixActions }).Add(action);
         }
+        // v4.5.0: the WISP companion monitor runs from app start, unseen, not only while the Tools tab is open.
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) EnsureCompanionMonitor();
     }
 
     // ── Shared console ────────────────────────────────────────────────────────
@@ -399,6 +401,7 @@ public sealed partial class ToolsViewModel : ViewModelBase, IDisposable
     {
         if (_loaded) return;
         _loaded = true;
+        EnsureCompanionMonitor();
         await RefreshDrives();
         await RefreshPower();
         await RefreshHealth();
@@ -417,6 +420,7 @@ public sealed partial class ToolsViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        DisposeCompanions();
         try { _lifetime.Cancel(); } catch { }
         _runCts?.Cancel();
         _lifetime.Dispose();

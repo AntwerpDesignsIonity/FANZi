@@ -91,16 +91,54 @@ public static class OpenRgbConfigWriter
     }
 
     /// <summary>Writes FANZi's private config (creating the folder) and returns the folder path.</summary>
-    public static string EnsurePrivateConfig(int port)
+    /// <param name="smbusHandsOff">4.5: true turns OpenRGB's SMBus RAM / board detectors off (a vendor app owns that
+    /// bus), false turns back on the ones FANZi turned off. Null leaves the detector list untouched.</param>
+    public static string EnsurePrivateConfig(int port, bool? smbusHandsOff = null)
     {
         string dir = PrivateConfigDirectory;
         Directory.CreateDirectory(dir);
         string path = Path.Combine(dir, ConfigFileName);
         string? existing = File.Exists(path) ? File.ReadAllText(path) : null;
         string updated = ApplyServerSettings(existing, port);
+        if (smbusHandsOff is bool off)
+            updated = ApplySmbusDetectors(updated, RgbCoexistence.SmbusDetectors, enabled: !off);
         if (updated != existing)
             File.WriteAllText(path, updated);
         return dir;
+    }
+
+    /// <summary>
+    /// Sets the given detectors on or off inside <c>Detectors → detectors</c>. Text-level, because OpenRGB writes
+    /// duplicate keys that JSON object models reject: an existing <c>"name": true|false</c> is rewritten in place, and
+    /// a missing entry is added (creating the section when the file has none). Everything else is preserved. Pure.
+    /// </summary>
+    public static string ApplySmbusDetectors(string json, System.Collections.Generic.IReadOnlyList<string> detectors, bool enabled)
+    {
+        string value = enabled ? "true" : "false";
+        var missing = new System.Collections.Generic.List<string>();
+        foreach (string name in detectors)
+        {
+            var rx = new Regex("(\"" + Regex.Escape(name) + "\"\\s*:\\s*)(true|false)");
+            if (rx.IsMatch(json)) json = rx.Replace(json, "${1}" + value);
+            else missing.Add(name);
+        }
+        // Missing entries only matter when turning detectors off (absent = OpenRGB's default, which is on).
+        if (enabled || missing.Count == 0) return json;
+
+        string entries = string.Join(",\n", missing.ConvertAll(n => $"      \"{n}\": false"));
+        var section = new Regex("\"detectors\"\\s*:\\s*\\{");
+        var m = section.Match(json);
+        if (m.Success)
+        {
+            int insertAt = m.Index + m.Length;
+            bool empty = Regex.IsMatch(json.Substring(insertAt), "^\\s*\\}");
+            return json.Insert(insertAt, "\n" + entries + (empty ? "\n    " : ","));
+        }
+
+        int open = json.IndexOf('{');
+        if (open < 0) return "{\n  \"Detectors\": {\n    \"detectors\": {\n" + entries + "\n    }\n  }\n}";
+        bool onlyBraces = Regex.IsMatch(json.Substring(open + 1), "^\\s*\\}");
+        return json.Insert(open + 1, "\n  \"Detectors\": {\n    \"detectors\": {\n" + entries + "\n    }\n  }" + (onlyBraces ? "\n" : ","));
     }
 
     /// <summary>

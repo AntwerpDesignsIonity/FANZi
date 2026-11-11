@@ -49,6 +49,22 @@ public static class RgbConflictDetector
             ["FireStorm"]            = "ZOTAC FireStorm",
             ["Spectra"]              = "ZOTAC Spectra",
             ["PolychromeRGB"]        = "ASRock Polychrome",
+            // 4.5: more SMBus owners (motherboard + RAM vendor tools)
+            ["AsrPolychromeRGB"]     = "ASRock Polychrome",
+            ["LEDKeeper2"]           = "MSI Mystic Light",
+            ["SelLedV2"]             = "Gigabyte RGB Fusion",
+            ["RGBFusion2"]           = "Gigabyte RGB Fusion",
+            ["AuraWallpaperService"] = "ASUS Aura",
+            ["TridentZ Lighting Control"] = "G.SKILL Trident Z Lighting",
+            ["Trident Z Lighting Control"] = "G.SKILL Trident Z Lighting",
+            ["FuryCTRL"]             = "Kingston FURY CTRL",
+            ["Kingston FURY CTRL"]   = "Kingston FURY CTRL",
+            ["T-FORCE BLITZ"]        = "TEAMGROUP T-FORCE BLITZ",
+            ["XPG-PRIME"]            = "XPG Prime",
+            ["XPG Prime"]            = "XPG Prime",
+            ["Ballistix MOD Utility"] = "Crucial Ballistix MOD",
+            ["Viper RGB"]            = "Patriot Viper RGB",
+            ["TT RGB Plus"]          = "Thermaltake TT RGB Plus",
         };
 
     /// <summary>
@@ -75,6 +91,11 @@ public static class RgbConflictDetector
             ["LConnectService"]          = "Lian Li L-Connect",
             ["GigabyteUpdateService"]    = "Gigabyte Control Center",
             ["Polychrome RGB Service"]   = "ASRock Polychrome",
+            // 4.5
+            ["AsrPolychromeRGB"]         = "ASRock Polychrome",
+            ["GigabyteControlCenter"]    = "Gigabyte Control Center",
+            ["GCC_Service"]              = "Gigabyte Control Center",
+            ["FuryCTRLService"]          = "Kingston FURY CTRL",
         };
 
     /// <summary>HKCU\…\Run value names that auto-start these apps at sign-in.</summary>
@@ -98,7 +119,10 @@ public static class RgbConflictDetector
     }
 
     /// <summary>Running conflicting products (grouped), or an empty list.</summary>
-    public static IReadOnlyList<Conflict> Find() => Classify(SafeProcessList(), RunningServices());
+    public static IReadOnlyList<Conflict> Find() => FindOverride?.Invoke() ?? Classify(SafeProcessList(), RunningServices());
+
+    /// <summary>Test seam: render tests replace the machine's real process list (a dev PC may run a vendor RGB app).</summary>
+    internal static Func<IReadOnlyList<Conflict>>? FindOverride { get; set; }
 
     /// <summary>Groups (name, pid) pairs into conflicts. Pure — unit-tested.</summary>
     internal static IReadOnlyList<Conflict> Classify(IEnumerable<(string Name, int Pid)> processes) =>

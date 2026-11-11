@@ -182,8 +182,8 @@ public sealed class AppSettingsTests
 
         settings.Migrate();
 
-        Assert.Equal(6, AppSettings.CurrentVersion);
-        Assert.Equal(6, settings.SettingsVersion);
+        Assert.Equal(7, AppSettings.CurrentVersion);
+        Assert.Equal(AppSettings.CurrentVersion, settings.SettingsVersion);
         Assert.False(settings.ReduceMotion);    // upgraded installs keep their animations
         Assert.False(settings.OverlayCompact);  // ...and the expanded overlay, the only layout before v5
         Assert.False(settings.ToastNotificationsEnabled);
@@ -207,7 +207,7 @@ public sealed class AppSettingsTests
         settings.Migrate();
         settings.Migrate();
 
-        Assert.Equal(6, settings.SettingsVersion);
+        Assert.Equal(AppSettings.CurrentVersion, settings.SettingsVersion);
         Assert.True(settings.ReduceMotion);
         Assert.True(settings.OverlayCompact);
     }
@@ -225,7 +225,7 @@ public sealed class AppSettingsTests
         settings.Migrate();
 
         Assert.Equal(after, settings.PollingIntervalSeconds);
-        Assert.Equal(6, settings.SettingsVersion);
+        Assert.Equal(AppSettings.CurrentVersion, settings.SettingsVersion);
     }
 
     [Fact]

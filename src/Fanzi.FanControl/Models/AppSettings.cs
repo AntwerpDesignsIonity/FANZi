@@ -77,6 +77,39 @@ public sealed class AppSettings
     /// </summary>
     public bool FanBiosControl { get; set; } = true;
 
+    /// <summary>4.5: pumps are read-only and stay on their BIOS / firmware speed (default on).</summary>
+    public bool PumpProtectionEnabled { get; set; } = true;
+
+    /// <summary>4.5: highest duty for a pump once the user unlocked pump control (60–100).</summary>
+    public double PumpMaxPercent { get; set; } = 100;
+
+    /// <summary>4.5: the user's role per fan channel id ("Pump", "SystemFan", "CpuFan", "GpuFan"); absent = auto-detect.</summary>
+    public Dictionary<string, string> FanChannelRoles { get; set; } = new();
+
+    /// <summary>4.5: one duty for every system / case fan (the "System fans" group slider).</summary>
+    public double SystemFansPercent { get; set; } = 50;
+
+    /// <summary>
+    /// 4.5 RGB coexistence: who drives SMBus lighting (RAM, onboard). "Auto" = the motherboard / RAM vendor's app when it
+    /// is running, else FANZi. "Vendor" = FANZi never touches SMBus lighting. "Fanzi" = FANZi drives it (stop the vendor app first).
+    /// </summary>
+    public string RgbSmbusPolicy { get; set; } = "Auto";
+
+    /// <summary>4.5: RGB changes apply as you make them (true) or wait for Apply (false).</summary>
+    public bool RgbLiveApply { get; set; } = true;
+
+    /// <summary>4.5: Simple RGB layout (Auto switch, moods, brightness) — Advanced shows every control.</summary>
+    public bool RgbSimpleMode { get; set; } = true;
+
+    /// <summary>4.5: saved per-zone lighting ("device|zone" → settings): segments, direction, pattern, brightness…</summary>
+    public Dictionary<string, RgbZoneSettings> RgbZones { get; set; } = new();
+
+    /// <summary>4.5: per-zone control on (each zone / segment follows its own row).</summary>
+    public bool RgbZoneMode { get; set; }
+
+    /// <summary>4.5: one switch — AEDi picks scene, brightness and alerts from what the PC is doing.</summary>
+    public bool RgbAuto { get; set; }
+
     /// <summary>4.3: SMBus host port forced for mirrored RAM entries (null = automatic pick).</summary>
     public int? RgbRamSmbusPort { get; set; }
 
@@ -109,7 +142,7 @@ public sealed class AppSettings
     public bool ThermalFrameEnabled { get; set; } = true;
 
     /// <summary>Settings schema version written by this build.</summary>
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
 
     /// <summary>
     /// Applies one-time migrations for settings created by older builds.
@@ -137,6 +170,9 @@ public sealed class AppSettings
         if (SettingsVersion < 6 && PollingIntervalSeconds == 3)
             PollingIntervalSeconds = 1;
 
+        // 4.5: Simple mode is the default for new installs only — an upgrade keeps every RGB section visible.
+        if (SettingsVersion is >= 1 and < 7)
+            RgbSimpleMode = false;
         SettingsVersion = Math.Max(SettingsVersion, CurrentVersion);
     }
 
@@ -150,5 +186,25 @@ public sealed class AppSettings
         PollingIntervalSeconds = Math.Clamp(PollingIntervalSeconds, 1, 60);
         ReducedPollingIntervalSeconds = Math.Clamp(ReducedPollingIntervalSeconds, 2, 120);
         Profiles = (Profiles ?? new List<FanProfile>()).Where(profile => profile is not null).ToList();
+        PumpMaxPercent = Math.Clamp(PumpMaxPercent, 60, 100);
+        SystemFansPercent = Math.Clamp(SystemFansPercent, 20, 100);
+        FanChannelRoles ??= new();
+        RgbZones ??= new();
+        if (RgbSmbusPolicy is not ("Auto" or "Vendor" or "Fanzi")) RgbSmbusPolicy = "Auto";
     }
+}
+
+/// <summary>4.5: persisted settings of one RGB zone (see ZoneEffectViewModel / ZoneSegmentRenderer).</summary>
+public sealed class RgbZoneSettings
+{
+    public bool Enabled { get; set; } = true;
+    public string Effect { get; set; } = "Static";
+    public string Source { get; set; } = "CpuTemperature";
+    public string PrimaryHex { get; set; } = "#0064FF";
+    public string SecondaryHex { get; set; } = "#00C8FF";
+    public int Segments { get; set; } = 1;
+    public string Pattern { get; set; } = "Solid";
+    public string Direction { get; set; } = "Forward";
+    public double Brightness { get; set; } = 1.0;
+    public double Speed { get; set; } = 1.0;
 }

@@ -157,10 +157,13 @@
                                     <ProgressBar Classes="hud-bar" Minimum="0" Maximum="100" Value="{Binding GpuLoadValue}"/>
                                 </StackPanel>
                             </Border>
-                            <Border x:Name="HudFan" Grid.Column="4" Classes="hud-tile" ToolTip.Tip="CPU fan speed">
+                            <Border x:Name="HudFan" Grid.Column="4" Classes="hud-tile" ToolTip.Tip="CPU cooling speed, and the average speed of the system fans underneath">
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="CPU FAN" Classes="hud-label"/>
                                     <TextBlock Text="{Binding CpuFanSpeed}" Classes="hud-value" Foreground="#E8F0FF"/>
+                                    <TextBlock x:Name="HudSystemFans" FontSize="10" Foreground="#FBBF24" IsVisible="{Binding HasSystemFans}">
+                                        <Run Text="SYS "/><Run Text="{Binding SystemFansHud}"/>
+                                    </TextBlock>
                                 </StackPanel>
                             </Border>
                             <Border x:Name="HudRam" Grid.Column="5" Classes="hud-tile" ToolTip.Tip="Memory in use">
@@ -717,6 +720,7 @@
 
                                 <!-- Cooling: CPU fan reading, manual duty slider and Apply / Auto on one full-width bar -->
                                 <Border x:Name="CoolingCard" Classes="card-glow" Padding="20,16">
+                                    <StackPanel Spacing="12">
                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="24">
                                         <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center" MinWidth="170">
                                             <TextBlock Text="CPU COOLING" Classes="label-caps"/>
@@ -740,6 +744,27 @@
                                             <Button Content="Auto" Command="{Binding AutoCpuFanCommand}" IsEnabled="{Binding CpuFanCanControl}" MinWidth="64"/>
                                         </StackPanel>
                                     </Grid>
+                                    <!-- 4.5: every fan and pump with its speed — system fans were invisible on the dashboard before -->
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                        <TextBlock Text="ALL FANS" Classes="label-caps" VerticalAlignment="Center"/>
+                                        <ItemsControl x:Name="CoolingChipList" Grid.Column="1" ItemsSource="{Binding CoolingChips}">
+                                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:CoolingChip">
+                                                    <Border CornerRadius="9" Background="#0B1626" BorderBrush="#182B4A" BorderThickness="1" Padding="9,4" Margin="0,0,6,4" ToolTip.Tip="{Binding Tip}">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="{Binding Label}" FontSize="10" FontWeight="Black" Foreground="{Binding Color}" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding Value}" FontSize="12" FontWeight="Bold" Foreground="#E8F0FF" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Grid.Column="2" Content="Fans ›" Classes="ghost" Command="{Binding OpenFansTabCommand}" Padding="10,4" FontSize="11" VerticalAlignment="Center"
+                                                ToolTip.Tip="Open the Fans tab: per-channel Apply, system-fan group, pump protection"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding CpuFanCapability}" Classes="metric-caption" TextWrapping="Wrap" IsVisible="{Binding !CpuFanCanControl}"/>
+                                    </StackPanel>
                                 </Border>
 
                             </StackPanel>
@@ -756,10 +781,16 @@
                                         <TextBlock Text="{Binding FanCountLabel}" Foreground="#4A6A8F" FontSize="12"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                        <TextBlock Text="AI Auto-Fan:" FontSize="11" Foreground="#5A7FA8" VerticalAlignment="Center"/>
-                                        <ToggleSwitch IsChecked="{Binding AiAutoFanEnabled}" VerticalAlignment="Center"/>
+                                        <Button x:Name="ApplyAllFansButton" Content="Apply all" Classes="primary" Command="{Binding ApplyAllFansCommand}" Padding="12,5" FontSize="11"
+                                                ToolTip.Tip="Send every row's target in one go. Pumps and BIOS-controlled headers are skipped."/>
+                                        <Button x:Name="AllFansAutoButton" Content="All to Auto" Command="{Binding AllFansAutoCommand}" Padding="12,5" FontSize="11"
+                                                ToolTip.Tip="Hand every channel back to automatic / BIOS control"/>
+                                        <TextBlock Text="AI Auto-Fan:" FontSize="11" Foreground="#5A7FA8" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                        <ToggleSwitch IsChecked="{Binding AiAutoFanEnabled}" VerticalAlignment="Center"
+                                                      ToolTip.Tip="AEDi drives the CPU fan from the curve below. It never drives a pump."/>
                                     </StackPanel>
                                 </Grid>
+                                <TextBlock x:Name="FanLockSummaryText" Text="{Binding FanLockSummary}" IsVisible="{Binding HasFanLockSummary}" Classes="muted" FontSize="11" TextWrapping="Wrap"/>
 
                                 <!-- 4.4: BIOS fan control — motherboard headers follow the BIOS Smart Fan settings -->
                                 <Border x:Name="BiosFanControlCard" Classes="card" Padding="20,14">
@@ -819,6 +850,56 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- 4.5: system fans as one group -->
+                                <Border x:Name="SystemFansCard" Classes="card" Padding="20,14">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                                        <StackPanel Spacing="3" VerticalAlignment="Center" MinWidth="230" MaxWidth="330">
+                                            <TextBlock Text="System fans" Classes="h2"/>
+                                            <TextBlock x:Name="SystemFansSummaryText" Text="{Binding SystemFansSummary}" Classes="muted" FontSize="11" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding SystemFansHint}" Foreground="#FDE68A" FontSize="11" TextWrapping="Wrap"
+                                                       IsVisible="{Binding SystemFansHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="ONE SPEED FOR ALL SYSTEM FANS" Classes="label-caps" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding SystemFansPercent, StringFormat='{}{0:F0}%'}" Classes="muted" FontSize="11"/>
+                                            </Grid>
+                                            <Slider Minimum="20" Maximum="100" Value="{Binding SystemFansPercent, Mode=TwoWay}" IsEnabled="{Binding CanControlSystemFans}"
+                                                    AutomationProperties.Name="System fans speed"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <Button x:Name="ApplySystemFansButton" Content="Apply" Classes="primary" Command="{Binding ApplySystemFansCommand}" IsEnabled="{Binding CanControlSystemFans}" MinWidth="72"/>
+                                            <Button Content="Unlock" Command="{Binding UnlockBoardFansCommand}" MinWidth="72"
+                                                    IsVisible="{Binding SystemFansHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                    ToolTip.Tip="Turns 'Use BIOS fan settings' off so FANZi can set the headers"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- 4.5: pump protection -->
+                                <Border x:Name="PumpProtectionCard" Classes="card" Padding="20,14">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" RowDefinitions="Auto,Auto" RowSpacing="8">
+                                        <StackPanel Grid.Column="0" Spacing="3">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="Pump protection" Classes="h2" VerticalAlignment="Center"/>
+                                                <Border CornerRadius="6" Background="#1A1433" Padding="6,2" VerticalAlignment="Center" IsVisible="{Binding HasPump}">
+                                                    <TextBlock Text="PUMP FOUND" FontSize="10" FontWeight="Black" Foreground="#A78BFA"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock x:Name="PumpProtectionStatusText" Text="{Binding PumpProtectionStatus}" Classes="muted" FontSize="11" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                        <ToggleSwitch Grid.Column="1" x:Name="PumpProtectionToggle" IsChecked="{Binding PumpProtectionEnabled}" VerticalAlignment="Center"
+                                                      ToolTip.Tip="On: FANZi never writes to a pump. Off: you may set a fixed pump duty inside the safe window."
+                                                      AutomationProperties.Name="Pump protection"/>
+                                        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" IsVisible="{Binding !PumpProtectionEnabled}">
+                                            <TextBlock Text="Pump duty cap" Foreground="#C4D8F4" FontSize="12" VerticalAlignment="Center"/>
+                                            <Slider Grid.Column="1" Minimum="60" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" Value="{Binding PumpMaxPercent, Mode=TwoWay}"
+                                                    AutomationProperties.Name="Highest pump duty"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding PumpMaxPercent, StringFormat='{}{0:F0}% max'}" Foreground="#A78BFA" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+
                                 <ItemsControl ItemsSource="{Binding FanChannels}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:FanChannelViewModel">
@@ -827,13 +908,19 @@
                                                     <StackPanel Grid.Column="0" Spacing="4">
                                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                                             <Border CornerRadius="6" Background="#0F1E30" Padding="6,2">
-                                                                <TextBlock Text="{Binding DeviceKindBadge}" FontSize="10" FontWeight="Black" Foreground="#3B82F6"/>
+                                                                <TextBlock Text="{Binding DeviceKindBadge}" FontSize="10" FontWeight="Black" Foreground="{Binding BadgeColor}"/>
                                                             </Border>
                                                             <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" Foreground="#E8F0FF" VerticalAlignment="Center"/>
                                                         </StackPanel>
                                                         <TextBlock Text="{Binding SourceLabel}" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="10" IsVisible="{Binding SourceLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                                                         <TextBlock Text="{Binding SpeedLabel}" FontSize="22" FontWeight="Black" Foreground="#2563EB"/>
                                                         <TextBlock Text="{Binding CapabilityMessage}" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+                                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2,0,0">
+                                                            <TextBlock Text="This is a" Foreground="#5A7FA8" FontSize="11" VerticalAlignment="Center"/>
+                                                            <ComboBox ItemsSource="{Binding Roles}" SelectedIndex="{Binding RoleChoiceIndex, Mode=TwoWay}" FontSize="11" MinWidth="130" Padding="8,3"
+                                                                      ToolTip.Tip="Tell FANZi what is plugged into this header. 'Pump' protects it; 'System fan' adds it to the system-fan group."
+                                                                      AutomationProperties.Name="Channel role"/>
+                                                        </StackPanel>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
                                                         <TextBlock Text="CURRENT" Classes="section-title"/>
@@ -843,7 +930,7 @@
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
                                                         <StackPanel Spacing="0">
-                                                            <Slider Minimum="0" Maximum="100" Value="{Binding DesiredPercent, Mode=TwoWay}" IsEnabled="{Binding CanControl}"/>
+                                                            <Slider Minimum="{Binding SliderMinimum}" Maximum="100" Value="{Binding DesiredPercent, Mode=TwoWay}" IsEnabled="{Binding CanControl}"/>
                                                             <!-- Range legend spans the slider track: 0 % left, 50 % centre, 100 % right -->
                                                             <Grid ColumnDefinitions="*,*,*">
                                                                 <TextBlock Grid.Column="0" Text="0%" Classes="legend" HorizontalAlignment="Left"/>
@@ -854,10 +941,16 @@
                                                         <Border IsVisible="{Binding ShowMinSpeedWarning}" CornerRadius="8" Background="#1A1000" BorderBrush="#78350F" BorderThickness="1" Padding="8,4">
                                                             <TextBlock Text="Below 20% — bearing wear risk" Foreground="#FDE68A" FontSize="10"/>
                                                         </Border>
-                                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
-                                                            <Button Content="Apply" Classes="primary" Command="{Binding ApplyCommand}" IsEnabled="{Binding CanControl}" MinWidth="65" Padding="8,5" FontSize="11"/>
-                                                            <Button Content="Auto" Command="{Binding AutoCommand}" IsEnabled="{Binding CanControl}" MinWidth="65" Padding="8,5" FontSize="11"/>
-                                                        </StackPanel>
+                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                            <TextBlock Text="{Binding LockText}" IsVisible="{Binding IsLocked}" Foreground="#FDE68A" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                                                                <Button Content="Unlock" IsVisible="{Binding IsBiosLocked}" MinWidth="65" Padding="8,5" FontSize="11"
+                                                                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).UnlockBoardFansCommand}"
+                                                                        ToolTip.Tip="Turns 'Use BIOS fan settings' off so this header can be set from FANZi"/>
+                                                                <Button Content="Apply" Classes="primary" Command="{Binding ApplyCommand}" IsEnabled="{Binding CanControl}" MinWidth="65" Padding="8,5" FontSize="11"/>
+                                                                <Button Content="Auto" Command="{Binding AutoCommand}" IsEnabled="{Binding CanControl}" MinWidth="65" Padding="8,5" FontSize="11"/>
+                                                            </StackPanel>
+                                                        </Grid>
                                                     </StackPanel>
                                                 </Grid>
                                             </Border>

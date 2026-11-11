@@ -813,6 +813,28 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 _appSettings.RgbRamSmbusPort = port;
                 _ = SaveSettingsAsync();
             });
+            // 4.5: Apply mode, Simple view, Auto and per-zone segments.
+            RgbControl.ApplyLookSettings(_appSettings.RgbLiveApply, _appSettings.RgbSimpleMode, _appSettings.RgbAuto, _appSettings.RgbZoneMode,
+                _appSettings.RgbZones,
+                (live, simple, auto, zoneMode) =>
+                {
+                    _appSettings.RgbLiveApply = live;
+                    _appSettings.RgbSimpleMode = simple;
+                    _appSettings.RgbAuto = auto;
+                    _appSettings.RgbZoneMode = zoneMode;
+                    _ = SaveSettingsAsync();
+                },
+                zones =>
+                {
+                    _appSettings.RgbZones = zones;
+                    _ = SaveSettingsAsync();
+                });
+            // 4.5: who drives RAM / onboard (SMBus) lighting when a vendor RGB app is running.
+            RgbControl.ApplyCoexistenceSettings(_appSettings.RgbSmbusPolicy, policy =>
+            {
+                _appSettings.RgbSmbusPolicy = policy;
+                _ = SaveSettingsAsync();
+            });
             RgbControl.ApplyTypingFxSettings(_appSettings.RgbTypingFxEnabled, _appSettings.RgbTypingFxStyle, _appSettings.RgbTypingFxAllDevices,
                 (enabled, style, all) =>
                 {
@@ -882,6 +904,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             StartWithWindows = _appSettings.StartWithWindows;
             ThermalFrameEnabled = _appSettings.ThermalFrameEnabled;
             UseBiosFanControl = _appSettings.FanBiosControl;
+            PumpMaxPercent = _appSettings.PumpMaxPercent;
+            PumpProtectionEnabled = _appSettings.PumpProtectionEnabled;
+            SystemFansPercent = _appSettings.SystemFansPercent;
+            _hardwareMonitorService.PumpMaxPercent = _appSettings.PumpMaxPercent;
+            _hardwareMonitorService.PumpProtectionEnabled = _appSettings.PumpProtectionEnabled;
+            PushChannelRoles();
             StartMinimized = _appSettings.StartMinimized;
             MinimizeToTray = _appSettings.MinimizeToTray;
             CloseToTray = _appSettings.CloseToTray;
@@ -1322,7 +1350,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             CpuFanRpmValue = snapshot.CpuFan?.SpeedRpm ?? 0;
             CpuFanControl = snapshot.CpuFan?.CurrentControlPercent is double control ? $"{control:F0}%" : "Auto/BIOS";
             CpuFanCapability = snapshot.CpuFan?.CapabilityMessage ?? "No dedicated CPU fan header was detected.";
-            CpuFanCanControl = snapshot.CpuFan?.CanControl == true;
+            // 4.5: the dashboard slider / Apply never act on a pump — it is set (if at all) from its own row on the Fans tab.
+            CpuFanCanControl = snapshot.CpuFan?.CanControl == true && snapshot.CpuFan?.IsPump != true;
             _cpuFanChannelId = snapshot.CpuFan?.Id;
 
             // Don't fight the user: only follow the hardware value once the slider has been idle for 5 s.
@@ -1331,6 +1360,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 SetCpuFanDesiredPercent(cpuFanPercent);
 
             FanCountLabel = snapshot.Fans.Count == 1 ? "1 channel" : $"{snapshot.Fans.Count} channels";
+            RunPollStep("Cooling summary", () => UpdateCoolingSummary(snapshot));
             LastUpdated = $"Updated {snapshot.Timestamp.LocalDateTime:HH:mm:ss}";
             StatusMessage = snapshot.StatusMessage;
 
@@ -1389,7 +1419,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 AiForecast = _aiEngine.Predictor.PredictedTempIn30s is double forecast ? $"{forecast:F1}°C" : "--";
                 AiStatus = _aiEngine.IsLearning ? "AEDi: Active" : "AEDi: Learning...";
 
-                if (AiAutoFanEnabled && CpuFanCanControl && !string.IsNullOrEmpty(_cpuFanChannelId))
+                if (AiAutoFanEnabled && CpuFanCanControl && !_cpuCoolingIsPump && !string.IsNullOrEmpty(_cpuFanChannelId))
                 {
                     // Only touch the hardware when the target actually moved (≥ 1 %) or the channel changed.
                     bool channelChanged = !string.Equals(_lastAiAppliedChannelId, _cpuFanChannelId, StringComparison.OrdinalIgnoreCase);
@@ -1569,8 +1599,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                     snapshot,
                     channel => SafeExecuteAsync(() => ApplyFanControlAsync(channel), $"Apply fan '{channel.Name}'"),
                     channel => SafeExecuteAsync(() => RestoreAutomaticControlAsync(channel), $"Auto mode for fan '{channel.Name}'"));
-                if (_activeProfileTab?.Profile.FanChannelPercents.TryGetValue(snapshot.Id, out double stored) == true)
+                // 4.5: a stored target never applies to a pump (old profiles saved 100 % for every header).
+                if (!snapshot.IsPump && _activeProfileTab?.Profile.FanChannelPercents.TryGetValue(snapshot.Id, out double stored) == true)
                     vm.DesiredPercent = stored;
+                vm.SetRoleHandler(OnChannelRoleChosen,
+                    _appSettings.FanChannelRoles.TryGetValue(snapshot.Id, out var savedRole) ? CoolingChannelClassifier.ParseRole(savedRole) : CoolingRole.Auto);
                 FanChannels.Add(vm);
                 continue;
             }

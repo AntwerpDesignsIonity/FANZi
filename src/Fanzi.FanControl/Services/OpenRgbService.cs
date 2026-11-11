@@ -63,6 +63,16 @@ public sealed class OpenRgbService : IRgbService
     /// </summary>
     public bool SuppressDramWrites { get; set; }
 
+    /// <summary>
+    /// 4.5 coexistence: when true every SMBus-attached device (RAM, onboard controllers on the board's SMBus) is planned
+    /// as "not driven" because a vendor RGB app owns that bus. GPU I2C (its own bus) and USB devices are unaffected.
+    /// Takes effect on the next device refresh.
+    /// </summary>
+    public bool SmbusHandsOff { get; set; }
+
+    /// <summary>Who owns SMBus lighting while <see cref="SmbusHandsOff"/> is on (for the device label), e.g. "ASUS Armoury Crate".</summary>
+    public string SmbusOwnerName { get; set; } = "the vendor app";
+
     /// <summary>4.4: DRAM entries (both SMBus ports) skipped by the last refresh because of <see cref="SuppressDramWrites"/>.</summary>
     public int SuppressedDramCount { get; private set; }
     private volatile bool       _disposed;
@@ -90,6 +100,13 @@ public sealed class OpenRgbService : IRgbService
 
     /// <summary>Error from the last GetAllControllerData call; null when it succeeded.</summary>
     public string? LastDeviceQueryError { get; private set; }
+
+    /// <inheritdoc />
+    public void SetSmbusHandsOff(bool handsOff, string ownerName)
+    {
+        SmbusHandsOff = handsOff;
+        if (!string.IsNullOrWhiteSpace(ownerName)) SmbusOwnerName = ownerName;
+    }
 
     // ── Connection ────────────────────────────────────────────────────────────
 
@@ -695,7 +712,39 @@ public sealed class OpenRgbService : IRgbService
             }
         }
         SuppressedDramCount = skipped;
+
+        // 4.5 coexistence: a vendor app owns the motherboard SMBus → FANZi writes nothing to it.
+        if (SmbusHandsOff)
+        {
+            int handsOff = 0;
+            for (int i = 0; i < devices.Length; i++)
+            {
+                if (!IsBoardSmbusDevice(devices[i])) continue;
+                if (_controls[i].Kind is RgbControlKind.Unsupported && _controls[i].Note is not null) continue; // already explained
+                _controls[i] = RgbDeviceControl.None with { Note = $"Left to {SmbusOwnerName} — FANZi does not write this bus" };
+                handsOff++;
+            }
+            if (handsOff > 0)
+            {
+                MirroredSmbusPorts = Array.Empty<int>();
+                RamBusStatus = $"RAM / onboard lighting: {handsOff} SMBus device(s) left to {SmbusOwnerName}";
+                AppLog.Info("OpenRGB: " + RamBusStatus);
+            }
+        }
     }
+
+    /// <summary>RAM, or anything on the motherboard's SMBus. GPU I2C (NvAPI / AMD ADL) is a separate bus and stays driven.</summary>
+    internal static bool IsBoardSmbusLocation(string? location, bool isDram)
+    {
+        if (isDram) return true;
+        if (string.IsNullOrEmpty(location) || !location.StartsWith("I2C:", StringComparison.OrdinalIgnoreCase)) return false;
+        return !(location.Contains("NvAPI", StringComparison.OrdinalIgnoreCase)
+              || location.Contains("on GPU", StringComparison.OrdinalIgnoreCase)
+              || location.Contains("AMD ADL", StringComparison.OrdinalIgnoreCase)
+              || location.Contains("Radeon", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsBoardSmbusDevice(OpenRGB.NET.Device d) => IsBoardSmbusLocation(d.Location, d.Type == DeviceType.Dram);
 
     private static bool IsSmbusDevice(OpenRGB.NET.Device d) =>
         d.Type == DeviceType.Dram || (d.Location?.StartsWith("I2C:", StringComparison.OrdinalIgnoreCase) ?? false);

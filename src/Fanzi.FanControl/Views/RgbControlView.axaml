@@ -172,18 +172,18 @@
 
         <!-- ══ 4.2 BLOCKER: other RGB software repainting the same hardware ══════ -->
         <Border x:Name="RgbConflictBanner" IsVisible="{Binding HasRgbConflicts}" CornerRadius="14" Padding="16,14"
-                Background="#2A0A10" BorderBrush="#EF4444" BorderThickness="2" BoxShadow="0 0 18 0 #55EF4444">
+                Background="{Binding ConflictBannerBackground}" BorderBrush="{Binding ConflictBannerBorder}" BorderThickness="2">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
-                <TextBlock Grid.Column="0" Text="⛔" FontSize="26" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="0" Text="{Binding ConflictBannerIcon}" FontSize="26" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
-                    <TextBlock x:Name="RgbConflictTitleText" Text="{Binding RgbConflictTitle}" FontSize="15" FontWeight="Black" Foreground="#FCA5A5" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding RgbConflictMessage}" FontSize="11.5" Foreground="#F3C4C4" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="RgbConflictTitleText" Text="{Binding RgbConflictTitle}" FontSize="15" FontWeight="Black" Foreground="{Binding ConflictTitleColor}" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding RgbConflictMessage}" FontSize="11.5" Foreground="#F3DCC4" TextWrapping="Wrap"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Spacing="6" VerticalAlignment="Center">
-                    <Button Classes="rgb-solid" Content="Stop &amp; disable autostart" Command="{Binding DisableConflictingAppsCommand}"
+                    <Button x:Name="RgbTakeOverButton" Classes="rgb-outline" Content="Stop it — FANZi takes over" Command="{Binding DisableConflictingAppsCommand}"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                            ToolTip.Tip="Stops the app and its background service, sets the service to Manual and removes its sign-in autostart. Re-enable any time in services.msc."/>
-                    <Button Classes="rgb-outline" Content="Close for now" Command="{Binding CloseConflictingAppsCommand}"
+                            ToolTip.Tip="Only when you want FANZi to drive everything: stops the app and its background service, sets the service to Manual and removes its sign-in autostart. Re-enable any time in services.msc. FANZi never does this on its own."/>
+                    <Button Classes="rgb-outline" Content="Close it for now" Command="{Binding CloseConflictingAppsCommand}"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                             ToolTip.Tip="Close the app and stop its service until the next restart"/>
                 </StackPanel>
@@ -296,6 +296,35 @@
             </Grid>
         </Border>
 
+        <!-- ══ 4.5 QUICK BAR: Auto, view, Apply / Revert ═══════════════════ -->
+        <Border x:Name="RgbQuickBar" Classes="rgb-card" Padding="16,12">
+            <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="14">
+                    <ToggleSwitch x:Name="AutoRgbToggle" Grid.Column="0" IsChecked="{Binding AutoRgb}" OnContent="Auto" OffContent="Auto" VerticalAlignment="Center"
+                                  ToolTip.Tip="One switch: Smart Ambient (the scene follows idle / work / game / heat), night dimming and the overheat alert. Picking a colour or theme yourself switches it back to manual."/>
+                    <TextBlock x:Name="AutoRgbStatusText" Grid.Column="1" Text="{Binding AutoRgbText}" FontSize="11.5" Foreground="#C4D8F4" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                    <ToggleSwitch x:Name="RgbLiveApplyToggle" Grid.Column="2" IsChecked="{Binding RgbLiveApply}" OnContent="Instant" OffContent="Use Apply" VerticalAlignment="Center"
+                                  ToolTip.Tip="Instant: every change shows on the lights at once. Use Apply: set everything up first, then press Apply — Revert drops the changes."/>
+                    <ToggleSwitch x:Name="RgbSimpleToggle" Grid.Column="3" IsChecked="{Binding RgbSimpleMode}" OnContent="Simple" OffContent="Advanced" VerticalAlignment="Center"
+                                  ToolTip.Tip="Simple: Auto, effects, colours and themes. Advanced adds Typing FX, per-zone segments, the hardware scan and the OpenRGB connection."/>
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <TextBlock Grid.Column="0" Text="BRIGHTNESS" Classes="rgb-caption" VerticalAlignment="Center"/>
+                    <Slider x:Name="QuickBrightness" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Brightness, Mode=TwoWay}" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Brightness, StringFormat={}{0:P0}}" FontSize="11" Foreground="#A5F3FC" VerticalAlignment="Center" MinWidth="40" TextAlignment="Right"/>
+                </Grid>
+                <Border x:Name="RgbApplyBar" IsVisible="{Binding ShowApplyBar}" Classes="tile" Padding="12,8">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock x:Name="RgbApplyStatusText" Text="{Binding ApplyStatusText}" FontSize="11.5" Foreground="#C4D8F4" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Button x:Name="RgbRevertButton" Grid.Column="1" Classes="rgb-outline" Content="Revert" Command="{Binding RevertRgbCommand}" IsEnabled="{Binding HasPendingRgbChanges}"
+                                ToolTip.Tip="Put the controls back to what the lights are showing"/>
+                        <Button x:Name="RgbApplyButton" Grid.Column="2" Classes="rgb-solid" Content="✓ Apply" Command="{Binding ApplyRgbCommand}" IsEnabled="{Binding HasPendingRgbChanges}"
+                                ToolTip.Tip="Send effect, colours, speed, brightness and every zone row to the lights"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Border>
+
         <!-- ══ DEVICES + LIVE PREVIEW ═══════════════════════════════════════ -->
         <Border Classes="rgb-card">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
@@ -348,6 +377,18 @@
                                        Text="No OpenRGB devices detected yet. FANZI launches OpenRGB automatically in the background — if your hardware doesn't appear, run a Deep scan or Restart OpenRGB."/>
                         </Border>
                     </Panel>
+                    <!-- 4.5 coexistence: who drives RAM / onboard (SMBus) lighting -->
+                    <Border x:Name="SmbusPolicyCard" Classes="tile" Padding="12,8">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <StackPanel Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="RAM / ONBOARD LIGHTING OWNER" Classes="rgb-caption"/>
+                                <TextBlock x:Name="SmbusPolicyStatusText" Text="{Binding SmbusPolicyStatus}" TextWrapping="Wrap" FontSize="11" Foreground="#C4D8F4"/>
+                            </StackPanel>
+                            <ComboBox x:Name="SmbusPolicyPicker" Grid.Column="1" ItemsSource="{Binding SmbusPolicyChoices}" SelectedIndex="{Binding SmbusPolicyIndex}"
+                                      MinWidth="250" FontSize="11" VerticalAlignment="Center"
+                                      ToolTip.Tip="RAM sticks and onboard LEDs sit on the motherboard's SMBus, which tolerates one writer. Automatic: when Aura, Mystic Light, RGB Fusion, Polychrome, iCUE, SignalRGB or a RAM maker's app is running, FANZi leaves that bus alone and lights everything else."/>
+                        </Grid>
+                    </Border>
                     <!-- 4.3 RAM bus status: which SMBus port drives the sticks, re-sync and port override -->
                     <Border Classes="tile" Padding="12,8" IsVisible="{Binding HasRamBusStatus}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
@@ -389,6 +430,7 @@
         </Border>
 
         <!-- ══ TYPING FX (4.3) ══════════════════════════════════════════════ -->
+        <Panel x:Name="TypingFxHost" IsVisible="{Binding ShowAdvancedRgb}">
         <Border Classes="rgb-card" IsVisible="{Binding TypingFxSupported}">
             <Grid ColumnDefinitions="1.6*,*" ColumnSpacing="18">
                 <StackPanel Grid.Column="0" Spacing="10">
@@ -447,6 +489,7 @@
                 </StackPanel>
             </Grid>
         </Border>
+        </Panel>
 
         <!-- ══ EFFECTS ══════════════════════════════════════════════════════ -->
         <Border Classes="rgb-card">
@@ -627,7 +670,7 @@
         </Border>
 
         <!-- ══ HARDWARE &AMP; DRIVERS (collapsible) ══ -->
-        <Border Classes="rgb-card" Padding="6,4">
+        <Border Classes="rgb-card" Padding="6,4" IsVisible="{Binding ShowAdvancedRgb}">
             <Expander x:Name="HardwareSection" Classes="rgb-section" IsExpanded="False" HorizontalAlignment="Stretch">
                 <Expander.Header>
                     <StackPanel Spacing="1">
@@ -672,7 +715,7 @@
         </Border>
 
         <!-- ══ PER-ZONE CONTROL (collapsible) ══ -->
-        <Border Classes="rgb-card" Padding="6,4">
+        <Border Classes="rgb-card" Padding="6,4" IsVisible="{Binding ShowAdvancedRgb}">
             <Expander x:Name="ZoneSection" Classes="rgb-section" IsExpanded="False" HorizontalAlignment="Stretch">
                 <Expander.Header>
                     <StackPanel Spacing="1">
@@ -686,6 +729,12 @@
                                    Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/>
                         <ToggleSwitch Grid.Column="1" IsChecked="{Binding ZoneModeEnabled}" OnContent="Per-zone" OffContent="Global" VerticalAlignment="Center"/>
                     </Grid>
+                    <WrapPanel IsVisible="{Binding HasZones}">
+                        <TextBlock Text="Each zone (RAM stick, fan ring, strip, case light bar) can be split into up to 8 segments with its own pattern, brightness and speed. Settings are saved per zone."
+                                   Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11" TextWrapping="Wrap" MaxWidth="640" Margin="0,0,12,6" VerticalAlignment="Center"/>
+                        <Button x:Name="ResetZoneSegmentsButton" Classes="rgb-outline" Content="Reset segments" FontSize="11" Padding="10,4" Margin="0,0,0,6" Command="{Binding ResetZoneSegmentsCommand}"
+                                ToolTip.Tip="Every zone back to one solid segment at full brightness (colours and effects stay)"/>
+                    </WrapPanel>
                     <Border IsVisible="{Binding !HasZones}" Classes="tile empty">
                         <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource FanziTextMutedBrush}"
                                    Text="No addressable zones detected yet. Once OpenRGB enumerates your RAM, ARGB headers or GPU, each zone appears here for individual control."/>
@@ -703,12 +752,36 @@
                                                 <TextBlock Text="{Binding DisplayLabel}" Foreground="#C4D8F4" FontSize="13" FontWeight="SemiBold"/>
                                                 <TextBlock Text="{Binding LedLabel}" Foreground="#4E6E95" FontSize="11" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
-                                                <ComboBox Grid.Column="0" ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect, Mode=TwoWay}"
+                                            <Grid ColumnDefinitions="Auto,*,*,Auto,Auto" ColumnSpacing="8">
+                                                <ToggleSwitch Grid.Column="0" IsChecked="{Binding ZoneEnabled}" OnContent="On" OffContent="Off" VerticalAlignment="Center"
+                                                              ToolTip.Tip="Off = this zone stays dark"/>
+                                                <ComboBox Grid.Column="1" ItemsSource="{Binding Effects}" SelectedItem="{Binding SelectedEffect, Mode=TwoWay}"
                                                           FontSize="12" HorizontalAlignment="Stretch" ToolTip.Tip="Effect for this zone"/>
-                                                <ComboBox Grid.Column="1" ItemsSource="{Binding Sources}" SelectedItem="{Binding ReactiveSource, Mode=TwoWay}"
+                                                <ComboBox Grid.Column="2" ItemsSource="{Binding Sources}" SelectedItem="{Binding ReactiveSource, Mode=TwoWay}"
                                                           FontSize="12" HorizontalAlignment="Stretch" ToolTip.Tip="Hardware signal that drives reactive effects"/>
-                                                <TextBox Grid.Column="2" Text="{Binding PrimaryHex}" Width="84" Classes="hex" ToolTip.Tip="Zone colour (hex)"/>
+                                                <TextBox Grid.Column="3" Text="{Binding PrimaryHex}" Width="84" Classes="hex" ToolTip.Tip="Zone colour A (hex)"/>
+                                                <TextBox Grid.Column="4" Text="{Binding SecondaryHex}" Width="84" Classes="hex" ToolTip.Tip="Zone colour B (hex) — used by Gradient, Alternate, Mirror and two-colour effects"/>
+                                            </Grid>
+                                            <!-- 4.5 segments: split, pattern, direction, brightness, speed -->
+                                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="8" IsVisible="{Binding CanSegment}">
+                                                <TextBlock Grid.Column="0" Text="{Binding SegmentLabel}" FontSize="11" Foreground="#A5F3FC" VerticalAlignment="Center" MinWidth="78"/>
+                                                <Slider Grid.Column="1" Minimum="1" Maximum="{Binding MaxSegments}" Value="{Binding Segments, Mode=TwoWay}" TickFrequency="1" IsSnapToTickEnabled="True"
+                                                        Width="120" VerticalAlignment="Center" ToolTip.Tip="Split this zone into equal segments (up to 8, never more than its LEDs)"/>
+                                                <ComboBox Grid.Column="2" ItemsSource="{Binding Patterns}" SelectedIndex="{Binding PatternIndex, Mode=TwoWay}" FontSize="12" HorizontalAlignment="Stretch"
+                                                          ToolTip.Tip="Solid: one colour. Gradient: A to B. Alternate: segments A / B. Chase: one lit segment runs along the zone. Mirror: A at the ends, B in the middle."/>
+                                                <CheckBox Grid.Column="3" IsChecked="{Binding Reverse}" Content="Reverse" FontSize="11" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="4" Classes="rgb-outline" Content="Copy to all" FontSize="11" Padding="8,3" VerticalAlignment="Center"
+                                                        Command="{Binding $parent[UserControl].DataContext.CopyZoneToAllCommand}" CommandParameter="{Binding}"
+                                                        ToolTip.Tip="Give every other zone this row's effect, colours, segments and pattern"/>
+                                            </Grid>
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,*,Auto,Auto" ColumnSpacing="8">
+                                                <TextBlock Grid.Column="0" Text="Brightness" FontSize="11" Foreground="#6E8DB5" VerticalAlignment="Center"/>
+                                                <Slider Grid.Column="1" Minimum="10" Maximum="100" Value="{Binding ZoneBrightness, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding ZoneBrightnessLabel}" FontSize="11" Foreground="#A5F3FC" VerticalAlignment="Center" MinWidth="42"/>
+                                                <TextBlock Grid.Column="3" Text="Speed" FontSize="11" Foreground="#6E8DB5" VerticalAlignment="Center"/>
+                                                <Slider Grid.Column="4" Minimum="0.25" Maximum="3" Value="{Binding ZoneSpeed, Mode=TwoWay}" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="5" Text="{Binding ZoneSpeedLabel}" FontSize="11" Foreground="#A5F3FC" VerticalAlignment="Center" MinWidth="42"/>
+                                                <TextBlock Grid.Column="6" Text="● not applied" FontSize="10.5" FontWeight="Bold" Foreground="#FBBF24" VerticalAlignment="Center" IsVisible="{Binding HasPending}"/>
                                             </Grid>
                                         </StackPanel>
                                     </Grid>
@@ -786,7 +859,7 @@
         </Border>
 
         <!-- ══ CONNECTION & OPENRGB SERVER (collapsible, advanced) ══ -->
-        <Border Classes="rgb-card" Padding="6,4">
+        <Border Classes="rgb-card" Padding="6,4" IsVisible="{Binding ShowAdvancedRgb}">
             <Expander x:Name="ConnectionSection" Classes="rgb-section" IsExpanded="False" HorizontalAlignment="Stretch">
                 <Expander.Header>
                     <StackPanel Spacing="1">
