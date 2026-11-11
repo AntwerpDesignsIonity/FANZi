@@ -1,0 +1,103 @@
+name: Windows packages (signed by SignPath when configured)
+
+# Builds the Windows x64 application and installer on a GitHub-hosted runner, signs them through SignPath
+# (free code signing by SignPath.io, certificate by SignPath Foundation - see docs/CODE_SIGNING_POLICY.md),
+# packages them and, on a v* tag, attaches them to the GitHub release of that tag.
+#
+# Signing runs only when the repository variable SIGNPATH_ORGANIZATION_ID is set (after SignPath approves the project):
+#   variables: SIGNPATH_ORGANIZATION_ID, SIGNPATH_PROJECT_SLUG, SIGNPATH_SIGNING_POLICY_SLUG
+#   secret:    SIGNPATH_API_TOKEN
+# Without it the workflow still builds and uploads the unsigned packages as a workflow artifact, and attaches nothing.
+
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version
+        id: v
+        shell: pwsh
+        run: |
+          $v = (Select-Xml -Path src/Fanzi.FanControl/Fanzi.FanControl.csproj -XPath "//Version" | Select-Object -First 1).Node.InnerText
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: dotnet test tests/Fanzi.FanControl.Tests/Fanzi.FanControl.Tests.csproj -c Release --verbosity minimal
+
+      - name: Publish application and installer
+        shell: pwsh
+        run: |
+          dotnet publish src/Fanzi.FanControl/Fanzi.FanControl.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true -o publish/app
+          dotnet publish src/Fanzi.Installer/Fanzi.Installer.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/installer
+          New-Item -ItemType Directory -Force unsigned | Out-Null
+          Copy-Item publish/app/Fanzi.FanControl.exe unsigned/
+          Copy-Item publish/installer/FANZI-Installer.exe unsigned/
+
+      - name: Upload unsigned binaries
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: fanzi-win-x64-unsigned
+          path: unsigned/*.exe
+
+      - name: Sign with SignPath
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: signed
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $v = '${{ steps.v.outputs.version }}'
+          $src = if (Test-Path signed/Fanzi.FanControl.exe) { 'signed' } else { 'unsigned' }
+          "Packaging from: $src"
+          New-Item -ItemType Directory -Force dist, stage/installer/app, stage/portable | Out-Null
+          Copy-Item "$src/Fanzi.FanControl.exe" "dist/FANZi-IO-nity-v$v-Portable-win-x64.exe"
+          Copy-Item "$src/Fanzi.FanControl.exe" "stage/portable/FANZi-IO-nity-v$v-Portable-win-x64.exe"
+          Compress-Archive -Path stage/portable/* -DestinationPath "dist/FANZi-IO-nity-v$v-Portable-win-x64.zip"
+          Copy-Item "$src/FANZI-Installer.exe" stage/installer/
+          Copy-Item "$src/Fanzi.FanControl.exe" stage/installer/app/
+          Compress-Archive -Path stage/installer/* -DestinationPath "dist/FANZi-IO-nity-v$v-Installer-win-x64.zip"
+          Get-ChildItem dist | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash, $_.Name } | Set-Content dist/SHA256SUMS-windows.txt
+          Get-AuthenticodeSignature "dist/FANZi-IO-nity-v$v-Portable-win-x64.exe" | Format-List Status, SignerCertificate
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fanzi-win-x64-packages
+          path: dist/*
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:GITHUB_REF_NAME 2>$null; if ($LASTEXITCODE -ne 0) { gh release create $env:GITHUB_REF_NAME --title $env:GITHUB_REF_NAME --notes "FANZi IO-nity $env:GITHUB_REF_NAME" }
+          gh release upload $env:GITHUB_REF_NAME (Get-ChildItem dist -File | ForEach-Object FullName) --clobber
