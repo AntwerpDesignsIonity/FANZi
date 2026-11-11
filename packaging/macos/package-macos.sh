@@ -3,7 +3,7 @@
 # Usage: package-macos.sh <version> <rid: osx-arm64|osx-x64> <publish-dir> <out-dir> <icon-png>
 # Produces: FANZi-IO-nity-v<ver>-macOS-<arm64|x64>.dmg and .zip (ad-hoc signed; not notarised —
 #           first launch: right-click the app → Open, or: xattr -dr com.apple.quarantine "/Applications/FANZi IO-nity.app").
-# (c) 2018-2026 Ionity Global (Pty) Ltd — Policy 986 AED.
+# (c) 2018-2026 Antwerp Designs | Ionity Global (Pty) Ltd — MIT License.
 set -euo pipefail
 VERSION="$1"; RID="$2"; PUB="$(cd "$3" && pwd)"; OUT="$(mkdir -p "$4" && cd "$4" && pwd)"; ICON="$(cd "$(dirname "$5")" && pwd)/$(basename "$5")"
 case "$RID" in osx-arm64) ARCH=arm64 ;; osx-x64) ARCH=x64 ;; *) echo "unsupported rid $RID" >&2; exit 2 ;; esac

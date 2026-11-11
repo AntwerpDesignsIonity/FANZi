@@ -1434,9 +1434,9 @@
                                                 <TextBlock Text="AI Thermal Intelligence &amp; RGB Lighting" FontSize="12" Foreground="#6A8AAF"/>
                                             </StackPanel>
                                         </StackPanel>
-                                        <TextBlock Text="© 2018-2026 Antwerp Designs. ALL Rights Reserved." Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"/>
+                                        <TextBlock Text="© 2018-2026 Antwerp Designs | Ionity Global (Pty) Ltd" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"/>
                                         <TextBlock Text="Johan Wilhelm van Antwerp · AI@IONITY.TODAY" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"/>
-                                        <TextBlock Text="POL986 AED License 990|900 · FREE TO USE" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"/>
+                                        <TextBlock Text="Open source · MIT License · free to use" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="11"/>
                                         <TextBlock TextWrapping="Wrap" Foreground="{StaticResource FanziTextMutedBrush}" FontSize="10"
                                                    Text="Powered by LibreHardwareMonitor, OpenRGB, Avalonia UI, and custom AI thermal intelligence."/>
                                     </StackPanel>

@@ -12,8 +12,8 @@
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-blue?logo=windows"/>
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet"/>
-  <img alt="License" src="https://img.shields.io/badge/license-Proprietary-red"/>
-  <img alt="Version" src="https://img.shields.io/badge/version-4.1.1-green"/>
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-green"/>
+  <img alt="Version" src="https://img.shields.io/badge/version-4.5.0-green"/>
 </p>
 
 ---
@@ -394,9 +394,20 @@ Contributions are welcome! Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** be
 
 ## License
 
-Copyright © 2026 **Ionity Global (Pty) Ltd**. All rights reserved.
+FANZi IO-nity is open source under the **[MIT License](LICENSE)**. Copyright © 2018-2026 Antwerp Designs | **Ionity Global (Pty) Ltd**.
 
-This software is proprietary. Redistribution or modification without written permission from Ionity Global (Pty) Ltd is not permitted.
+Third-party components and their licences: **[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)**. The FANZi, IO-nity, Ionity and
+AEDi names and logos are marks of Ionity Global (Pty) Ltd; the MIT licence does not grant trademark rights.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
+(applied for - releases are unsigned until the project is approved).
+
+- Committers, reviewers and approvers: [Johan Wilhelm van Antwerp](https://github.com/AntwerpDesignsIonity)
+- Signed binaries are built only by GitHub Actions from this repository; every signing request is approved by hand.
+- Privacy: this program will not transfer any information to other networked systems unless specifically requested by the user
+  or the person installing or operating it. Details: **[docs/CODE_SIGNING_POLICY.md](docs/CODE_SIGNING_POLICY.md)**.
 
 ---
 

@@ -3,7 +3,7 @@
 # Usage: package-linux.sh <version> <rid: linux-x64|linux-arm64> <publish-dir> <out-dir> <icon-png>
 # Produces: FANZi-IO-nity-v<ver>-<rid>.tar.gz (portable + install.sh), FANZi-IO-nity-v<ver>-<arch>.deb,
 #           and on x64 FANZi-IO-nity-v<ver>-x86_64.AppImage.
-# (c) 2018-2026 Ionity Global (Pty) Ltd — Policy 986 AED.
+# (c) 2018-2026 Antwerp Designs | Ionity Global (Pty) Ltd — MIT License.
 set -euo pipefail
 VERSION="$1"; RID="$2"; PUB="$(cd "$3" && pwd)"; OUT="$(mkdir -p "$4" && cd "$4" && pwd)"; ICON="$(cd "$(dirname "$5")" && pwd)/$(basename "$5")"
 HERE="$(cd "$(dirname "$0")" && pwd)"
