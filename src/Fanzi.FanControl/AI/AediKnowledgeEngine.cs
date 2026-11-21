@@ -11,6 +11,11 @@ namespace Fanzi.FanControl.AI;
 /// </summary>
 public sealed class AediKnowledgeEngine
 {
+    // Tab order since 4.3: Dashboard 0, Fans 1, Sensors 2, RGB 3, Tasks 4, Network 5, Power 6, Cleaner 7, Tools 8,
+    // Bench 9, Alerts 10, Settings 11. 4.6: the entries below still used the pre-Bench numbers, so asking AEDi for
+    // "settings" opened Alerts and "email alerts" opened Bench.
+    internal const int BenchTab = 9, AlertsTab = 10, SettingsTab = 11;
+
     private readonly List<AediEntry> _entries = new();
 
     public IReadOnlyList<AediEntry> Entries => _entries;
@@ -77,13 +82,14 @@ public sealed class AediKnowledgeEngine
         var direct = cmd switch
         {
             "dashboard" or "home" or "main" => "Dashboard",
+            "autopilot" or "auto" or "automatic" or "auto pilot" => "Autopilot",
             "fans" or "fan" or "speed" or "rpm" => "Fans",
             "sensors" or "temp" or "temperature" or "cpu" or "gpu" => "Sensors",
             "rgb" or "light" or "color" or "led" => "RGB Control",
             "tasks" or "process" or "kill" or "end task" or "task manager" => "Tasks",
             "network" or "net" or "bandwidth" or "download" or "upload" or "port" => "Network",
             "power" or "watt" or "energy" or "drive" => "Power",
-            "clean" or "cleaner" or "cache" or "temp" or "ram" or "dns" => "System Cleaner",
+            "clean" or "cleaner" or "cache" or "ram" or "dns" => "System Cleaner",
             "tools" or "tool" or "defrag" or "trim" or "optimise" or "optimize" or "maintenance" => "Disk optimiser, repair & tweaks",
             "repair" or "sfc" or "dism" or "chkdsk" => "SFC, DISM, CHKDSK",
             "smart" or "disk health" or "drive health" => "S.M.A.R.T. status",
@@ -93,13 +99,21 @@ public sealed class AediKnowledgeEngine
             "game" or "gaming" => "Dashboard",
             "overlay" or "mini" or "small" => "Overlay",
             "about" or "ionity" or "aedi" or "who" => "About",
-            "help" or "?" or "how" => "Help",
+            "help" or "?" or "how" => "Getting Started",
+            "bench" or "benchmark" => "Thermal Bench",
             _ => null
         };
 
         if (direct is not null)
         {
-            var entry = _entries.FirstOrDefault(e => e.Section == direct);
+            // 4.6: quick commands name an entry by title ("Dashboard", "Autopilot") or by section; only the section
+            // was compared, so most quick commands fell through to the slower full search.
+            // "Fans" → "Fan Control", "Tasks" → "Task Manager", "Alerts" → "Email Alerts": the name, then its singular.
+            string stem = direct.EndsWith('s') ? direct[..^1] : direct;
+            var entry = _entries.FirstOrDefault(e => string.Equals(e.Title, direct, StringComparison.OrdinalIgnoreCase))
+                        ?? _entries.FirstOrDefault(e => string.Equals(e.Section, direct, StringComparison.OrdinalIgnoreCase))
+                        ?? _entries.FirstOrDefault(e => e.Title.Contains(direct, StringComparison.OrdinalIgnoreCase))
+                        ?? _entries.FirstOrDefault(e => e.Title.Contains(stem, StringComparison.OrdinalIgnoreCase));
             if (entry is not null)
                 return new AediSearchResult(entry, 100);
         }
@@ -115,6 +129,12 @@ public sealed class AediKnowledgeEngine
             new[] { "dashboard", "home", "overview", "main", "health", "score", "game", "gaming", "status", "temp", "cpu", "gpu", "fan" },
             0,
             "Navigate to Dashboard"));
+
+        _entries.Add(new AediEntry("Autopilot", "One-switch AI cooling",
+            "AEDi Autopilot: switch it on, pick Quiet / Balanced / Cool, and FANZi sets the CPU fan and system fans for what the PC is doing (idle, everyday, gaming, heavy work, quiet hours). Pumps are never driven.",
+            new[] { "autopilot", "auto", "automatic", "ai", "one click", "simple", "quiet", "balanced", "cool", "quiet hours", "night", "silent" },
+            0,
+            "Autopilot card at the top of the Dashboard"));
 
         _entries.Add(new AediEntry("Health Score", "IO-nity System Health",
             "Real-time 0-100 health grade (A+ to Critical). Analyzes thermal efficiency, dust buildup, fan health, stability.",
@@ -265,18 +285,24 @@ public sealed class AediKnowledgeEngine
         _entries.Add(new AediEntry("Email Alerts", "Thermal notification emails",
             "SMTP email alerts when CPU temperature exceeds threshold. Configure SMTP host, port, credentials. Test email button. 10-minute cooldown.",
             new[] { "email", "alert", "notification", "smtp", "warning", "thermal", "threshold", "gmail", "outlook" },
-            9, "Go to Alerts tab"));
+            AlertsTab, "Go to Alerts tab"));
+
+        // 4.3 Bench tab (was missing from the knowledge base)
+        _entries.Add(new AediEntry("Thermal Bench", "Cooling benchmark",
+            "Repeatable all-core cooling benchmark with a score: how many degrees your cooler holds per watt, time to settle, and a result you can compare after a repaste or a fan change.",
+            new[] { "bench", "benchmark", "stress", "score", "test cooling", "repaste", "compare" },
+            BenchTab, "Go to Bench tab"));
 
         // Settings
         _entries.Add(new AediEntry("Settings", "Application configuration",
             "Start with Windows, minimize to tray, close to tray, polling interval, AI auto-fan, anomaly detection, overlay transparency, tab visibility.",
             new[] { "settings", "config", "startup", "tray", "polling", "overlay", "transparent", "tab", "visibility" },
-            10, "Go to Settings tab"));
+            SettingsTab, "Go to Settings tab"));
 
         _entries.Add(new AediEntry("Overlay", "Mini overlay & Overlay Studio",
             "Always-on-top mini window: CPU/GPU gauges, CPU history, fan, CPU/GPU load, RAM, network down/up, health, clock. Toggle with the ▣ Overlay title-bar button or Ctrl+O. Right-click it (or Settings → Overlay Studio) to switch rows, size 80–160 %, accent (incl. RGB Sync) and snap to a corner.",
             new[] { "overlay", "mini", "small", "transparent", "opacity", "always on top", "floating", "widget", "studio", "network", "ram", "accent", "snap", "osd", "hud" },
-            10, "Overlay Studio in Settings tab"));
+            SettingsTab, "Overlay Studio in Settings tab"));
 
         // v4 RGB studio + AEDi lighting
         _entries.Add(new AediEntry("RGB Control", "AEDi Lighting AI",
@@ -292,7 +318,7 @@ public sealed class AediKnowledgeEngine
         _entries.Add(new AediEntry("About FANZi IO-nity", "Ionity Global",
             "FANZi IO-nity by Ionity Global (Pty) Ltd. AI Thermal Intelligence powered by AEDi (Antwerp Ecosystems Designs Ionity). www.ionity.co.za",
             new[] { "about", "ionity", "aedi", "antwerp", "ecosystems", "designs", "website", "www", "pty", "ltd", "johan", "van antwerp" },
-            10, "About — www.ionity.co.za"));
+            SettingsTab, "About — www.ionity.co.za"));
 
         // Help
         _entries.Add(new AediEntry("Getting Started", "Quick start guide",

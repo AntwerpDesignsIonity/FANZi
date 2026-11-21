@@ -13,7 +13,7 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-blue?logo=windows"/>
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet"/>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green"/>
-  <img alt="Version" src="https://img.shields.io/badge/version-4.5.1-green"/>
+  <img alt="Version" src="https://img.shields.io/badge/version-4.6.0-green"/>
 </p>
 
 ---
@@ -64,6 +64,34 @@ The UI is built with [Avalonia](https://avaloniaui.net/) so the rendering layer 
 | ⌨ **Typing FX (4.3)** | Keystrokes become light: Ripple, Pulse, Line, Area, Fireworks, Typewriter, Matrix rain, Typing heat — on the keyboard where you hit the key and across RAM, GPU, strips and mouse |
 | 🔥 **Thermal Bench (4.3)** | Repeatable all-core cooling benchmark with a 0–100 score, grade, fan-lag / recovery metrics, run history and CSV export |
 | ▤ **RAM lighting that sticks (4.3)** | ENE DRAM mirrored on two SMBus ports is driven exactly once, SMBus writes are rate-limited, and **Re-sync RAM** recovers a stuck controller without a reboot |
+
+### What's new in v4.6.0
+
+**AEDi Autopilot — one switch for cooling.** A card at the top of the Dashboard with one switch and one choice
+(*Quiet / Balanced / Cool*). While it is on, AEDi works out what the PC is doing — idle, everyday use, gaming, heavy work,
+quiet hours (22:00 – 07:00), or a part close to its limit — picks the matching fan curve, and drives the CPU fan **and the
+system fans** (which were manual-only before) from the combined CPU + GPU heat. Scenes need 20 s to change, duties are
+slew-limited, and a part at 90 °C (CPU) / 88 °C (GPU) gets full airflow at once. A pump is never driven; headers the BIOS
+owns are only watched, with a one-click *Let Autopilot set them*. Off hands every fan back. Off by default.
+
+**Fixed**
+
+| Fault | Cause | Fix |
+|---|---|---|
+| ~350 "Anomaly detected" alerts a day on a healthy PC | 2.5σ of the last minute: on a steady system (σ ≈ 0.2 °C) any 1 °C step was a "spike", every BIOS curve step an "unusual fan speed" | A spike is ≥ 12 °C above the baseline at ≥ 70 °C for 3 polls; fan-speed changes are no longer reported, only a stall or a fan slowing while hot |
+| Zero-RPM curve made the fan jump to 100 % | 0 RPM at 0 % duty counted as a fan stall (critical ⇒ full speed) | A fan stopped on purpose is not a stall; a stall needs 3 polls |
+| "Game Mode" permanently on | Steam, Battle.net, Epic, EA, Ubisoft, GOG and Riot launchers were listed as games | Launchers removed; editors / OBS / Java count only with GPU load |
+| Game session always "0 min"; Game Mode never ended | The clock restarted on every 5 s scan; exit needed the CPU under 50 °C | The clock runs; the session ends when the game is gone and the GPU is quiet |
+| E-mail alerts stopped after every restart | SMTP host / port / user / password were never saved | Saved in settings; the password through Windows DPAPI (never clear text) |
+| A cleared alert address came back; mails to an empty address | Clearing the box was not saved and "configured" stayed true | Saved, and e-mail is off without an address |
+| Anomaly banner stayed after switching detection off | Only cleared while detection was on | Cleared |
+| A fatal crash left fans at their last duty | Only the normal exit path handed fans back | CrashGuard hands every channel back before the restart |
+| AEDi search opened the wrong tab ("settings" → Alerts, "email alerts" → Bench); most quick commands matched nothing | Tab numbers predated the Bench tab; quick commands were compared with the wrong field | Correct tab numbers; commands resolve by title |
+| `build.ps1` did not parse in Windows PowerShell 5.1 | UTF-8 dashes read as ANSI closing quotes | ASCII-only script |
+| Unit tests wrote "test storm" errors into the user's real FANZi log | AppLog's default directory was the live %APPDATA% folder | Test host logs to a temp folder |
+
+**Updated**: Avalonia 11.3.23 (DataGrid 11.3.13), CommunityToolkit.Mvvm 8.4.2, test SDK 18.12.0. Avalonia 12 is a breaking
+major and is not part of this release.
 
 ### What's new in v4.5.1
 

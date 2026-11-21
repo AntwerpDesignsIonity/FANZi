@@ -40,7 +40,9 @@ public partial class MainWindowViewModel
     /// <summary>"Balanced", "Silent", … or "Custom".</summary>
     public string FanCurvePresetLabel => FanCurveMath.MatchPreset(FanCurvePoints)?.ToString() ?? "Custom";
 
-    public string FanCurveStatus => !FanCurveInUse
+    public string FanCurveStatus => AutopilotEnabled
+        ? "Autopilot is on — it picks the curve for what the PC is doing. Switch Autopilot off (Dashboard) to use this one."
+        : !FanCurveInUse
         ? "Preview — drag a point or pick a preset to use this curve"
         : AiAutoFanEnabled
             ? "Active — AI Auto-Fan drives the CPU fan from this curve"

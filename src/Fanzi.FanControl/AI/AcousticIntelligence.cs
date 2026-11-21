@@ -56,9 +56,9 @@ public sealed class AcousticIntelligence
             if (!_inSpike)
             {
                 _inSpike = true;
-                _lastSpikeStart = DateTime.Now;
+                _lastSpikeStart = DateTime.UtcNow;
             }
-            if ((DateTime.Now - _lastSpikeStart).TotalSeconds < SpikeIgnoreSec)
+            if ((DateTime.UtcNow - _lastSpikeStart).TotalSeconds < SpikeIgnoreSec)
             {
                 // Hold current speed — let the AIO absorb the spike
                 return _lastTargetPct;

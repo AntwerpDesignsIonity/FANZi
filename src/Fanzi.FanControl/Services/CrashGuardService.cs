@@ -82,6 +82,30 @@ public static class CrashGuardService
     internal static string BuildRestartArguments(int nextRestartCount, bool startMinimized) =>
         $"{RecoveredArgument} {RestartCountArgumentPrefix}{nextRestartCount}" + (startMinimized ? " --minimized" : "");
 
+    /// <summary>
+    /// 4.6: last-ditch fan hand-back. A fatal crash skips the normal exit path, so a fan FANZi was driving (manual duty,
+    /// AI Auto-Fan, Autopilot) stayed pinned at its last duty with nothing watching the temperature — until the
+    /// automatic restart took over, or for good when the restart limit was reached. The app registers a bounded
+    /// "return every channel to automatic / BIOS control" action here; it runs before the restart attempt.
+    /// </summary>
+    public static Action? EmergencyFanRelease { get; set; }
+
+    /// <summary>Runs <see cref="EmergencyFanRelease"/>; never throws (it is called while the process is going down).</summary>
+    internal static void InvokeEmergencyFanRelease()
+    {
+        var release = EmergencyFanRelease;
+        if (release is null) return;
+        try
+        {
+            release();
+            AppLog.Info("CrashGuard: fans handed back to automatic control before exit.");
+        }
+        catch (Exception releaseEx)
+        {
+            AppLog.Warn("CrashGuard: emergency fan hand-back failed", releaseEx);
+        }
+    }
+
     private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         var ex = e.ExceptionObject as Exception;
@@ -90,6 +114,8 @@ public static class CrashGuardService
 
         if (!e.IsTerminating)
             return;
+
+        InvokeEmergencyFanRelease();
 
         if (ShouldRestart(_restartAttempts))
         {

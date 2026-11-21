@@ -50,7 +50,9 @@ public sealed class AppLogTests : IDisposable
 
         AppLog.ResetToDefaults();
 
-        Assert.Equal(
+        // 4.6: the test host moves the baseline to a temp folder (TestLogIsolation) — never the user's %APPDATA% log.
+        Assert.Equal(AppLog.BaselineDirectory, AppLog.LogDirectory);
+        Assert.NotEqual(
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FANZI", "logs"),
             AppLog.LogDirectory);
     }

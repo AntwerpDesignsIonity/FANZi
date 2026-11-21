@@ -144,6 +144,25 @@ public sealed class AppSettings
     /// </summary>
     public bool ThermalFrameEnabled { get; set; } = true;
 
+    // ── 4.6 ──────────────────────────────────────────────────────────────────
+
+    /// <summary>4.6 AEDi Autopilot: one switch, AEDi sets the fans for what the PC is doing. Off until the user turns it on.</summary>
+    public bool AutopilotEnabled { get; set; }
+
+    /// <summary>4.6 Autopilot goal: "Quiet", "Balanced" or "Cool".</summary>
+    public string AutopilotGoal { get; set; } = "Balanced";
+
+    /// <summary>4.6 Autopilot: Silent curve between 22:00 and 07:00 unless gaming / working hard.</summary>
+    public bool AutopilotQuietHours { get; set; } = true;
+
+    /// <summary>4.6: SMTP server for alert e-mails (was kept in memory only — alerts stopped after every restart).</summary>
+    public string SmtpHost { get; set; } = string.Empty;
+    public int SmtpPort { get; set; } = 587;
+    public string SmtpUser { get; set; } = string.Empty;
+
+    /// <summary>4.6: SMTP password protected with Windows DPAPI ("dpapi:…"); never clear text. Null = not saved.</summary>
+    public string? SmtpPasswordProtected { get; set; }
+
     /// <summary>Settings schema version written by this build.</summary>
     public const int CurrentVersion = 7;
 
@@ -194,6 +213,18 @@ public sealed class AppSettings
         FanChannelRoles ??= new();
         RgbZones ??= new();
         if (RgbSmbusPolicy is not ("Auto" or "Vendor" or "Fanzi")) RgbSmbusPolicy = "Auto";
+        if (AutopilotGoal is not ("Quiet" or "Balanced" or "Cool")) AutopilotGoal = "Balanced";
+        SmtpHost ??= string.Empty;
+        SmtpUser ??= string.Empty;
+        if (SmtpPort is < 1 or > 65535) SmtpPort = 587;
+        foreach (var profile in Profiles)
+        {
+            // A hand-edited / downloaded profile can carry nulls where the app expects collections.
+            profile.FanChannelPercents ??= new();
+            profile.FanCurve ??= new();
+            profile.NotificationEmail ??= string.Empty;
+            if (string.IsNullOrWhiteSpace(profile.Name)) profile.Name = "Profile";
+        }
     }
 }
 

@@ -89,11 +89,21 @@ internal sealed class FakeHardwareMonitorService : IHardwareMonitorService
         return Task.FromResult(snapshot);
     }
 
-    public Task<SetFanControlResult> SetFanControlAsync(string channelId, double percent, CancellationToken cancellationToken = default) =>
-        Task.FromResult(new SetFanControlResult(true, $"{channelId} → {percent:F0}% (render harness)"));
+    /// <summary>4.6: every duty write / hand-back the view model asked for (Autopilot assertions).</summary>
+    public List<(string ChannelId, double Percent)> Writes { get; } = new();
+    public List<string> Restores { get; } = new();
 
-    public Task<SetFanControlResult> RestoreAutomaticControlAsync(string channelId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(new SetFanControlResult(true, $"{channelId} → auto (render harness)"));
+    public Task<SetFanControlResult> SetFanControlAsync(string channelId, double percent, CancellationToken cancellationToken = default)
+    {
+        lock (Writes) Writes.Add((channelId, percent));
+        return Task.FromResult(new SetFanControlResult(true, $"{channelId} → {percent:F0}% (render harness)"));
+    }
+
+    public Task<SetFanControlResult> RestoreAutomaticControlAsync(string channelId, CancellationToken cancellationToken = default)
+    {
+        lock (Restores) Restores.Add(channelId);
+        return Task.FromResult(new SetFanControlResult(true, $"{channelId} → auto (render harness)"));
+    }
 
     public void Dispose() { }
 }

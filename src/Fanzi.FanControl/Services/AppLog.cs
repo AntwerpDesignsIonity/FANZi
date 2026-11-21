@@ -26,6 +26,27 @@ public static class AppLog
 
     private static string _directory = DefaultDirectory;
 
+    // 4.6: the unit-test host points this at a temp folder once, so tests that run production code (and tests that
+    // call ResetToDefaults) no longer write "test storm" / "boom" lines into the user's real %APPDATA% log.
+    private static string? _baselineDirectory;
+
+    /// <summary>The directory <see cref="ResetToDefaults"/> returns to (%APPDATA%\FANZI\logs unless a test host moved it).</summary>
+    internal static string BaselineDirectory
+    {
+        get { lock (Sync) return _baselineDirectory ?? DefaultDirectory; }
+    }
+
+    /// <summary>Test hosts only: makes <paramref name="directory"/> the default for the whole process.</summary>
+    internal static void SetBaselineDirectory(string directory)
+    {
+        lock (Sync)
+        {
+            _baselineDirectory = directory;
+            _directory = directory;
+            _currentFileDate = DateTime.MinValue;
+        }
+    }
+
     private static Func<DateTime> _now = DefaultClock;
 
     // Date of the file currently being written; when it changes we prune old files.
@@ -65,7 +86,7 @@ public static class AppLog
     {
         lock (Sync)
         {
-            _directory = DefaultDirectory;
+            _directory = _baselineDirectory ?? DefaultDirectory;
             _now = DefaultClock;
             _currentFileDate = DateTime.MinValue;
         }

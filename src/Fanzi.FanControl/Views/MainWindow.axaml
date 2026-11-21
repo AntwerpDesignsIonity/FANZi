@@ -284,6 +284,40 @@
                                     <TextBlock Text="{Binding CpuTempWarningMessage}" Foreground="#FDE68A" FontSize="12" FontWeight="SemiBold"/>
                                 </Border>
 
+                                <!-- 4.6 AEDi Autopilot: one switch + one choice instead of profiles, curves and sliders -->
+                                <Border x:Name="AutopilotCard" Classes="card" Padding="20,14">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                                        <Border Grid.Column="0" CornerRadius="8" Background="#0A1A10" Padding="10,5" VerticalAlignment="Center">
+                                            <TextBlock Text="AUTOPILOT" FontSize="11" FontWeight="Black" Foreground="#34D399"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                            <TextBlock x:Name="AutopilotHeadlineText" Text="{Binding AutopilotHeadline}" Classes="h2"/>
+                                            <TextBlock x:Name="AutopilotDetailText" Text="{Binding AutopilotDetail}" Classes="muted" FontSize="11" TextWrapping="Wrap"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasAutopilotHint}" Margin="0,4,0,0">
+                                                <TextBlock x:Name="AutopilotHintText" Text="{Binding AutopilotHint}" Foreground="#FDE68A" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="520"/>
+                                                <Button x:Name="AutopilotUnlockButton" Content="Let Autopilot set them" Command="{Binding AutopilotUnlockBoardFansCommand}"
+                                                        IsVisible="{Binding AutopilotCanUnlockBoardFans}" Padding="10,4" FontSize="11"
+                                                        ToolTip.Tip="Turns 'Use BIOS fan settings' off (Fans tab) so FANZi may set the motherboard fan headers. Pumps stay protected. Switch it back on any time."/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Spacing="8" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                                                <RadioButton Classes="segment" GroupName="AutopilotGoal" Content="Quiet" IsChecked="{Binding IsAutopilotQuiet}"
+                                                             ToolTip.Tip="Noise first: fans stay low and ramp only when they have to" AutomationProperties.Name="Autopilot goal: quiet"/>
+                                                <RadioButton Classes="segment" GroupName="AutopilotGoal" Content="Balanced" IsChecked="{Binding IsAutopilotBalanced}"
+                                                             ToolTip.Tip="Quiet at the desk, firm cooling under load" AutomationProperties.Name="Autopilot goal: balanced"/>
+                                                <RadioButton Classes="segment" GroupName="AutopilotGoal" Content="Cool" IsChecked="{Binding IsAutopilotCool}"
+                                                             ToolTip.Tip="Temperature first: fans ramp early" AutomationProperties.Name="Autopilot goal: cool"/>
+                                                <ToggleSwitch x:Name="AutopilotSwitch" IsChecked="{Binding AutopilotEnabled}" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                              OnContent="On" OffContent="Off" AutomationProperties.Name="AEDi Autopilot"
+                                                              ToolTip.Tip="AEDi sets the CPU fan and system fans for what the PC is doing. It never drives a pump, and it leaves BIOS-owned headers alone."/>
+                                            </StackPanel>
+                                            <CheckBox Content="Quiet hours 22:00 – 07:00" IsChecked="{Binding AutopilotQuietHours}" FontSize="11" HorizontalAlignment="Right"
+                                                      ToolTip.Tip="At night Autopilot uses the Silent curve unless a game or heavy work is running"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
                                 <!-- IO-nity AI HERO: health gauge · CPU/GPU gauges · Game Mode + AI Coach -->
                                 <Border CornerRadius="20" BorderThickness="1.5"
                                         BorderBrush="{StaticResource AccentGradientSoft}"

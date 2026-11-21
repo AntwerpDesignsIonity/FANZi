@@ -56,6 +56,9 @@ public partial class App : Application
             desktop.MainWindow = mainWindow;
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+            // 4.6: a fatal crash also hands the fans back (bounded to 3 s inside the view model).
+            CrashGuardService.EmergencyFanRelease = viewModel.RestoreAutomaticControlOnExit;
+
             DataContext = viewModel;
 
             bool shuttingDown = false;
@@ -87,6 +90,7 @@ public partial class App : Application
             desktop.Exit += (_, _) =>
             {
                 AppLog.Info("Application exit: restoring automatic fan control and releasing hardware.");
+                CrashGuardService.EmergencyFanRelease = null; // the normal path below does it
                 try { viewModel.RestoreAutomaticControlOnExit(); }
                 catch (Exception ex) { AppLog.Warn("Restoring automatic fan control on exit failed", ex); }
 

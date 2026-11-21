@@ -450,6 +450,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ProfileSaveStatus = $"Failed to load {info.Name}";
             return;
         }
+        // 4.6: a hand-edited profile file can carry nulls where the app expects collections.
+        loaded.FanChannelPercents ??= new();
+        loaded.FanCurve ??= new();
+        loaded.NotificationEmail ??= string.Empty;
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             // Register with AppSettings and create a tab using the same wiring as built-ins
@@ -658,12 +662,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 if (loaded is not null && _activeProfileTab is not null)
                 {
                     var existing = _activeProfileTab.Profile;
-                    existing.Name = loaded.Name;
+                    if (!string.IsNullOrWhiteSpace(loaded.Name)) existing.Name = loaded.Name;
                     existing.CpuFanDesiredPercent = loaded.CpuFanDesiredPercent;
                     existing.CpuWarningThresholdDegrees = loaded.CpuWarningThresholdDegrees;
                     existing.NotificationEmail = loaded.NotificationEmail;
-                    existing.FanCurve = loaded.FanCurve;
-                    existing.FanChannelPercents = loaded.FanChannelPercents;
+                    existing.NotificationEmail ??= string.Empty;
+                    existing.FanCurve = loaded.FanCurve ?? new();
+                    existing.FanChannelPercents = loaded.FanChannelPercents ?? new();
                     ApplyProfileToVm(existing);
                     GoogleSyncStatus = $"Downloaded '{existing.Name}' from Google Drive";
                 }
@@ -930,6 +935,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ReduceMotion = _appSettings.ReduceMotion;
             OverlayCompact = _appSettings.OverlayCompact;
             ApplyOverlayStudioSettings();
+            // 4.6: SMTP settings survive a restart (password via DPAPI) and Autopilot.
+            SmtpHost = _appSettings.SmtpHost;
+            SmtpPort = _appSettings.SmtpPort;
+            SmtpUser = _appSettings.SmtpUser;
+            SmtpPassword = SecretProtector.Unprotect(_appSettings.SmtpPasswordProtected);
+            ApplyAutopilotSettings();
         }
         finally
         {
@@ -1026,14 +1037,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(FanCurveStatus));
         if (_suppressProfileSync) return;
         _appSettings.AiAutoFanEnabled = value;
-        if (!value)
+        if (!value && !AutopilotEnabled)
         {
             _aiEngine.Reset();
             _lastAiAppliedPercent = null;
             _lastAiAppliedChannelId = null;
 
-            // The AI left the CPU fan at a manual duty — hand it back to the BIOS.
-            if (CpuFanCanControl && _cpuFanChannelId is { Length: > 0 } channelId)
+            // The AI left the CPU fan at a manual duty — hand it back to the BIOS (unless Autopilot is driving it).
+            if (!AutopilotEnabled && CpuFanCanControl && _cpuFanChannelId is { Length: > 0 } channelId)
             {
                 _ = SafeExecuteAsync(async () =>
                 {
@@ -1404,12 +1415,17 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             double cpuLoad = snapshot.CpuTotalLoadPercent ?? 0;
             HottestTempValue = hottest;
 
+            // 4.6 Autopilot: picks the curve for what the PC is doing (null when it is off).
+            var autopilot = StepAutopilot(snapshot, hottest);
+            double? cpuFanTarget = null;
+
             if (hottest.HasValue)
             {
                 double suggested = _aiEngine.ComputeOptimalFanSpeed(
                     hottest.Value, cpuLoad, snapshot.CpuFan?.SpeedRpm,
-                    _activeProfileTab?.Profile.FanCurve,
-                    gpuTempC: snapshot.GpuCoreTemperature);
+                    autopilot?.CpuCurve ?? _activeProfileTab?.Profile.FanCurve,
+                    gpuTempC: snapshot.GpuCoreTemperature,
+                    fanDutyPercent: snapshot.CpuFan?.CurrentControlPercent);
 
                 AiSuggestedFan = $"{suggested:F0}%";
                 AiTrend = _aiEngine.Predictor.Trend.ToString();
@@ -1420,8 +1436,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 AiForecast = _aiEngine.Predictor.PredictedTempIn30s is double forecast ? $"{forecast:F1}°C" : "--";
                 AiStatus = _aiEngine.IsLearning ? "AEDi: Active" : "AEDi: Learning...";
 
-                if (AiAutoFanEnabled && CpuFanCanControl && !_cpuCoolingIsPump && !string.IsNullOrEmpty(_cpuFanChannelId))
+                if ((AiAutoFanEnabled || autopilot is not null) && CpuFanCanControl && !_cpuCoolingIsPump && !string.IsNullOrEmpty(_cpuFanChannelId))
                 {
+                    cpuFanTarget = suggested;
                     // Only touch the hardware when the target actually moved (≥ 1 %) or the channel changed.
                     bool channelChanged = !string.Equals(_lastAiAppliedChannelId, _cpuFanChannelId, StringComparison.OrdinalIgnoreCase);
                     if (channelChanged || _lastAiAppliedPercent is not double last || Math.Abs(suggested - last) >= 1.0)
@@ -1452,7 +1469,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                         AnomalyMessage = string.Empty;
                     }
                 }
+                else if (HasAnomaly)
+                {
+                    // 4.6: switching detection off used to leave the last banner on the dashboard for good.
+                    HasAnomaly = false;
+                    AnomalyMessage = string.Empty;
+                }
             }
+            else if (HasAnomaly)
+            {
+                // No CPU temperature this poll: an old anomaly banner says nothing about now.
+                HasAnomaly = false;
+                AnomalyMessage = string.Empty;
+            }
+
+            if (autopilot is not null)
+                await ApplyAutopilotAsync(autopilot, cpuFanTarget);
 
             // ── IO-nity AI: Thermal Coach ─────────────────────────────
             // Pump-only / RPM-less systems are coached too: fall back to the pump RPM, else skip RPM rules.
@@ -1484,6 +1516,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             var gameDetection = _lastGameScan;
             if (gameDetection.IsGameRunning)
                 _gameModeDetector.SetDetectedGame(gameDetection.GameName);
+            else
+                _gameModeDetector.SetNoGameRunning(); // 4.6: the game closed — the session ends once the GPU is quiet too
             IsGameMode = _gameModeDetector.IsGameModeActive;
             GameModeStatus = _gameModeDetector.StatusMessage;
             DetectedGame = _gameModeDetector.DetectedGame;
@@ -1785,11 +1819,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             try { _ = new MailAddress(value.Trim()); HasNotificationEmail = true; }
             catch (FormatException) { HasNotificationEmail = false; }
-
-            UpdateSmtpConfigured();
-            UpdateActiveProfileFromVm();
-            _ = SaveSettingsAsync();
         }
+
+        // 4.6: a cleared address is saved too, and "configured" follows it — it used to stay true, so alert
+        // e-mails were still attempted to an empty recipient and the old address came back after a restart.
+        UpdateSmtpConfigured();
+        if (_suppressProfileSync) return;
+        UpdateActiveProfileFromVm();
+        _ = SaveSettingsAsync();
     }
 
     private void SetCpuFanDesiredPercent(double value)
@@ -1800,10 +1837,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _suppressCpuFanDesiredUpdate = false;
     }
 
-    partial void OnSmtpHostChanged(string value) => UpdateSmtpConfigured();
-    partial void OnSmtpPortChanged(double value) => UpdateSmtpConfigured();
-    partial void OnSmtpUserChanged(string value) => UpdateSmtpConfigured();
-    partial void OnSmtpPasswordChanged(string value) => UpdateSmtpConfigured();
+    partial void OnSmtpHostChanged(string value) => OnSmtpSettingChanged();
+    partial void OnSmtpPortChanged(double value) => OnSmtpSettingChanged();
+    partial void OnSmtpUserChanged(string value) => OnSmtpSettingChanged();
+    partial void OnSmtpPasswordChanged(string value) => OnSmtpSettingChanged();
+
+    /// <summary>4.6: SMTP settings are persisted (they were memory-only, so e-mail alerts died with every restart).</summary>
+    private void OnSmtpSettingChanged()
+    {
+        UpdateSmtpConfigured();
+        if (_suppressProfileSync) return;
+        _appSettings.SmtpHost = (SmtpHost ?? string.Empty).Trim();
+        _appSettings.SmtpPort = double.IsFinite(SmtpPort) ? Math.Clamp((int)SmtpPort, 1, 65535) : 587;
+        _appSettings.SmtpUser = (SmtpUser ?? string.Empty).Trim();
+        _appSettings.SmtpPasswordProtected = SecretProtector.Protect(SmtpPassword);
+        _ = SaveSettingsAsync();
+    }
 
     private void UpdateSmtpConfigured()
     {

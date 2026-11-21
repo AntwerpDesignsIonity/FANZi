@@ -55,12 +55,16 @@ public sealed class ScreenshotTests
             // Hover on the first temperature-reactive card: lift + stronger temperature-tinted glow.
             var tempCard = window.GetVisualDescendants().OfType<Border>()
                 .First(b => b.Classes.Contains("temp-card") && b.IsEffectivelyVisible);
+            // 4.6: the Autopilot card sits above the hero, so the first temperature card can start below the fold.
+            tempCard.BringIntoView();
+            Dispatcher.UIThread.RunJobs();
             var centre = tempCard.TranslatePoint(new Point(tempCard.Bounds.Width / 2, tempCard.Bounds.Height / 2), window);
             Assert.NotNull(centre);
             window.MouseMove(centre!.Value);
             Capture(window, "dashboard-hover.png", 1400, 960);
             Assert.True(tempCard.IsPointerOver, "temp card should be hovered for dashboard-hover.png");
             window.MouseMove(new Point(2, 2));
+            ScrollDashboardToEnd(window, toTop: true);
 
             // Same dashboard at the window's MinWidth — checks nothing clips or overlaps when narrow.
             window.Width = window.MinWidth;
@@ -155,6 +159,80 @@ public sealed class ScreenshotTests
 
             AssertKeyboardShortcuts(window, scope);
             AssertKeyboardFocusRing(window);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// 4.6 AEDi Autopilot card: off by default; switched on it drives the CPU fan and both system fans, never the pump
+    /// or the GPU fan, says so in plain words, and hands the fans back when switched off.
+    /// </summary>
+    [RenderFact]
+    public void Dashboard_Autopilot_DrivesFansButNeverThePump()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        using var scope = CreateScope(SampleState.Normal);
+        var vm = scope.Vm;
+        var window = new MainWindow { DataContext = vm, Width = 1400, Height = 960 };
+        window.Show();
+        try
+        {
+            vm.SelectedTabIndex = TabDashboard;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(vm.AutopilotEnabled, "Autopilot is off until the user switches it on");
+            Assert.Equal("Off", vm.AutopilotHeadline);
+            Assert.True(window.FindControl<Border>("AutopilotCard")!.IsEffectivelyVisible);
+            Assert.False(window.FindControl<Button>("AutopilotUnlockButton")!.IsEffectivelyVisible);
+            Assert.Empty(scope.Hardware.Writes);
+            Capture(window, "dashboard-autopilot-off.png", 1400, 960);
+
+            vm.AutopilotQuietHours = false; // the scene must not depend on when the suite runs
+            vm.AutopilotEnabled = true;
+            vm.RefreshCommand.Execute(null);
+            PumpUntil(() => vm.AutopilotDetail.StartsWith("Driving", StringComparison.Ordinal), TimeSpan.FromSeconds(15), "Autopilot's first decision");
+
+            Assert.StartsWith("Driving 3 fans", vm.AutopilotDetail);
+            Assert.Equal("Everyday use", vm.AutopilotHeadline);
+            Assert.False(vm.HasAutopilotHint);
+            Assert.True(scope.Settings.LastSaved!.AutopilotEnabled);
+
+            List<(string ChannelId, double Percent)> writes;
+            lock (scope.Hardware.Writes) writes = [.. scope.Hardware.Writes];
+            Assert.Contains(writes, w => w.ChannelId == "mb/fan/0");
+            Assert.Contains(writes, w => w.ChannelId == "mb/fan/2");
+            Assert.Contains(writes, w => w.ChannelId == "mb/fan/3");
+            Assert.DoesNotContain(writes, w => w.ChannelId == "mb/fan/1");  // the pump
+            Assert.DoesNotContain(writes, w => w.ChannelId == "gpu/fan/0"); // GPU firmware owns its fan
+            Assert.All(writes, w => Assert.InRange(w.Percent, 20, 100));
+
+            Capture(window, "dashboard-autopilot.png", 1400, 960);
+            AssertTextNotTrimmed(window, ["AutopilotHeadlineText"]);
+
+            window.Width = window.MinWidth;
+            Capture(window, "dashboard-autopilot-1100.png", 1100, 960);
+            window.Width = 1400;
+
+            // The curve editor says who is in charge while Autopilot is on.
+            Assert.StartsWith("Autopilot is on", vm.FanCurveStatus);
+
+            vm.AutopilotEnabled = false;
+            PumpUntil(() =>
+            {
+                lock (scope.Hardware.Restores) return scope.Hardware.Restores.Count >= 3;
+            }, TimeSpan.FromSeconds(15), "fans handed back");
+            lock (scope.Hardware.Restores)
+            {
+                Assert.Contains("mb/fan/0", scope.Hardware.Restores);
+                Assert.Contains("mb/fan/2", scope.Hardware.Restores);
+                Assert.Contains("mb/fan/3", scope.Hardware.Restores);
+                Assert.DoesNotContain("mb/fan/1", scope.Hardware.Restores);
+            }
+            Assert.Equal("Off", vm.AutopilotHeadline);
+            Assert.False(scope.Settings.LastSaved!.AutopilotEnabled);
         }
         finally
         {
@@ -883,6 +961,7 @@ public sealed class ScreenshotTests
     {
         public required MainWindowViewModel Vm { get; init; }
         public required FakeSettingsService Settings { get; init; }
+        public required FakeHardwareMonitorService Hardware { get; init; }
         public required string TempDir { get; init; }
 
         public void Dispose()
@@ -909,7 +988,8 @@ public sealed class ScreenshotTests
         // Fake game detector: the renders must not depend on what runs on the build machine.
         var gameDetector = new GameModeDetector(() => state.RunningGame is { } game ? (true, game) : (false, ""));
         var settings = new FakeSettingsService();
-        var vm = new MainWindowViewModel(new FakeHardwareMonitorService(state), settings, rgb, gameDetector);
+        var hardware = new FakeHardwareMonitorService(state);
+        var vm = new MainWindowViewModel(hardware, settings, rgb, gameDetector);
 
         PumpUntil(() => !vm.IsLoading && vm.CpuGaugeTempValue is not null && vm.FanChannels.Count > 0
                         && vm.LastUpdated.StartsWith("Updated", StringComparison.Ordinal),
@@ -929,7 +1009,7 @@ public sealed class ScreenshotTests
 
         SeedHistory(vm, state);
 
-        return new Scope { Vm = vm, Settings = settings, TempDir = tempDir };
+        return new Scope { Vm = vm, Settings = settings, Hardware = hardware, TempDir = tempDir };
     }
 
     /// <summary>

@@ -1,4 +1,6 @@
 # FANZI Build & Publish Script
+# ASCII only on purpose: Windows PowerShell 5.1 reads a BOM-less file as ANSI, and a UTF-8 dash then decodes to a
+# closing quote - the 4.5 script did not parse there ("The string is missing the terminator").
 # Usage: .\build.ps1 [-Runtime win-x64|win-arm64|linux-x64|osx-x64|all] [-Installer] [-Clean]
 
 param(
@@ -18,10 +20,10 @@ $AppVersion = (Select-Xml -Path $ProjectPath -XPath "//Version" | Select-Object 
 if (-not $AppVersion) { $AppVersion = "0.0.0" }
 
 Write-Host ""
-Write-Host "  ╔══════════════════════════════════════════╗" -ForegroundColor Blue
-Write-Host ("  ║      FANZI v{0} — Build System" -f $AppVersion).PadRight(44) "║" -ForegroundColor Blue
-Write-Host "  ║    Ionity Global Pty Ltd                 ║" -ForegroundColor DarkGray
-Write-Host "  ╚══════════════════════════════════════════╝" -ForegroundColor Blue
+Write-Host "  ============================================" -ForegroundColor Blue
+Write-Host ("    FANZI v{0} - Build System" -f $AppVersion) -ForegroundColor Blue
+Write-Host "    Ionity Global (Pty) Ltd" -ForegroundColor DarkGray
+Write-Host "  ============================================" -ForegroundColor Blue
 Write-Host ""
 
 if ($Clean) {

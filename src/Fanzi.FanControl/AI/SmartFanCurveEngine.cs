@@ -41,14 +41,16 @@ public sealed class SmartFanCurveEngine
         List<FanCurvePoint>? customCurve = null,
         double targetTempC = 75,
         double? gpuTempC = null,
-        double? caseTempC = null)
+        double? caseTempC = null,
+        double? fanDutyPercent = null)
     {
         var now = DateTime.UtcNow;
         double dt = Math.Max(0.1, (now - _lastTick).TotalSeconds);
         _lastTick = now;
 
         _predictor.AddSample(currentTempC, cpuLoadPct);
-        _anomalyDetector.AddSample(currentTempC, fanRpm);
+        // 4.6: the duty the fan is told to run at — a fan stopped on purpose (Zero-RPM) is not a stall.
+        _anomalyDetector.AddSample(currentTempC, fanRpm, fanDutyPercent);
 
         if (_anomalyDetector.LastReport?.Severity == AnomalySeverity.Critical)
         {
