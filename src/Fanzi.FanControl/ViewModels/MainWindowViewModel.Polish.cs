@@ -18,6 +18,25 @@ public partial class MainWindowViewModel
     /// <summary>Overlay shows gauges only (persisted as <see cref="AppSettings.OverlayCompact"/>); false = gauges + bars + sparkline.</summary>
     [ObservableProperty, NotifyPropertyChangedFor(nameof(OverlaySparklineVisible))] private bool _overlayCompact;
 
+    /// <summary>
+    /// 4.6: the AEDi side bar folded into a slim rail (persisted as <see cref="AppSettings.SidebarCollapsed"/>), so the
+    /// dashboard gets the full window width. The rail keeps one button each for search and the Google profile.
+    /// </summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SidebarToggleTip))] private bool _sidebarCollapsed;
+
+    public string SidebarToggleTip => SidebarCollapsed ? "Show the AEDi side bar" : "Minimise the AEDi side bar";
+
+    private CommunityToolkit.Mvvm.Input.IRelayCommand? _toggleSidebarCommand;
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ToggleSidebarCommand => _toggleSidebarCommand ??=
+        new CommunityToolkit.Mvvm.Input.RelayCommand(() => SidebarCollapsed = !SidebarCollapsed);
+
+    partial void OnSidebarCollapsedChanged(bool value)
+    {
+        if (_suppressProfileSync) return;
+        _appSettings.SidebarCollapsed = value;
+        _ = SaveSettingsAsync();
+    }
+
     /// <summary>Rows of the help panel's keyboard-shortcut list.</summary>
     public IReadOnlyList<ShortcutHelp> ShortcutHelpEntries => KeyboardShortcuts.HelpEntries;
 

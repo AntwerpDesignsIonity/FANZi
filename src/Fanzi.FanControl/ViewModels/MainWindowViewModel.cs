@@ -941,6 +941,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             SmtpUser = _appSettings.SmtpUser;
             SmtpPassword = SecretProtector.Unprotect(_appSettings.SmtpPasswordProtected);
             ApplyAutopilotSettings();
+            SidebarCollapsed = _appSettings.SidebarCollapsed;
         }
         finally
         {

@@ -15,6 +15,13 @@
     <Version>4.6.0</Version>
   </PropertyGroup>
 
+  <!-- 4.6 "Sign in with Google": the Desktop OAuth client JSON (Google Cloud console → Download JSON), saved as
+       google_oauth.json next to FANZI.slnx, is compiled into the app. The file is git-ignored; CI writes it from the
+       GOOGLE_OAUTH_JSON repository secret. Without it the build still works and sign-in asks for the file. -->
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)..\..\google_oauth.json')">
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\..\google_oauth.json" LogicalName="Fanzi.FanControl.google_oauth.json" Link="google_oauth.json" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="Fanzi.FanControl.Tests" />
     <InternalsVisibleTo Include="Fanzi.FanControl.RenderTests" />

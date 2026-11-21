@@ -497,6 +497,59 @@ public sealed class V46CrashFanReleaseTests : IDisposable
     }
 }
 
+/// <summary>4.6 "Sign in with Google" out of the box: the Desktop client compiled into official builds.</summary>
+public sealed class V46GoogleBuiltInClientTests
+{
+    private const string ClientJson =
+        """{"installed":{"client_id":"123-abc.apps.googleusercontent.com","client_secret":"not-a-real-secret","redirect_uris":["http://localhost"]}}""";
+
+    [Fact]
+    public void ParseStream_ReadsGooglesDownloadedJson()
+    {
+        using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(ClientJson));
+        var config = GoogleOAuthConfig.ParseStream(stream, GoogleOAuthConfig.EmbeddedSource);
+
+        Assert.NotNull(config);
+        Assert.True(config!.HasSecret);
+        Assert.Equal("123-abc.apps.googleusercontent.com", config.ClientId);
+        Assert.Equal("(built in)", config.SourcePath);
+    }
+
+    [Fact]
+    public void AssemblyWithoutTheResource_HasNoBuiltInClient()
+        => Assert.Null(GoogleOAuthConfig.LoadEmbedded(typeof(V46GoogleBuiltInClientTests).Assembly));
+
+    [Fact]
+    public void ExplicitPathList_NeverFallsBackToTheBuiltInClient()
+    {
+        string missing = Path.Combine(Path.GetTempPath(), "fanzi-no-such-" + Guid.NewGuid().ToString("N") + ".json");
+        var config = GoogleOAuthConfig.Load(new[] { missing });
+
+        Assert.False(config.HasSecret);
+        Assert.Equal(GoogleOAuthConfig.DefaultClientId, config.ClientId);
+    }
+
+    [Fact]
+    public void BuiltInClient_WhenPresent_IsTheFanziDesktopClient()
+    {
+        // Present in builds made with google_oauth.json next to FANZI.slnx (official builds); absent on a bare clone / CI.
+        var builtIn = GoogleOAuthConfig.LoadEmbedded(typeof(GoogleOAuthConfig).Assembly);
+        if (builtIn is null) return;
+
+        Assert.True(builtIn.HasSecret);
+        Assert.Equal(GoogleOAuthConfig.DefaultClientId, builtIn.ClientId);
+    }
+
+    [Fact]
+    public void SidebarCollapsed_DefaultsToOpen_AndRoundTrips()
+    {
+        Assert.False(new AppSettings().SidebarCollapsed);
+        var back = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+            System.Text.Json.JsonSerializer.Serialize(new AppSettings { SidebarCollapsed = true }))!;
+        Assert.True(back.SidebarCollapsed);
+    }
+}
+
 /// <summary>4.6 repository checks.</summary>
 public sealed class V46RepositoryTests
 {

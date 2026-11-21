@@ -74,6 +74,13 @@ system fans** (which were manual-only before) from the combined CPU + GPU heat. 
 slew-limited, and a part at 90 °C (CPU) / 88 °C (GPU) gets full airflow at once. A pump is never driven; headers the BIOS
 owns are only watched, with a one-click *Let Autopilot set them*. Off hands every fan back. Off by default.
 
+**Side bar.** The AEDi side bar (search, quick ping, Google profile) minimises into a 44 px rail with the » button in
+its header; « brings it back. The choice is saved.
+
+**Sign in with Google out of the box.** Official builds carry the FANZi Desktop OAuth client, so no `google_oauth.json`
+has to be fetched by the user. To build with it, save the client JSON (Google Cloud console → Download JSON) as
+`google_oauth.json` next to `FANZI.slnx` (git-ignored); CI writes it from the `GOOGLE_OAUTH_JSON` repository secret.
+
 **Fixed**
 
 | Fault | Cause | Fix |

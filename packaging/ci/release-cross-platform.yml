@@ -28,6 +28,12 @@ jobs:
         rid: [ linux-x64, linux-arm64 ]
     steps:
       - uses: actions/checkout@v4
+      - name: Google sign-in client (from the GOOGLE_OAUTH_JSON secret, when set)
+        shell: bash
+        env:
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+        run: |
+          if [ -n "$GOOGLE_OAUTH_JSON" ]; then printf '%s' "$GOOGLE_OAUTH_JSON" > google_oauth.json; echo "built-in Google client: yes"; else echo "built-in Google client: no (secret not set)"; fi
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -62,6 +68,12 @@ jobs:
         rid: [ osx-arm64, osx-x64 ]
     steps:
       - uses: actions/checkout@v4
+      - name: Google sign-in client (from the GOOGLE_OAUTH_JSON secret, when set)
+        shell: bash
+        env:
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+        run: |
+          if [ -n "$GOOGLE_OAUTH_JSON" ]; then printf '%s' "$GOOGLE_OAUTH_JSON" > google_oauth.json; echo "built-in Google client: yes"; else echo "built-in Google client: no (secret not set)"; fi
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'

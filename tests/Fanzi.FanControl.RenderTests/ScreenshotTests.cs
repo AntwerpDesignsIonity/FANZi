@@ -216,6 +216,28 @@ public sealed class ScreenshotTests
             Capture(window, "dashboard-autopilot-1100.png", 1100, 960);
             window.Width = 1400;
 
+            // 4.6: the AEDi side bar minimises into a 44 px rail and the dashboard takes the freed width.
+            var sidebar = window.FindControl<Grid>("AediSidebar")!;
+            var rail = window.FindControl<Border>("AediSidebarRail")!;
+            var card = window.FindControl<Border>("AutopilotCard")!;
+            Assert.True(sidebar.IsEffectivelyVisible);
+            Assert.False(rail.IsEffectivelyVisible);
+            double openWidth = card.Bounds.Width;
+
+            window.FindControl<Button>("AediSidebarCollapseButton")!.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Capture(window, "dashboard-sidebar-minimised.png", 1400, 960);
+            Assert.False(sidebar.IsEffectivelyVisible);
+            Assert.True(rail.IsEffectivelyVisible);
+            Assert.Equal(44, rail.Bounds.Width, 1.0);
+            Assert.True(card.Bounds.Width >= openWidth + 200, $"dashboard should gain the side bar's width ({openWidth:F0} → {card.Bounds.Width:F0})");
+            Assert.True(scope.Settings.LastSaved!.SidebarCollapsed);
+
+            window.FindControl<Button>("AediSidebarExpandButton")!.Command!.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(sidebar.IsEffectivelyVisible);
+            Assert.False(scope.Settings.LastSaved!.SidebarCollapsed);
+
             // The curve editor says who is in charge while Autopilot is on.
             Assert.StartsWith("Autopilot is on", vm.FanCurveStatus);
 

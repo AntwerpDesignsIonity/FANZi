@@ -155,6 +155,9 @@ public sealed class AppSettings
     /// <summary>4.6 Autopilot: Silent curve between 22:00 and 07:00 unless gaming / working hard.</summary>
     public bool AutopilotQuietHours { get; set; } = true;
 
+    /// <summary>4.6: the AEDi side bar (search, quick ping, Google profile) is folded into a slim rail.</summary>
+    public bool SidebarCollapsed { get; set; }
+
     /// <summary>4.6: SMTP server for alert e-mails (was kept in memory only — alerts stopped after every restart).</summary>
     public string SmtpHost { get; set; } = string.Empty;
     public int SmtpPort { get; set; } = 587;

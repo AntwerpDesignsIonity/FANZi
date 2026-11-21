@@ -28,6 +28,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Google sign-in client (from the GOOGLE_OAUTH_JSON secret, when set)
+        shell: bash
+        env:
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+        run: |
+          if [ -n "$GOOGLE_OAUTH_JSON" ]; then printf '%s' "$GOOGLE_OAUTH_JSON" > google_oauth.json; echo "built-in Google client: yes"; else echo "built-in Google client: no (secret not set)"; fi
 
       - uses: actions/setup-dotnet@v4
         with:

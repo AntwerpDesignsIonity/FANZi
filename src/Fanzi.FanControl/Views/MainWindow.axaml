@@ -121,7 +121,8 @@
 
         <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
         <Panel IsVisible="{Binding !IsLoading}" Margin="0,38,0,0">
-            <Grid ColumnDefinitions="*,280" Margin="20,12,20,20" ColumnSpacing="12">
+            <!-- 4.6: the side-bar column sizes to its content: 280 px open, a 44 px rail when minimised -->
+            <Grid ColumnDefinitions="*,Auto" Margin="20,12,20,20" ColumnSpacing="12">
 
                 <!-- ═══ LEFT: Main Content ═══ -->
                 <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="12">
@@ -1520,18 +1521,50 @@
 
                 </Grid> <!-- End left content -->
 
+                <!-- ═══ RIGHT: AEDi side bar, minimised (4.6) — a slim rail; every button opens the side bar again ═══ -->
+                <Border x:Name="AediSidebarRail" Grid.Column="1" Width="44" Classes="card" CornerRadius="14" Padding="0,10"
+                        IsVisible="{Binding SidebarCollapsed}">
+                    <StackPanel Spacing="10" HorizontalAlignment="Center">
+                        <Button x:Name="AediSidebarExpandButton" Command="{Binding ToggleSidebarCommand}" Padding="0" Width="32" Height="32"
+                                Background="{StaticResource AccentGradient}" CornerRadius="8"
+                                ToolTip.Tip="Show the AEDi side bar (search, quick ping, Google profile)" AutomationProperties.Name="Show the AEDi side bar">
+                            <TextBlock Text="«" FontSize="16" FontWeight="Black" Foreground="#FFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button Command="{Binding ToggleSidebarCommand}" Padding="0" Width="32" Height="32" Background="#141E30" CornerRadius="8"
+                                ToolTip.Tip="AEDi search &amp; quick ping" AutomationProperties.Name="Open AEDi search">
+                            <TextBlock Text="🔍" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button Command="{Binding ToggleSidebarCommand}" Padding="0" Width="32" Height="32" Background="#141E30" CornerRadius="8"
+                                ToolTip.Tip="{Binding GoogleStatus}" AutomationProperties.Name="Open the Google profile">
+                            <Panel>
+                                <TextBlock Text="G" FontSize="14" FontWeight="Black" Foreground="#A0C0E0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Ellipse Width="7" Height="7" Fill="#34D399" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,3,3,0"
+                                         IsVisible="{Binding IsLoggedInGoogle}"/>
+                            </Panel>
+                        </Button>
+                        <TextBlock Text="AEDi" FontSize="9" FontWeight="Black" Foreground="#4E6E95" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- ═══ RIGHT: AEDi Sidebar ═══ -->
-                <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" RowSpacing="10">
+                <Grid x:Name="AediSidebar" Grid.Column="1" Width="280" RowDefinitions="Auto,*,Auto" RowSpacing="10"
+                      IsVisible="{Binding !SidebarCollapsed}">
 
                     <!-- AEDi Header -->
                     <Border Grid.Row="0" Classes="card-accent" CornerRadius="14" Padding="14,10">
                         <StackPanel Spacing="6">
-                            <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                                 <Border Grid.Column="0" CornerRadius="8" Background="{StaticResource AccentGradient}" Padding="6,3">
                                     <TextBlock Text="AEDi" FontSize="12" FontWeight="Black" Foreground="#FFF"/>
                                 </Border>
                                 <TextBlock Grid.Column="1" Text="by Ionity" FontSize="10" Foreground="#4A6A8F" VerticalAlignment="Center" Margin="6,0"/>
                                 <TextBlock Grid.Column="2" Text="{x:Static services:AppVersion.ShortLabel}" FontSize="9" Foreground="#3A5070" VerticalAlignment="Center"/>
+                                <!-- 4.6: minimise the side bar into a rail -->
+                                <Button x:Name="AediSidebarCollapseButton" Grid.Column="3" Command="{Binding ToggleSidebarCommand}" Margin="8,0,0,0"
+                                        Padding="0" Width="24" Height="22" Background="#141E30" CornerRadius="6"
+                                        ToolTip.Tip="Minimise the AEDi side bar — more room for the dashboard" AutomationProperties.Name="Minimise the AEDi side bar">
+                                    <TextBlock Text="»" FontSize="13" FontWeight="Black" Foreground="#A0C0E0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Button>
                             </Grid>
                             <TextBlock Text="Search &amp; Ping AI" FontSize="9" Foreground="#5A7899" LetterSpacing="1"/>
                         </StackPanel>
@@ -1573,8 +1606,9 @@
                                     <Button Content="Power" Command="{Binding AediNavigateCommand}" CommandParameter="6" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
                                     <Button Content="Clean" Command="{Binding AediNavigateCommand}" CommandParameter="7" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
                                     <Button Content="Tools" Command="{Binding AediNavigateCommand}" CommandParameter="8" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
-                                    <Button Content="Alerts" Command="{Binding AediNavigateCommand}" CommandParameter="9" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
-                                    <Button Content="Settings" Command="{Binding AediNavigateCommand}" CommandParameter="10" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Bench" Command="{Binding AediNavigateCommand}" CommandParameter="9" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Alerts" Command="{Binding AediNavigateCommand}" CommandParameter="10" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
+                                    <Button Content="Settings" Command="{Binding AediNavigateCommand}" CommandParameter="11" Margin="0,0,4,4" Padding="8,3" FontSize="9" Background="#141E30"/>
                                 </WrapPanel>
                             </StackPanel>
                         </StackPanel>
@@ -1590,7 +1624,8 @@
                                 <Button Content="🔑 Sign in with Google" Command="{Binding GoogleLoginCommand}"
                                         HorizontalAlignment="Stretch" Padding="10,6" FontSize="10"
                                         Background="#1A3A60" Foreground="#E8F0FF"/>
-                                <TextBlock Text="Save profiles to Google Drive" FontSize="9" Foreground="#4A6A8F"/>
+                                <TextBlock Text="Opens your browser. FANZi only sees your name and e-mail, and keeps fan profiles in its own hidden Google Drive app folder."
+                                           FontSize="9" Foreground="#4A6A8F" TextWrapping="Wrap"/>
                             </StackPanel>
 
                             <!-- Logged in state -->
@@ -1613,7 +1648,7 @@
                                 <TextBlock Text="{Binding GoogleSyncStatus}" FontSize="9" Foreground="#5A7899" TextWrapping="Wrap"/>
                             </StackPanel>
 
-                            <TextBlock Text="{Binding GoogleStatus}" FontSize="9" Foreground="#3A5070"/>
+                            <TextBlock x:Name="GoogleStatusText" Text="{Binding GoogleStatus}" FontSize="9" Foreground="#5A7899" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
                 </Grid>

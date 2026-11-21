@@ -52,7 +52,44 @@ public sealed record GoogleOAuthConfig(string ClientId, string? ClientSecret, st
                 AppLog.Warn($"Google OAuth config {path} unreadable", ex);
             }
         }
+
+        // 4.6: official builds carry the Desktop client, so "Sign in with Google" works without the user fetching
+        // a JSON file from the Google Cloud console. Only for the default search — an explicit path list means "these".
+        if (paths is null && LoadEmbedded(typeof(GoogleOAuthConfig).Assembly) is { } embedded)
+            return embedded;
         return new GoogleOAuthConfig(DefaultClientId, null, null);
+    }
+
+    /// <summary>Logical name of the client JSON embedded at build time (see Fanzi.FanControl.csproj).</summary>
+    internal const string EmbeddedResourceName = "Fanzi.FanControl.google_oauth.json";
+
+    /// <summary>Shown as <see cref="SourcePath"/> when the config came from inside the application.</summary>
+    internal const string EmbeddedSource = "(built in)";
+
+    /// <summary>
+    /// The client JSON compiled into the assembly, or null when this build has none (a build from source without
+    /// <c>google_oauth.json</c> next to FANZI.slnx). A Desktop-app client secret is not confidential — Google's
+    /// installed-app flow (RFC 8252) says so and sign-in is protected by PKCE — but it still stays out of source
+    /// control: the file is git-ignored locally and written from a repository secret in CI.
+    /// </summary>
+    internal static GoogleOAuthConfig? LoadEmbedded(System.Reflection.Assembly assembly)
+    {
+        try
+        {
+            using var stream = assembly.GetManifestResourceStream(EmbeddedResourceName);
+            return stream is null ? null : ParseStream(stream, EmbeddedSource);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Built-in Google OAuth client unreadable", ex);
+            return null;
+        }
+    }
+
+    internal static GoogleOAuthConfig? ParseStream(Stream stream, string? sourcePath)
+    {
+        using var reader = new StreamReader(stream);
+        return Parse(reader.ReadToEnd(), sourcePath);
     }
 
     /// <summary>Parses Google's client JSON ("installed" / "web" wrapper) or a flat object; null when invalid.</summary>
