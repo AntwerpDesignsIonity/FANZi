@@ -77,6 +77,14 @@ owns are only watched, with a one-click *Let Autopilot set them*. Off hands ever
 **Side bar.** The AEDi side bar (search, quick ping, Google profile) minimises into a 44 px rail with the » button in
 its header; « brings it back. The choice is saved.
 
+**RGB that looks after itself.** The RGB tab opens in a Simple view for everyone: on / off, Auto, Take over,
+brightness and themes. Effects, colour sliders, RAM / SMBus options, OpenRGB port and endpoint, zones and the hardware
+scan are behind the Advanced switch. **Take over** (on by default) closes other lighting-only apps — Aura, Mystic Light,
+RGB Fusion, Polychrome, SignalRGB, RAM vendor tools — for the Windows session so FANZi's colours are not overwritten,
+then rescans. Suites that also run fans, pumps or peripherals (iCUE, NZXT CAM, L-Connect, Armoury Crate, MSI Center,
+Gigabyte Control Center, Synapse, G HUB …) are never closed automatically. One attempt a minute, three per app, then
+the banner asks. New installs start with Auto on.
+
 **Sign in with Google out of the box.** Official builds carry the FANZi Desktop OAuth client, so no `google_oauth.json`
 has to be fetched by the user. To build with it, save the client JSON (Google Cloud console → Download JSON) as
 `google_oauth.json` next to `FANZI.slnx` (git-ignored); CI writes it from the `GOOGLE_OAUTH_JSON` repository secret.

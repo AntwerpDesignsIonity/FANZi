@@ -550,6 +550,139 @@ public sealed class V46GoogleBuiltInClientTests
     }
 }
 
+/// <summary>4.6 RGB: automatic take-over closes lighting-only apps, never cooling / peripheral suites.</summary>
+public sealed class V46RgbTakeOverTests
+{
+    private static Fanzi.FanControl.Services.Rgb.RgbConflictDetector.Conflict C(string product, params int[] pids) => new(product, pids);
+
+    [Theory]
+    [InlineData("SignalRGB")]
+    [InlineData("ASUS Aura")]
+    [InlineData("ASUS Aura (LightingService)")]
+    [InlineData("MSI Mystic Light")]
+    [InlineData("Gigabyte RGB Fusion")]
+    [InlineData("ASRock Polychrome")]
+    [InlineData("G.SKILL Trident Z Lighting")]
+    [InlineData("Kingston FURY CTRL")]
+    public void LightingOnlyApps_AreClosedAutomatically(string product)
+        => Assert.True(Fanzi.FanControl.Services.Rgb.RgbTakeOver.IsLightingOnly(product));
+
+    [Theory]
+    [InlineData("Corsair iCUE")]           // AIO pumps, fan hubs
+    [InlineData("NZXT CAM")]               // Kraken pumps
+    [InlineData("Lian Li L-Connect")]      // fan hubs
+    [InlineData("Thermaltake TT RGB Plus")]
+    [InlineData("ASUS Armoury Crate")]
+    [InlineData("MSI Center")]
+    [InlineData("Gigabyte Control Center")]
+    [InlineData("ZOTAC FireStorm")]        // GPU fans / tuning
+    [InlineData("Razer Synapse")]
+    [InlineData("Logitech G HUB")]
+    [InlineData("SteelSeries GG")]
+    [InlineData("HyperX NGENUITY")]
+    [InlineData("MAXSUN View")]
+    public void SuitesThatAlsoRunCoolingOrPeripherals_AreNeverClosedAutomatically(string product)
+        => Assert.False(Fanzi.FanControl.Services.Rgb.RgbTakeOver.IsLightingOnly(product));
+
+    [Fact]
+    public void EveryKnownProduct_IsClassifiedOnPurpose()
+    {
+        // A product added to the detector later must be put on one side or the other here, not closed by accident.
+        var known = Fanzi.FanControl.Services.Rgb.RgbConflictDetector.KnownProcesses.Values
+            .Concat(Fanzi.FanControl.Services.Rgb.RgbConflictDetector.KnownServices.Values)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        string[] neverAuto =
+        [
+            "Corsair iCUE", "NZXT CAM", "Lian Li L-Connect", "Thermaltake TT RGB Plus", "ASUS Armoury Crate", "MSI Center",
+            "Gigabyte Control Center", "ZOTAC FireStorm", "Razer Synapse", "Logitech G HUB", "SteelSeries GG",
+            "HyperX NGENUITY", "MAXSUN View",
+        ];
+        foreach (string product in known)
+            Assert.True(Fanzi.FanControl.Services.Rgb.RgbTakeOver.IsLightingOnly(product) ^ neverAuto.Contains(product, StringComparer.OrdinalIgnoreCase),
+                $"'{product}' must be either lighting-only or on the never-automatic list");
+        foreach (string product in Fanzi.FanControl.Services.Rgb.RgbTakeOver.LightingOnlyProducts)
+            Assert.Contains(product, known, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AutoClosable_SplitsAMixedList()
+    {
+        var conflicts = new[] { C("Corsair iCUE", 1), C("SignalRGB", 2), C("Gigabyte Control Center", 3), C("MSI Mystic Light", 4) };
+
+        Assert.Equal(new[] { "SignalRGB", "MSI Mystic Light" }, Fanzi.FanControl.Services.Rgb.RgbTakeOver.AutoClosable(conflicts).Select(c => c.Product));
+        Assert.Equal(new[] { "Corsair iCUE", "Gigabyte Control Center" }, Fanzi.FanControl.Services.Rgb.RgbTakeOver.NeedsUser(conflicts).Select(c => c.Product));
+    }
+
+    [Fact]
+    public void Throttle_OneAttemptPerMinute_ThreePerProduct_ThenGivesUp()
+    {
+        var throttle = new Fanzi.FanControl.Services.Rgb.RgbTakeOverThrottle();
+        var signal = new[] { C("SignalRGB", 10) };
+        var t = new DateTime(2026, 11, 21, 12, 0, 0, DateTimeKind.Utc);
+
+        Assert.Single(throttle.Acquire(t, signal));
+        Assert.Empty(throttle.Acquire(t.AddSeconds(30), signal));          // too soon
+        Assert.Single(throttle.Acquire(t.AddSeconds(61), signal));
+        Assert.Single(throttle.Acquire(t.AddSeconds(122), signal));
+        Assert.True(throttle.GaveUpOn("SignalRGB"));
+        Assert.Empty(throttle.Acquire(t.AddSeconds(600), signal));         // came back three times: the user decides
+
+        // Another app is still handled.
+        Assert.Single(throttle.Acquire(t.AddSeconds(700), new[] { C("SignalRGB", 10), C("ASUS Aura", 11) }));
+
+        throttle.Reset();
+        Assert.False(throttle.GaveUpOn("SignalRGB"));
+        Assert.Single(throttle.Acquire(t.AddSeconds(701), signal));
+    }
+
+    [Fact]
+    public void Throttle_NothingToClose_RecordsNothing()
+    {
+        var throttle = new Fanzi.FanControl.Services.Rgb.RgbTakeOverThrottle();
+        var t = DateTime.UtcNow;
+        Assert.Empty(throttle.Acquire(t, Array.Empty<Fanzi.FanControl.Services.Rgb.RgbConflictDetector.Conflict>()));
+        Assert.Single(throttle.Acquire(t, new[] { C("SignalRGB", 1) }));
+    }
+
+    [Fact]
+    public void TestHost_NeverClosesAnything()
+    {
+        Assert.False(Fanzi.FanControl.Services.Rgb.RgbConflictDetector.AllowStop);
+        Assert.Equal(0, Fanzi.FanControl.Services.Rgb.RgbConflictDetector.Stop(new[] { C("SignalRGB", Environment.ProcessId) }, disableAutostart: false));
+    }
+
+    [Fact]
+    public void Stop_WithTheTestSeamActive_KillsNothing()
+    {
+        var previous = Fanzi.FanControl.Services.Rgb.RgbConflictDetector.FindOverride;
+        try
+        {
+            Fanzi.FanControl.Services.Rgb.RgbConflictDetector.FindOverride = () => Array.Empty<Fanzi.FanControl.Services.Rgb.RgbConflictDetector.Conflict>();
+            // The current process id: if Stop() ignored the seam this test run would die here.
+            Assert.Equal(0, Fanzi.FanControl.Services.Rgb.RgbConflictDetector.Stop(new[] { C("SignalRGB", Environment.ProcessId) }, disableAutostart: false));
+        }
+        finally { Fanzi.FanControl.Services.Rgb.RgbConflictDetector.FindOverride = previous; }
+    }
+
+    [Fact]
+    public void Settings_TakeOverOn_SimpleViewForEveryone_AutoForNewInstalls()
+    {
+        var fresh = new AppSettings();
+        Assert.True(fresh.RgbAutoTakeOver);
+        Assert.True(fresh.RgbSimpleMode);
+        Assert.True(fresh.RgbAuto);
+
+        // An upgraded file keeps its lighting choices; only the layout switches to Simple.
+        var upgraded = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(
+            """{"SettingsVersion":7,"RgbSimpleMode":false,"RgbAuto":false,"RgbSmartAmbient":false,"RgbNightDimming":false}""")!;
+        upgraded.Migrate();
+        Assert.True(upgraded.RgbSimpleMode);
+        Assert.False(upgraded.RgbAuto);
+        Assert.False(upgraded.RgbSmartAmbient);
+        Assert.Equal(8, upgraded.SettingsVersion);
+    }
+}
+
 /// <summary>4.6 repository checks.</summary>
 public sealed class V46RepositoryTests
 {

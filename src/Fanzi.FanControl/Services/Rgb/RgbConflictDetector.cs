@@ -124,6 +124,9 @@ public static class RgbConflictDetector
     /// <summary>Test seam: render tests replace the machine's real process list (a dev PC may run a vendor RGB app).</summary>
     internal static Func<IReadOnlyList<Conflict>>? FindOverride { get; set; }
 
+    /// <summary>False in test hosts: <see cref="Stop(IReadOnlyList{Conflict}, bool)"/> then closes nothing.</summary>
+    internal static bool AllowStop { get; set; } = true;
+
     /// <summary>Groups (name, pid) pairs into conflicts. Pure — unit-tested.</summary>
     internal static IReadOnlyList<Conflict> Classify(IEnumerable<(string Name, int Pid)> processes) =>
         Classify(processes, Array.Empty<string>());
@@ -169,6 +172,10 @@ public static class RgbConflictDetector
     /// </summary>
     public static int Stop(IReadOnlyList<Conflict> conflicts, bool disableAutostart)
     {
+        // 4.6: with the test seam active the conflicts are made up — their process ids must never reach Kill();
+        // and a test host never closes anything on the machine it runs on (automatic take-over is on by default).
+        if (FindOverride is not null || !AllowStop) return 0;
+
         int stopped = 0;
         foreach (var svc in conflicts.SelectMany(c => c.ServiceNames).Distinct(StringComparer.OrdinalIgnoreCase))
         {

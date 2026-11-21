@@ -14,5 +14,10 @@ internal static class TestLogIsolation
         Path.Combine(Path.GetTempPath(), "fanzi-test-logs-" + Environment.ProcessId);
 
     [ModuleInitializer]
-    internal static void Initialize() => AppLog.SetBaselineDirectory(Directory);
+    internal static void Initialize()
+    {
+        AppLog.SetBaselineDirectory(Directory);
+        // Automatic RGB take-over is on by default: a test run must never close a lighting app on the machine it runs on.
+        Fanzi.FanControl.Services.Rgb.RgbConflictDetector.AllowStop = false;
+    }
 }

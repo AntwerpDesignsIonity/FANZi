@@ -94,6 +94,10 @@ public partial class RgbControlViewModel
         if (coexistenceChanged && _coexistencePrimed)
             _ = ApplyCoexistenceChangeAsync();
         _coexistencePrimed = true;
+
+        // 4.6: lighting-only apps are closed without asking when "take over automatically" is on.
+        try { MaybeAutoTakeOver(conflicts); }
+        catch (Exception ex) { AppLog.Info("RGB automatic take-over check failed: " + ex.Message); }
     }
 
     private bool _coexistencePrimed;

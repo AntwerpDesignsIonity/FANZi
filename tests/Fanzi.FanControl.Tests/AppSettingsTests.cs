@@ -182,7 +182,7 @@ public sealed class AppSettingsTests
 
         settings.Migrate();
 
-        Assert.Equal(7, AppSettings.CurrentVersion);
+        Assert.Equal(8, AppSettings.CurrentVersion);
         Assert.Equal(AppSettings.CurrentVersion, settings.SettingsVersion);
         Assert.False(settings.ReduceMotion);    // upgraded installs keep their animations
         Assert.False(settings.OverlayCompact);  // ...and the expanded overlay, the only layout before v5

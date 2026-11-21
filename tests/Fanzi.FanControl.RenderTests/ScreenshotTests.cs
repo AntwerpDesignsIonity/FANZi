@@ -503,6 +503,16 @@ public sealed class ScreenshotTests
         Assert.False(view.FindControl<Expander>("ZoneSection")!.IsEffectivelyVisible);
         Assert.False(view.FindControl<Expander>("ConnectionSection")!.IsEffectivelyVisible);
         Assert.True(view.FindControl<ItemsControl>("ThemeList")!.IsEffectivelyVisible);
+        // 4.6: Simple is on / off, Auto, take over, brightness and themes — no ports, buses, effect grid or RGB sliders.
+        foreach (string hidden in new[] { "EffectsCard", "ColoursCard", "SmbusPolicyCard" })
+            Assert.False(view.FindControl<Border>(hidden)!.IsEffectivelyVisible, hidden + " is advanced-only");
+        Assert.False(view.FindControl<Panel>("RamBusHost")!.IsVisible);
+        foreach (string hidden in new[] { "HeroRescanButton", "HeroTakeControlButton", "HeroRestartButton" })
+            Assert.False(view.FindControl<Button>(hidden)!.IsEffectivelyVisible, hidden + " is advanced-only");
+        Assert.False(view.FindControl<ToggleSwitch>("RgbLiveApplyToggle")!.IsEffectivelyVisible);
+        Assert.True(view.FindControl<ToggleSwitch>("AutoTakeOverToggle")!.IsEffectivelyVisible);
+        Assert.True(view.FindControl<ToggleSwitch>("AutoRgbToggle")!.IsEffectivelyVisible);
+        Assert.True(view.FindControl<Slider>("QuickBrightness")!.IsEffectivelyVisible);
         Capture(window, "rgb-simple.png", 1400, 960);
         rgb.RgbSimpleMode = false;
         Dispatcher.UIThread.RunJobs();

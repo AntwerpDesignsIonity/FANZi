@@ -269,11 +269,11 @@
                     <WrapPanel Margin="0,4,0,0">
                         <Button Classes="rgb-solid" Content="⚡ Test RGB" Command="{Binding TestRgbCommand}" Margin="0,0,8,6"
                                 ToolTip.Tip="Cycle red, green, blue, white on all devices to verify output"/>
-                        <Button Classes="rgb-outline" Content="⟳ Rescan" Command="{Binding RescanDevicesCommand}" Margin="0,0,8,6"
+                        <Button x:Name="HeroRescanButton" Classes="rgb-outline" Content="⟳ Rescan" Command="{Binding RescanDevicesCommand}" Margin="0,0,8,6" IsVisible="{Binding ShowAdvancedRgb}"
                                 ToolTip.Tip="Re-enumerate OpenRGB devices"/>
-                        <Button Classes="rgb-solid" Content="✓ Take control" Command="{Binding TakeControlCommand}" Margin="0,0,8,6"
+                        <Button x:Name="HeroTakeControlButton" Classes="rgb-solid" Content="✓ Take control" Command="{Binding TakeControlCommand}" Margin="0,0,8,6" IsVisible="{Binding ShowAdvancedRgb}"
                                 ToolTip.Tip="Switch every device into FANZi's control mode (Direct / Custom / Static) and apply the current colour now"/>
-                        <Button Classes="rgb-outline" Content="↻ Restart OpenRGB" Command="{Binding RestartServerCommand}" Margin="0,0,8,6"
+                        <Button x:Name="HeroRestartButton" Classes="rgb-outline" Content="↻ Restart OpenRGB" Command="{Binding RestartServerCommand}" Margin="0,0,8,6" IsVisible="{Binding ShowAdvancedRgb}"
                                 ToolTip.Tip="Restart the OpenRGB server so it re-detects all hardware"/>
                     </WrapPanel>
                 </StackPanel>
@@ -304,9 +304,16 @@
                                   ToolTip.Tip="One switch: Smart Ambient (the scene follows idle / work / game / heat), night dimming and the overheat alert. Picking a colour or theme yourself switches it back to manual."/>
                     <TextBlock x:Name="AutoRgbStatusText" Grid.Column="1" Text="{Binding AutoRgbText}" FontSize="11.5" Foreground="#C4D8F4" TextWrapping="Wrap" VerticalAlignment="Center"/>
                     <ToggleSwitch x:Name="RgbLiveApplyToggle" Grid.Column="2" IsChecked="{Binding RgbLiveApply}" OnContent="Instant" OffContent="Use Apply" VerticalAlignment="Center"
+                                  IsVisible="{Binding ShowAdvancedRgb}"
                                   ToolTip.Tip="Instant: every change shows on the lights at once. Use Apply: set everything up first, then press Apply — Revert drops the changes."/>
                     <ToggleSwitch x:Name="RgbSimpleToggle" Grid.Column="3" IsChecked="{Binding RgbSimpleMode}" OnContent="Simple" OffContent="Advanced" VerticalAlignment="Center"
-                                  ToolTip.Tip="Simple: Auto, effects, colours and themes. Advanced adds Typing FX, per-zone segments, the hardware scan and the OpenRGB connection."/>
+                                  ToolTip.Tip="Simple: on / off, Auto, brightness and themes. Advanced adds effects, colours, Typing FX, per-zone segments, RAM / SMBus options, the hardware scan and the OpenRGB connection."/>
+                </Grid>
+                <!-- 4.6: close other lighting-only apps without asking -->
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                    <ToggleSwitch x:Name="AutoTakeOverToggle" Grid.Column="0" IsChecked="{Binding AutoTakeOver}" OnContent="Take over" OffContent="Take over" VerticalAlignment="Center"
+                                  ToolTip.Tip="FANZi closes other lighting-only apps for this Windows session so its colours are not overwritten. Apps that also run fans, pumps or mouse / keyboard settings (iCUE, NZXT CAM, Armoury Crate, MSI Center, Gigabyte Control Center, Synapse, G HUB …) are never closed automatically."/>
+                    <TextBlock x:Name="AutoTakeOverText" Grid.Column="1" Text="{Binding AutoTakeOverText}" FontSize="11.5" Foreground="#C4D8F4" TextWrapping="Wrap" VerticalAlignment="Center"/>
                 </Grid>
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                     <TextBlock Grid.Column="0" Text="BRIGHTNESS" Classes="rgb-caption" VerticalAlignment="Center"/>
@@ -378,7 +385,7 @@
                         </Border>
                     </Panel>
                     <!-- 4.5 coexistence: who drives RAM / onboard (SMBus) lighting -->
-                    <Border x:Name="SmbusPolicyCard" Classes="tile" Padding="12,8">
+                    <Border x:Name="SmbusPolicyCard" Classes="tile" Padding="12,8" IsVisible="{Binding ShowAdvancedRgb}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                             <StackPanel Spacing="2" VerticalAlignment="Center">
                                 <TextBlock Text="RAM / ONBOARD LIGHTING OWNER" Classes="rgb-caption"/>
@@ -390,6 +397,7 @@
                         </Grid>
                     </Border>
                     <!-- 4.3 RAM bus status: which SMBus port drives the sticks, re-sync and port override -->
+                    <Panel x:Name="RamBusHost" IsVisible="{Binding ShowAdvancedRgb}">
                     <Border Classes="tile" Padding="12,8" IsVisible="{Binding HasRamBusStatus}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                             <StackPanel Spacing="2" VerticalAlignment="Center">
@@ -406,6 +414,7 @@
                             </WrapPanel>
                         </Grid>
                     </Border>
+                    </Panel>
                 </StackPanel>
 
                 <!-- Live preview orb (large) -->
@@ -492,7 +501,7 @@
         </Panel>
 
         <!-- ══ EFFECTS ══════════════════════════════════════════════════════ -->
-        <Border Classes="rgb-card">
+        <Border x:Name="EffectsCard" Classes="rgb-card" IsVisible="{Binding ShowAdvancedRgb}">
             <Grid ColumnDefinitions="1.6*,*" ColumnSpacing="18">
                 <StackPanel Grid.Column="0" Spacing="10">
                     <StackPanel Orientation="Horizontal" Spacing="10">
@@ -554,7 +563,7 @@
         </Border>
 
         <!-- ══ COLOURS ══════════════════════════════════════════════════════ -->
-        <Border Classes="rgb-card">
+        <Border x:Name="ColoursCard" Classes="rgb-card" IsVisible="{Binding ShowAdvancedRgb}">
             <StackPanel Spacing="12">
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Text="COLOURS" Classes="rgb-caption" VerticalAlignment="Center"/>

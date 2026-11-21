@@ -390,11 +390,12 @@ public class V45RgbTests
     // ── Settings ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Upgrade_keeps_the_advanced_rgb_view_and_new_installs_start_simple()
+    public void Upgrade_and_new_installs_start_in_the_simple_rgb_view()
     {
+        // 4.5 kept Advanced for upgrades; 4.6 opens the Simple view for everyone (the Advanced switch stays on the tab).
         var upgraded = new AppSettings { SettingsVersion = 6 };
         upgraded.Migrate();
-        Assert.False(upgraded.RgbSimpleMode);
+        Assert.True(upgraded.RgbSimpleMode);
         Assert.Equal(AppSettings.CurrentVersion, upgraded.SettingsVersion);
 
         var fresh = new AppSettings();

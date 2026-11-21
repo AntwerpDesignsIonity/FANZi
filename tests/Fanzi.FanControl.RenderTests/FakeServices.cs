@@ -128,6 +128,7 @@ internal sealed class FakeSettingsService : ISettingsService
             ActiveProfileId = balanced.Id,
             AiAnomalyDetection = false, // keeps the anomaly banner out of the steady-state renders
             RgbSimpleMode = false,      // the renders cover every RGB section; Simple view is asserted separately
+            RgbAutoTakeOver = false,    // never close anything on the build machine
         };
         return Task.FromResult(settings);
     }

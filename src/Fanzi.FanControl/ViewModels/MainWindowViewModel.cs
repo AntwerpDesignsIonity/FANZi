@@ -840,6 +840,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 _appSettings.RgbSmbusPolicy = policy;
                 _ = SaveSettingsAsync();
             });
+            // 4.6: close other lighting-only apps automatically.
+            RgbControl.ApplyTakeOverSettings(_appSettings.RgbAutoTakeOver, on =>
+            {
+                _appSettings.RgbAutoTakeOver = on;
+                _ = SaveSettingsAsync();
+            });
             RgbControl.ApplyTypingFxSettings(_appSettings.RgbTypingFxEnabled, _appSettings.RgbTypingFxStyle, _appSettings.RgbTypingFxAllDevices,
                 (enabled, style, all) =>
                 {

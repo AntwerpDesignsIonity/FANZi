@@ -66,9 +66,10 @@ public sealed class AppSettings
     public string OverlayAccent { get; set; } = "Ionity Blue";
 
     // v4 AEDi lighting (RGB tab). Thermal Guardian defaults on: a critical temperature turns the lights into an alert.
-    public bool RgbSmartAmbient { get; set; }
+    // 4.6: new installs start with Auto on (Smart Ambient + night dimming); a saved file keeps what it says.
+    public bool RgbSmartAmbient { get; set; } = true;
     public bool RgbThermalGuardian { get; set; } = true;
-    public bool RgbNightDimming { get; set; }
+    public bool RgbNightDimming { get; set; } = true;
 
     /// <summary>
     /// 4.4: fans on motherboard headers follow the BIOS Smart Fan settings; FANZi only reads them. Default on — the
@@ -111,7 +112,7 @@ public sealed class AppSettings
     public bool RgbZoneMode { get; set; }
 
     /// <summary>4.5: one switch — AEDi picks scene, brightness and alerts from what the PC is doing.</summary>
-    public bool RgbAuto { get; set; }
+    public bool RgbAuto { get; set; } = true;
 
     /// <summary>4.3: SMBus host port forced for mirrored RAM entries (null = automatic pick).</summary>
     public int? RgbRamSmbusPort { get; set; }
@@ -155,6 +156,13 @@ public sealed class AppSettings
     /// <summary>4.6 Autopilot: Silent curve between 22:00 and 07:00 unless gaming / working hard.</summary>
     public bool AutopilotQuietHours { get; set; } = true;
 
+    /// <summary>
+    /// 4.6 RGB: close other lighting-only apps (Aura, Mystic Light, RGB Fusion, Polychrome, SignalRGB, RAM tools)
+    /// automatically, for the session, so FANZi's colours are not overwritten. Suites that also run cooling or
+    /// peripherals are never closed automatically. Default on.
+    /// </summary>
+    public bool RgbAutoTakeOver { get; set; } = true;
+
     /// <summary>4.6: the AEDi side bar (search, quick ping, Google profile) is folded into a slim rail.</summary>
     public bool SidebarCollapsed { get; set; }
 
@@ -167,7 +175,7 @@ public sealed class AppSettings
     public string? SmtpPasswordProtected { get; set; }
 
     /// <summary>Settings schema version written by this build.</summary>
-    public const int CurrentVersion = 7;
+    public const int CurrentVersion = 8;
 
     /// <summary>
     /// Applies one-time migrations for settings created by older builds.
@@ -198,6 +206,11 @@ public sealed class AppSettings
         // 4.5: Simple mode is the default for new installs only — an upgrade keeps every RGB section visible.
         if (SettingsVersion is >= 1 and < 7)
             RgbSimpleMode = false;
+
+        // 4.6: the RGB tab opens in the Simple view for everyone (On / Off, Auto, brightness, themes). The Advanced
+        // switch on the tab brings every section back; no lighting setting is changed by this.
+        if (SettingsVersion is >= 1 and < 8)
+            RgbSimpleMode = true;
         SettingsVersion = Math.Max(SettingsVersion, CurrentVersion);
     }
 
